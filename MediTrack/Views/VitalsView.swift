@@ -32,6 +32,8 @@ struct VitalsView: View {
                         .listRowSeparator(.hidden)
                 }
             }
+            .listRowBackground(GlassRowBackground())
+            .listRowSeparator(.hidden)
 
             Section("History") {
                 if samples.isEmpty {
@@ -56,7 +58,10 @@ struct VitalsView: View {
                 }
                 .onDelete(perform: deleteSamples)
             }
+            .listRowBackground(GlassRowBackground())
+            .listRowSeparator(.hidden)
         }
+        .ambientScreen()
         .navigationTitle("Vitals")
         .toolbar {
             Button {
@@ -147,23 +152,28 @@ struct AddVitalSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Picker("Vital", selection: $type) {
-                    ForEach(VitalType.allCases) { type in
-                        Label(type.displayName, systemImage: type.systemImage).tag(type)
+                Section {
+                    Picker("Vital", selection: $type) {
+                        ForEach(VitalType.allCases) { type in
+                            Label(type.displayName, systemImage: type.systemImage).tag(type)
+                        }
                     }
+                    TextField(
+                        type.usesSecondaryValue ? "Systolic (\(type.unit))" : "Value (\(type.unit))",
+                        text: $valueText
+                    )
+                    .keyboardType(.decimalPad)
+                    if type.usesSecondaryValue {
+                        TextField("Diastolic (\(type.unit))", text: $secondaryText)
+                            .keyboardType(.decimalPad)
+                    }
+                    DatePicker("Date", selection: $date)
+                    TextField("Note (optional)", text: $note)
                 }
-                TextField(
-                    type.usesSecondaryValue ? "Systolic (\(type.unit))" : "Value (\(type.unit))",
-                    text: $valueText
-                )
-                .keyboardType(.decimalPad)
-                if type.usesSecondaryValue {
-                    TextField("Diastolic (\(type.unit))", text: $secondaryText)
-                        .keyboardType(.decimalPad)
-                }
-                DatePicker("Date", selection: $date)
-                TextField("Note (optional)", text: $note)
+                .listRowBackground(GlassRowBackground())
+                .listRowSeparator(.hidden)
             }
+            .ambientScreen()
             .navigationTitle("Add Vital")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

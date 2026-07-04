@@ -96,6 +96,7 @@ struct TrendsView: View {
                     trendsList(for: series)
                 }
             }
+            .ambientScreen()
             .navigationTitle("Trends")
         }
     }
@@ -116,10 +117,14 @@ struct TrendsView: View {
                     .padding(.vertical, 8)
                     .listRowSeparator(.hidden)
             }
+            .listRowBackground(GlassRowBackground())
+            .listRowSeparator(.hidden)
 
             Section("Statistics") {
                 statsRows(for: series)
             }
+            .listRowBackground(GlassRowBackground())
+            .listRowSeparator(.hidden)
         }
     }
 

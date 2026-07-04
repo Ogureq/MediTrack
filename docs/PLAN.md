@@ -62,6 +62,14 @@ This document records the phased plan executed to build MediTrack, a privacy-fir
 - [x] Verify build from a clean checkout via `MediTrack.xcodeproj`
 - [x] Final review of privacy claims and disclaimer language before repository goes live
 
+## Phase 7 — Glassmorphic UI Refresh
+
+- [x] Build glass design system in `Theme.swift` — beveled edge strokes, ambient gradient background, glass card/chip modifiers, and button styles
+- [x] Restyle Dashboard with glass cards and a glowing gradient health-score ring
+- [x] Convert Health Review into floating glass finding cards tinted by severity
+- [x] Apply ambient backgrounds and glass chip rows across all lists, forms, and sheets
+- [x] Restyle the app lock screen with the glass design system
+
 ## Future Milestones
 
 Not part of the current plan; captured here for future scoping:

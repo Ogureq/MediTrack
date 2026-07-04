@@ -21,6 +21,10 @@ A privacy-first native iOS app that keeps all your medical data on-device and ge
 - **Health profile** — Date of birth, biological sex (used to resolve sex-specific reference ranges), height, blood type, allergies, and conditions.
 - **Share/export** — Share a generated review as text via the iOS share sheet.
 
+## Design
+
+MediTrack uses a glassmorphic design system built entirely with native SwiftUI materials — no third-party UI libraries. Frosted ultra-thin-material cards carry beveled edge strokes, with light catching the top-left edge and shade falling along the bottom-right, giving each surface a sense of depth. Lists and forms are presented as floating glass chip rows, while health findings and alerts appear as tinted glass cards colored by severity. Every screen sits over an ambient gradient backdrop of blurred teal, blue, and purple orbs that adapts automatically to light and dark mode. The Dashboard's health score is shown in a glowing gradient ring, and primary actions use glass gradient buttons throughout. The system is implemented as a set of reusable modifiers and styles in `MediTrack/Support/Theme.swift` (`glassCard`, `tintedGlassCard`, `ambientScreen`, `GlassRowBackground`, and glass button styles).
+
 ## Screenshots
 
 _Screenshots coming soon._
@@ -52,6 +56,7 @@ MediTrack is a single-target SwiftUI app built entirely on Apple frameworks — 
 | `MediTrack/Models/` | SwiftData `@Model` classes — `MedicalReport`, `LabResult`, `ReportAttachment`, `VitalSample`, `Medication`, `HealthProfile` — plus `LabCatalog.swift`, the static reference catalog of common lab tests and ranges. |
 | `MediTrack/Services/` | `AnalysisEngine.swift`, a set of pure functions that produce a `HealthReview` value from stored data, and `BiometricLock.swift` for Face ID / Touch ID app-lock handling. |
 | `MediTrack/Views/` | `Dashboard`, `Reports` (list/detail/add), `Review`, `Trends`, `Vitals`, `Medications`, `Profile`, and the root `TabView`. |
+| `MediTrack/Support/` | `Theme.swift`, the glassmorphic design system (glass card and chip modifiers, ambient backgrounds, button styles), and `UIHelpers.swift`. |
 
 The analysis engine is rule-based and deterministic — no cloud AI is involved. It is designed so that an LLM-powered summarizer could be added later behind the same `HealthReview` interface without disturbing the rest of the app.
 

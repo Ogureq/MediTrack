@@ -13,6 +13,7 @@ struct ProfileView: View {
                 ProgressView()
             }
         }
+        .ambientScreen()
         .navigationTitle("Profile & Settings")
         .task {
             if profiles.isEmpty {
@@ -67,6 +68,8 @@ private struct ProfileForm: View {
             } footer: {
                 Text("Biological sex is used to pick the correct reference ranges for lab tests. Height enables BMI calculation.")
             }
+            .listRowBackground(GlassRowBackground())
+            .listRowSeparator(.hidden)
 
             Section("Medical Background") {
                 TextField("Allergies", text: $profile.allergies, axis: .vertical)
@@ -74,6 +77,8 @@ private struct ProfileForm: View {
                 TextField("Existing conditions", text: $profile.conditions, axis: .vertical)
                     .lineLimit(1...3)
             }
+            .listRowBackground(GlassRowBackground())
+            .listRowSeparator(.hidden)
 
             Section {
                 Toggle("Require Face ID / Passcode", isOn: $appLockEnabled)
@@ -87,6 +92,8 @@ private struct ProfileForm: View {
                     Text("Set up Face ID, Touch ID, or a passcode on this device to enable the app lock.")
                 }
             }
+            .listRowBackground(GlassRowBackground())
+            .listRowSeparator(.hidden)
 
             Section {
                 LabeledContent("Version", value: "1.0")
@@ -96,6 +103,8 @@ private struct ProfileForm: View {
             } header: {
                 Text("About")
             }
+            .listRowBackground(GlassRowBackground())
+            .listRowSeparator(.hidden)
         }
     }
 

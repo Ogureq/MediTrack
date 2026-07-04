@@ -72,6 +72,8 @@ struct AddReportView: View {
                     TextField("Doctor / Provider", text: $provider)
                     TextField("Facility", text: $facility)
                 }
+                .listRowBackground(GlassRowBackground())
+                .listRowSeparator(.hidden)
 
                 Section("Lab Results") {
                     ForEach(labDrafts) { draft in
@@ -89,6 +91,8 @@ struct AddReportView: View {
                         Label("Add Lab Result", systemImage: "plus.circle.fill")
                     }
                 }
+                .listRowBackground(GlassRowBackground())
+                .listRowSeparator(.hidden)
 
                 Section("Attachments") {
                     ForEach(attachments) { attachment in
@@ -107,12 +111,17 @@ struct AddReportView: View {
                         Label("Add PDF", systemImage: "doc.badge.plus")
                     }
                 }
+                .listRowBackground(GlassRowBackground())
+                .listRowSeparator(.hidden)
 
                 Section("Notes") {
                     TextField("Notes", text: $notes, axis: .vertical)
                         .lineLimit(3...6)
                 }
+                .listRowBackground(GlassRowBackground())
+                .listRowSeparator(.hidden)
             }
+            .ambientScreen()
             .navigationTitle("New Report")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -250,6 +259,8 @@ struct LabEntrySheet: View {
                             valueText = ""
                         }
                     }
+                    .listRowBackground(GlassRowBackground())
+                    .listRowSeparator(.hidden)
                     valueSection
                 } else if isCustom {
                     Section("Custom Test") {
@@ -261,6 +272,8 @@ struct LabEntrySheet: View {
                             .keyboardType(.decimalPad)
                         Button("Back to Catalog") { isCustom = false }
                     }
+                    .listRowBackground(GlassRowBackground())
+                    .listRowSeparator(.hidden)
                     valueSection
                 } else {
                     Section {
@@ -270,6 +283,8 @@ struct LabEntrySheet: View {
                             Label("Custom Test…", systemImage: "plus.circle")
                         }
                     }
+                    .listRowBackground(GlassRowBackground())
+                    .listRowSeparator(.hidden)
                     ForEach(LabCategory.allCases) { category in
                         let tests = filteredTests(in: category)
                         if !tests.isEmpty {
@@ -288,10 +303,13 @@ struct LabEntrySheet: View {
                                     }
                                 }
                             }
+                            .listRowBackground(GlassRowBackground())
+                            .listRowSeparator(.hidden)
                         }
                     }
                 }
             }
+            .ambientScreen()
             .searchable(text: $searchText, prompt: "Search tests")
             .navigationTitle("Add Lab Result")
             .navigationBarTitleDisplayMode(.inline)
@@ -312,6 +330,8 @@ struct LabEntrySheet: View {
             TextField("Value", text: $valueText)
                 .keyboardType(.decimalPad)
         }
+        .listRowBackground(GlassRowBackground())
+        .listRowSeparator(.hidden)
     }
 
     private func filteredTests(in category: LabCategory) -> [LabReference] {

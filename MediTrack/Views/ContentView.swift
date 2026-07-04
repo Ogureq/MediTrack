@@ -43,13 +43,14 @@ struct LockScreenView: View {
 
     var body: some View {
         ZStack {
+            AmbientBackground()
             Rectangle()
-                .fill(.regularMaterial)
+                .fill(.ultraThinMaterial)
                 .ignoresSafeArea()
             VStack(spacing: 16) {
                 Image(systemName: "lock.fill")
-                    .font(.system(size: 44))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 40))
+                    .foregroundStyle(Glass.accentGradient)
                 Text("MediTrack is Locked")
                     .font(.title3.weight(.semibold))
                 Text("Your medical data is protected.")
@@ -64,10 +65,12 @@ struct LockScreenView: View {
                     Task { await lock.unlock() }
                 } label: {
                     Label("Unlock", systemImage: "faceid")
-                        .padding(.horizontal, 8)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(GlassProminentButtonStyle())
             }
+            .padding(24)
+            .frame(maxWidth: 320)
+            .glassCard()
             .padding()
         }
     }
@@ -77,22 +80,27 @@ struct MoreView: View {
     var body: some View {
         NavigationStack {
             List {
-                NavigationLink {
-                    VitalsView()
-                } label: {
-                    Label("Vitals", systemImage: "waveform.path.ecg")
+                Section {
+                    NavigationLink {
+                        VitalsView()
+                    } label: {
+                        Label("Vitals", systemImage: "waveform.path.ecg")
+                    }
+                    NavigationLink {
+                        MedicationsView()
+                    } label: {
+                        Label("Medications", systemImage: "pills.fill")
+                    }
+                    NavigationLink {
+                        ProfileView()
+                    } label: {
+                        Label("Profile & Settings", systemImage: "person.crop.circle")
+                    }
                 }
-                NavigationLink {
-                    MedicationsView()
-                } label: {
-                    Label("Medications", systemImage: "pills.fill")
-                }
-                NavigationLink {
-                    ProfileView()
-                } label: {
-                    Label("Profile & Settings", systemImage: "person.crop.circle")
-                }
+                .listRowBackground(GlassRowBackground())
+                .listRowSeparator(.hidden)
             }
+            .ambientScreen()
             .navigationTitle("More")
         }
     }

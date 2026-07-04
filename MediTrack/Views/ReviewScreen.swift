@@ -27,9 +27,21 @@ struct ReviewScreen: View {
                     description: Text("Add medical reports, lab results, or vitals and MediTrack will generate a detailed review of your health data.")
                 )
             } else {
-                reviewList
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        headerCard
+                        findingsGroup("Critical", severity: .critical, findings: review.criticalFindings)
+                        findingsGroup("Needs Attention", severity: .attention, findings: review.attentionFindings)
+                        findingsGroup("Informational", severity: .info, findings: review.infoFindings)
+                        trendsCard
+                        labValuesCard
+                        disclaimerCard
+                    }
+                    .padding()
+                }
             }
         }
+        .background(AmbientBackground())
         .navigationTitle("Health Review")
         .toolbar {
             if review.hasData {
@@ -40,61 +52,59 @@ struct ReviewScreen: View {
         }
     }
 
-    private var reviewList: some View {
-        List {
-            Section {
-                HStack(spacing: 16) {
-                    ScoreRing(score: review.score)
-                        .frame(width: 92, height: 92)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(review.scoreLabel)
-                            .font(.headline)
-                        Text("Generated \(review.generatedAt.formatted(date: .abbreviated, time: .shortened))")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.vertical, 4)
-                Text(review.summary)
-                    .font(.subheadline)
-            }
+    // MARK: Cards
 
-            if !review.criticalFindings.isEmpty {
-                Section {
-                    ForEach(review.criticalFindings) { finding in
-                        FindingRow(finding: finding)
-                    }
-                } header: {
-                    Label("Critical", systemImage: Severity.critical.systemImage)
-                        .foregroundStyle(Severity.critical.color)
+    private var headerCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 16) {
+                ScoreRing(score: review.score)
+                    .frame(width: 92, height: 92)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(review.scoreLabel)
+                        .font(.headline)
+                    Text("Generated \(review.generatedAt.formatted(date: .abbreviated, time: .shortened))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
+                Spacer()
             }
+            Text(review.summary)
+                .font(.subheadline)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard()
+    }
 
-            if !review.attentionFindings.isEmpty {
-                Section {
-                    ForEach(review.attentionFindings) { finding in
-                        FindingRow(finding: finding)
-                    }
-                } header: {
-                    Label("Needs Attention", systemImage: Severity.attention.systemImage)
-                        .foregroundStyle(Severity.attention.color)
+    @ViewBuilder
+    private func findingsGroup(_ title: String, severity: Severity, findings: [Finding]) -> some View {
+        if !findings.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Label(title, systemImage: severity.systemImage)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(severity.color)
+                ForEach(findings) { finding in
+                    FindingRow(finding: finding)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .tintedGlassCard(severity.color)
                 }
             }
+        }
+    }
 
-            if !review.infoFindings.isEmpty {
-                Section {
-                    ForEach(review.infoFindings) { finding in
-                        FindingRow(finding: finding)
-                    }
-                } header: {
-                    Label("Informational", systemImage: Severity.info.systemImage)
-                        .foregroundStyle(Severity.info.color)
-                }
-            }
-
-            if !review.trends.isEmpty {
-                Section("Trends") {
-                    ForEach(review.trends) { trend in
+    @ViewBuilder
+    private var trendsCard: some View {
+        if !review.trends.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Trends")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                VStack(spacing: 10) {
+                    ForEach(Array(review.trends.enumerated()), id: \.element.id) { index, trend in
+                        if index > 0 {
+                            Divider()
+                        }
                         HStack(alignment: .top, spacing: 10) {
                             Image(systemName: trend.direction.systemImage)
                                 .foregroundStyle(trend.direction.color)
@@ -112,14 +122,27 @@ struct ReviewScreen: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
-                        .padding(.vertical, 2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
+                .padding()
+                .glassCard()
             }
+        }
+    }
 
-            if !review.labSnapshots.isEmpty {
-                Section("Latest Lab Values") {
-                    ForEach(review.labSnapshots) { snapshot in
+    @ViewBuilder
+    private var labValuesCard: some View {
+        if !review.labSnapshots.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Latest Lab Values")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                VStack(spacing: 10) {
+                    ForEach(Array(review.labSnapshots.enumerated()), id: \.element.id) { index, snapshot in
+                        if index > 0 {
+                            Divider()
+                        }
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(snapshot.name)
@@ -137,14 +160,19 @@ struct ReviewScreen: View {
                         }
                     }
                 }
-            }
-
-            Section {
-                Text(HealthReview.disclaimer)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                .padding()
+                .glassCard()
             }
         }
+    }
+
+    private var disclaimerCard: some View {
+        Text(HealthReview.disclaimer)
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassCard(cornerRadius: 16)
     }
 }
 
@@ -168,6 +196,5 @@ struct FindingRow: View {
                     .foregroundStyle(finding.severity.color)
             }
         }
-        .padding(.vertical, 2)
     }
 }

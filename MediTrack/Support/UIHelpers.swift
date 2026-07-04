@@ -32,7 +32,7 @@ extension TrendDirection {
     }
 }
 
-/// Small colored capsule used for lab statuses and severities.
+/// Small frosted-glass capsule used for lab statuses and severities.
 struct StatusPill: View {
     let text: String
     let color: Color
@@ -40,9 +40,11 @@ struct StatusPill: View {
     var body: some View {
         Text(text)
             .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(color.opacity(0.15), in: Capsule())
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(.ultraThinMaterial, in: Capsule())
+            .background(color.opacity(0.22), in: Capsule())
+            .overlay(Capsule().strokeBorder(color.opacity(0.45), lineWidth: 1))
             .foregroundStyle(color)
     }
 }

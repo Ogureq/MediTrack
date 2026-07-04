@@ -26,6 +26,8 @@ struct ReportDetailView: View {
                     LabeledContent("Facility", value: report.facility)
                 }
             }
+            .listRowBackground(GlassRowBackground())
+            .listRowSeparator(.hidden)
 
             if !report.labResults.isEmpty {
                 Section("Lab Results") {
@@ -33,6 +35,8 @@ struct ReportDetailView: View {
                         LabResultRow(result: result, sex: profiles.first?.sex)
                     }
                 }
+                .listRowBackground(GlassRowBackground())
+                .listRowSeparator(.hidden)
             }
 
             if !report.attachments.isEmpty {
@@ -48,12 +52,16 @@ struct ReportDetailView: View {
                         }
                     }
                 }
+                .listRowBackground(GlassRowBackground())
+                .listRowSeparator(.hidden)
             }
 
             if !report.notes.isEmpty {
                 Section("Notes") {
                     Text(report.notes)
                 }
+                .listRowBackground(GlassRowBackground())
+                .listRowSeparator(.hidden)
             }
 
             Section {
@@ -61,7 +69,10 @@ struct ReportDetailView: View {
                     confirmDelete = true
                 }
             }
+            .listRowBackground(GlassRowBackground())
+            .listRowSeparator(.hidden)
         }
+        .ambientScreen()
         .navigationTitle(report.title)
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog(
@@ -141,6 +152,7 @@ struct AttachmentViewer: View {
                 ContentUnavailableView("Can't Preview File", systemImage: "eye.slash")
             }
         }
+        .background(AmbientBackground())
         .navigationTitle(attachment.filename)
         .navigationBarTitleDisplayMode(.inline)
     }

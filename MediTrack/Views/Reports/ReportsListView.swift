@@ -28,7 +28,8 @@ struct ReportsListView: View {
                         Text("Add your first medical report — lab results, imaging, prescriptions and more.")
                     } actions: {
                         Button("Add Report") { showingAdd = true }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(GlassProminentButtonStyle())
+                            .frame(maxWidth: 220)
                     }
                 } else {
                     List {
@@ -40,10 +41,13 @@ struct ReportsListView: View {
                             }
                         }
                         .onDelete(perform: deleteReports)
+                        .listRowBackground(GlassRowBackground())
+                        .listRowSeparator(.hidden)
                     }
                     .searchable(text: $searchText, prompt: "Search reports")
                 }
             }
+            .ambientScreen()
             .navigationTitle("Reports")
             .toolbar {
                 Button {
@@ -69,9 +73,13 @@ struct ReportRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: report.category.systemImage)
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Glass.accentGradient)
                 .frame(width: 36, height: 36)
-                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Glass.bevelStroke, lineWidth: 1)
+                )
             VStack(alignment: .leading, spacing: 2) {
                 Text(report.title)
                     .font(.subheadline.weight(.semibold))

@@ -42,6 +42,7 @@ struct DashboardView: View {
                 }
                 .padding()
             }
+            .background(AmbientBackground())
             .navigationTitle(navigationTitle)
             .toolbar {
                 Menu {
@@ -89,7 +90,7 @@ struct DashboardView: View {
                     .foregroundStyle(.tertiary)
             }
             .padding()
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+            .glassCard()
         }
         .buttonStyle(.plain)
     }
@@ -116,7 +117,7 @@ struct DashboardView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(12)
-                    .background(finding.severity.color.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                    .tintedGlassCard(finding.severity.color)
                 }
             }
         }
@@ -152,7 +153,7 @@ struct DashboardView: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(12)
-                            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+                            .glassCard(cornerRadius: 16)
                         }
                         .buttonStyle(.plain)
                     }
@@ -173,9 +174,13 @@ struct DashboardView: View {
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: report.category.systemImage)
-                                .foregroundStyle(Color.accentColor)
+                                .foregroundStyle(Glass.accentGradient)
                                 .frame(width: 36, height: 36)
-                                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .strokeBorder(Glass.bevelStroke, lineWidth: 1)
+                                )
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(report.title)
                                     .font(.subheadline.weight(.semibold))
@@ -190,7 +195,7 @@ struct DashboardView: View {
                                 .foregroundStyle(.tertiary)
                         }
                         .padding(12)
-                        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+                        .glassCard(cornerRadius: 16)
                     }
                     .buttonStyle(.plain)
                 }
@@ -205,24 +210,24 @@ struct DashboardView: View {
                 systemImage: "heart.text.square",
                 description: Text("Track your medical reports, lab results, vitals and medications — and get a detailed review of your health data. Everything stays on your device.")
             )
-            HStack {
+            HStack(spacing: 12) {
                 Button {
                     showingAddReport = true
                 } label: {
                     Label("Add Report", systemImage: "doc.badge.plus")
-                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(GlassProminentButtonStyle())
                 Button {
                     showingAddVital = true
                 } label: {
                     Label("Add Vital", systemImage: "waveform.path.ecg")
-                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(GlassButtonStyle())
             }
         }
-        .padding(.top, 40)
+        .padding(20)
+        .glassCard()
+        .padding(.top, 32)
     }
 }
 
@@ -241,11 +246,20 @@ struct ScoreRing: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color(.systemGray5), lineWidth: 10)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 10)
             Circle()
                 .trim(from: 0, to: max(0.02, CGFloat(score) / 100))
-                .stroke(ringColor, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                .stroke(
+                    AngularGradient(
+                        gradient: Gradient(colors: [ringColor.opacity(0.45), ringColor]),
+                        center: .center,
+                        startAngle: .degrees(0),
+                        endAngle: .degrees(360 * Double(score) / 100)
+                    ),
+                    style: StrokeStyle(lineWidth: 10, lineCap: .round)
+                )
                 .rotationEffect(.degrees(-90))
+                .shadow(color: ringColor.opacity(0.55), radius: 6)
             VStack(spacing: 0) {
                 Text("\(score)")
                     .font(.title2.bold())

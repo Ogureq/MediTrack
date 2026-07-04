@@ -24,7 +24,8 @@ struct MedicationsView: View {
                     Text("Track the medications you take, with dosage and schedule.")
                 } actions: {
                     Button("Add Medication") { showingAdd = true }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(GlassProminentButtonStyle())
+                        .frame(maxWidth: 220)
                 }
             } else {
                 List {
@@ -44,6 +45,8 @@ struct MedicationsView: View {
                                 delete(offsets, from: activeMedications)
                             }
                         }
+                        .listRowBackground(GlassRowBackground())
+                        .listRowSeparator(.hidden)
                     }
                     if !pastMedications.isEmpty {
                         Section("Past") {
@@ -54,10 +57,13 @@ struct MedicationsView: View {
                                 delete(offsets, from: pastMedications)
                             }
                         }
+                        .listRowBackground(GlassRowBackground())
+                        .listRowSeparator(.hidden)
                     }
                 }
             }
         }
+        .ambientScreen()
         .navigationTitle("Medications")
         .toolbar {
             Button {
@@ -127,11 +133,16 @@ struct AddMedicationSheet: View {
                     TextField("Purpose (e.g. blood pressure)", text: $purpose)
                     DatePicker("Start date", selection: $startDate, displayedComponents: .date)
                 }
+                .listRowBackground(GlassRowBackground())
+                .listRowSeparator(.hidden)
                 Section("Notes") {
                     TextField("Notes", text: $notes, axis: .vertical)
                         .lineLimit(2...4)
                 }
+                .listRowBackground(GlassRowBackground())
+                .listRowSeparator(.hidden)
             }
+            .ambientScreen()
             .navigationTitle("Add Medication")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
