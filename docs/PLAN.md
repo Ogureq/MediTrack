@@ -81,10 +81,16 @@ This document records the phased plan executed to build MediTrack, a privacy-fir
 - [x] Sample data & data management — Profile Data section with "Load Sample Data" (realistic 14-month demo history: 5 reports, 27 lab results, 28 vitals, 3 medications, created only alongside a non-destructive demo profile) and "Erase All Data" with confirmation (`SampleData.swift`)
 - [x] App icon — generated gradient icon (teal→blue with white medical cross and pulse line)
 
+## Phase 9 — Health Import & Report Scanning
+
+- [x] HealthKit entitlement configured in the Xcode project, plus `HealthKitService.swift` for importing vitals
+- [x] Profile Data-section import UI — one-tap "Import from Apple Health" action with incremental since-last-import fetching (first import covers the past year; later imports fetch only readings since the last import)
+- [x] On-device Vision OCR pipeline over report photo/PDF attachments (`LabScanService.swift`)
+- [x] Lab synonym dictionary (`LabSynonyms.swift`, 41 aliases) with longest-match word-boundary matching against the lab catalog
+- [x] Scan-results confirmation sheet (`ScannedResultsSheet.swift`) with review-before-add before detected values are added to the report
+
 ## Future Milestones
 
 Not part of the current plan; captured here for future scoping:
 
-- HealthKit import
-- OCR of report PDFs via the Vision framework
 - iCloud sync via SwiftData CloudKit mirroring
