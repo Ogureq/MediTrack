@@ -8,6 +8,8 @@ struct ReviewScreen: View {
     @Query private var vitals: [VitalSample]
     @Query private var medications: [Medication]
     @Query private var profiles: [HealthProfile]
+    @Query(sort: \ScoreSnapshot.date) private var snapshots: [ScoreSnapshot]
+    @Environment(\.modelContext) private var modelContext
 
     private var review: HealthReview {
         AnalysisEngine.generateReview(
@@ -45,10 +47,42 @@ struct ReviewScreen: View {
         .navigationTitle("Health Review")
         .toolbar {
             if review.hasData {
-                ShareLink(item: review.shareText) {
+                Menu {
+                    ShareLink(item: review.shareText) {
+                        Label("Share as Text", systemImage: "text.alignleft")
+                    }
+                    ShareLink(
+                        item: ReviewPDF(review: review),
+                        preview: SharePreview("MediTrack Health Review", image: Image(systemName: "doc.richtext"))
+                    ) {
+                        Label("Export as PDF", systemImage: "doc.richtext")
+                    }
+                } label: {
                     Image(systemName: "square.and.arrow.up")
                 }
             }
+        }
+        .task(id: review.score) { recordSnapshot() }
+    }
+
+    /// Keeps one score snapshot per day so the dashboard can chart history.
+    private func recordSnapshot() {
+        guard review.hasData else { return }
+        let current = review
+        if let last = snapshots.last, Calendar.current.isDate(last.date, inSameDayAs: .now) {
+            if last.score != current.score {
+                last.date = .now
+                last.score = current.score
+                last.criticalCount = current.criticalFindings.count
+                last.attentionCount = current.attentionFindings.count
+            }
+        } else {
+            modelContext.insert(ScoreSnapshot(
+                date: .now,
+                score: current.score,
+                criticalCount: current.criticalFindings.count,
+                attentionCount: current.attentionFindings.count
+            ))
         }
     }
 

@@ -43,19 +43,50 @@ struct AddReportView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
-    @State private var title = ""
-    @State private var category: ReportCategory = .labReport
-    @State private var date = Date.now
-    @State private var provider = ""
-    @State private var facility = ""
-    @State private var notes = ""
+    private let existingReport: MedicalReport?
+
+    @State private var title: String
+    @State private var category: ReportCategory
+    @State private var date: Date
+    @State private var provider: String
+    @State private var facility: String
+    @State private var notes: String
 
     @State private var labDrafts: [LabResultDraft] = []
     @State private var attachments: [AttachmentDraft] = []
+    @State private var removedLabResults: [LabResult] = []
+    @State private var removedAttachments: [ReportAttachment] = []
 
     @State private var showingLabEntry = false
     @State private var showingFileImporter = false
     @State private var photoItems: [PhotosPickerItem] = []
+
+    init(report: MedicalReport? = nil) {
+        existingReport = report
+        _title = State(initialValue: report?.title ?? "")
+        _category = State(initialValue: report?.category ?? .labReport)
+        _date = State(initialValue: report?.date ?? .now)
+        _provider = State(initialValue: report?.provider ?? "")
+        _facility = State(initialValue: report?.facility ?? "")
+        _notes = State(initialValue: report?.notes ?? "")
+    }
+
+    private var isEditing: Bool { existingReport != nil }
+
+    /// Existing lab results minus the ones marked for removal in this edit session.
+    private var remainingLabResults: [LabResult] {
+        guard let existingReport else { return [] }
+        return existingReport.labResults
+            .filter { result in !removedLabResults.contains(where: { $0 === result }) }
+            .sorted { $0.displayName < $1.displayName }
+    }
+
+    private var remainingAttachments: [ReportAttachment] {
+        guard let existingReport else { return [] }
+        return existingReport.attachments.filter { attachment in
+            !removedAttachments.contains(where: { $0 === attachment })
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -76,6 +107,17 @@ struct AddReportView: View {
                 .listRowSeparator(.hidden)
 
                 Section("Lab Results") {
+                    ForEach(remainingLabResults) { result in
+                        HStack {
+                            Text(result.displayName)
+                            Spacer()
+                            Text("\(result.value.compactFormatted) \(result.unit)")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .onDelete { offsets in
+                        removedLabResults.append(contentsOf: offsets.map { remainingLabResults[$0] })
+                    }
                     ForEach(labDrafts) { draft in
                         HStack {
                             Text(draft.displayName)
@@ -95,6 +137,15 @@ struct AddReportView: View {
                 .listRowSeparator(.hidden)
 
                 Section("Attachments") {
+                    ForEach(remainingAttachments) { attachment in
+                        Label(
+                            attachment.filename,
+                            systemImage: attachment.kind == .pdf ? "doc.richtext" : "photo"
+                        )
+                    }
+                    .onDelete { offsets in
+                        removedAttachments.append(contentsOf: offsets.map { remainingAttachments[$0] })
+                    }
                     ForEach(attachments) { attachment in
                         Label(
                             attachment.filename,
@@ -122,7 +173,7 @@ struct AddReportView: View {
                 .listRowSeparator(.hidden)
             }
             .ambientScreen()
-            .navigationTitle("New Report")
+            .navigationTitle(isEditing ? "Edit Report" : "New Report")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -180,15 +231,36 @@ struct AddReportView: View {
     }
 
     private func save() {
-        let report = MedicalReport(
-            title: title.trimmingCharacters(in: .whitespaces),
-            category: category,
-            date: date,
-            provider: provider.trimmingCharacters(in: .whitespaces),
-            facility: facility.trimmingCharacters(in: .whitespaces),
-            notes: notes
-        )
-        modelContext.insert(report)
+        let report: MedicalReport
+        if let existingReport {
+            report = existingReport
+            report.title = title.trimmingCharacters(in: .whitespaces)
+            report.category = category
+            report.date = date
+            report.provider = provider.trimmingCharacters(in: .whitespaces)
+            report.facility = facility.trimmingCharacters(in: .whitespaces)
+            report.notes = notes
+            for result in removedLabResults {
+                modelContext.delete(result)
+            }
+            for attachment in removedAttachments {
+                modelContext.delete(attachment)
+            }
+            // Keep lab result dates aligned with the (possibly changed) report date.
+            for result in remainingLabResults {
+                result.date = date
+            }
+        } else {
+            report = MedicalReport(
+                title: title.trimmingCharacters(in: .whitespaces),
+                category: category,
+                date: date,
+                provider: provider.trimmingCharacters(in: .whitespaces),
+                facility: facility.trimmingCharacters(in: .whitespaces),
+                notes: notes
+            )
+            modelContext.insert(report)
+        }
 
         for draft in labDrafts {
             guard let value = draft.value else { continue }

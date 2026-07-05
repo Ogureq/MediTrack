@@ -3,7 +3,9 @@ import SwiftUI
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("appLockEnabled") private var appLockEnabled = false
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @StateObject private var lock = BiometricLock()
+    @State private var showingOnboarding = false
 
     var body: some View {
         TabView {
@@ -24,10 +26,19 @@ struct ContentView: View {
             }
         }
         .task {
+            if !hasCompletedOnboarding {
+                showingOnboarding = true
+            }
             if appLockEnabled {
                 await lock.unlock()
             } else {
                 lock.isLocked = false
+            }
+        }
+        .fullScreenCover(isPresented: $showingOnboarding) {
+            OnboardingView {
+                hasCompletedOnboarding = true
+                showingOnboarding = false
             }
         }
         .onChange(of: scenePhase) { _, newPhase in

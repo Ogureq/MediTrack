@@ -25,7 +25,9 @@ struct ProfileView: View {
 
 private struct ProfileForm: View {
     @Bindable var profile: HealthProfile
+    @Environment(\.modelContext) private var modelContext
     @AppStorage("appLockEnabled") private var appLockEnabled = false
+    @State private var confirmErase = false
 
     private static let bloodTypes = ["", "A+", "A−", "B+", "B−", "AB+", "AB−", "O+", "O−"]
 
@@ -96,6 +98,25 @@ private struct ProfileForm: View {
             .listRowSeparator(.hidden)
 
             Section {
+                Button {
+                    SampleData.load(into: modelContext)
+                } label: {
+                    Label("Load Sample Data", systemImage: "sparkles")
+                }
+                Button(role: .destructive) {
+                    confirmErase = true
+                } label: {
+                    Label("Erase All Data", systemImage: "trash")
+                }
+            } header: {
+                Text("Data")
+            } footer: {
+                Text("Sample data fills the app with a realistic demo history so you can explore every feature. Erasing removes all reports, vitals, medications, and your profile from this device.")
+            }
+            .listRowBackground(GlassRowBackground())
+            .listRowSeparator(.hidden)
+
+            Section {
                 LabeledContent("Version", value: "1.0")
                 Text(HealthReview.disclaimer)
                     .font(.footnote)
@@ -105,6 +126,17 @@ private struct ProfileForm: View {
             }
             .listRowBackground(GlassRowBackground())
             .listRowSeparator(.hidden)
+        }
+        .confirmationDialog(
+            "Erase all data from this device?",
+            isPresented: $confirmErase,
+            titleVisibility: .visible
+        ) {
+            Button("Erase Everything", role: .destructive) {
+                SampleData.eraseAllData(in: modelContext)
+            }
+        } message: {
+            Text("This cannot be undone.")
         }
     }
 

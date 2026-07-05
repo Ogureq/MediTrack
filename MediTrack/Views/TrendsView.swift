@@ -16,12 +16,31 @@ struct MetricSeries: Identifiable {
     let points: [MetricPoint]
 }
 
+enum TrendTimeRange: String, CaseIterable, Identifiable {
+    case threeMonths = "3M"
+    case sixMonths = "6M"
+    case year = "1Y"
+    case all = "All"
+
+    var id: String { rawValue }
+
+    var months: Int? {
+        switch self {
+        case .threeMonths: 3
+        case .sixMonths: 6
+        case .year: 12
+        case .all: nil
+        }
+    }
+}
+
 struct TrendsView: View {
     @Query private var reports: [MedicalReport]
     @Query private var vitals: [VitalSample]
     @Query private var profiles: [HealthProfile]
 
     @State private var selectedSeriesID: String?
+    @State private var timeRange: TrendTimeRange = .all
 
     private var allSeries: [MetricSeries] {
         var series: [MetricSeries] = []
@@ -102,7 +121,8 @@ struct TrendsView: View {
     }
 
     private func trendsList(for series: MetricSeries) -> some View {
-        List {
+        let points = visiblePoints(for: series)
+        return List {
             Section {
                 Picker("Metric", selection: Binding(
                     get: { series.id },
@@ -112,24 +132,44 @@ struct TrendsView: View {
                         Text(candidate.name).tag(candidate.id)
                     }
                 }
-                chart(for: series)
-                    .frame(height: 240)
-                    .padding(.vertical, 8)
-                    .listRowSeparator(.hidden)
+                Picker("Range", selection: $timeRange) {
+                    ForEach(TrendTimeRange.allCases) { range in
+                        Text(range.rawValue).tag(range)
+                    }
+                }
+                .pickerStyle(.segmented)
+                if points.count >= 2 {
+                    chart(for: series, points: points)
+                        .frame(height: 240)
+                        .padding(.vertical, 8)
+                        .listRowSeparator(.hidden)
+                } else {
+                    Text("Not enough entries in this time range.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
             .listRowBackground(GlassRowBackground())
             .listRowSeparator(.hidden)
 
             Section("Statistics") {
-                statsRows(for: series)
+                statsRows(for: series, points: points)
             }
             .listRowBackground(GlassRowBackground())
             .listRowSeparator(.hidden)
         }
     }
 
+    private func visiblePoints(for series: MetricSeries) -> [MetricPoint] {
+        guard let months = timeRange.months,
+              let cutoff = Calendar.current.date(byAdding: .month, value: -months, to: .now) else {
+            return series.points
+        }
+        return series.points.filter { $0.date >= cutoff }
+    }
+
     @ViewBuilder
-    private func chart(for series: MetricSeries) -> some View {
+    private func chart(for series: MetricSeries, points: [MetricPoint]) -> some View {
         Chart {
             if let range = series.range {
                 RectangleMark(
@@ -138,7 +178,7 @@ struct TrendsView: View {
                 )
                 .foregroundStyle(.green.opacity(0.1))
             }
-            ForEach(series.points) { point in
+            ForEach(points) { point in
                 LineMark(
                     x: .value("Date", point.date),
                     y: .value(series.name, point.value)
@@ -154,13 +194,13 @@ struct TrendsView: View {
     }
 
     @ViewBuilder
-    private func statsRows(for series: MetricSeries) -> some View {
-        let values = series.points.map(\.value)
-        if let latest = series.points.last, let minValue = values.min(), let maxValue = values.max() {
+    private func statsRows(for series: MetricSeries, points: [MetricPoint]) -> some View {
+        let values = points.map(\.value)
+        if let latest = points.last, let minValue = values.min(), let maxValue = values.max() {
             LabeledContent("Latest", value: "\(latest.value.compactFormatted) \(series.unit)")
             LabeledContent("Lowest", value: "\(minValue.compactFormatted) \(series.unit)")
             LabeledContent("Highest", value: "\(maxValue.compactFormatted) \(series.unit)")
-            LabeledContent("Entries", value: "\(series.points.count)")
+            LabeledContent("Entries", value: "\(points.count)")
             if let range = series.range {
                 LabeledContent(
                     "Typical Range",
@@ -168,7 +208,7 @@ struct TrendsView: View {
                 )
             }
             if let (direction, percentChange) = AnalysisEngine.trend(
-                points: series.points.map { (date: $0.date, value: $0.value) },
+                points: points.map { (date: $0.date, value: $0.value) },
                 range: series.range
             ) {
                 LabeledContent("Trend") {

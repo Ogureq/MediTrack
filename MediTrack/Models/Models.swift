@@ -261,6 +261,11 @@ final class Medication {
     var notes: String = ""
     var startDate: Date = Date.now
     var endDate: Date?
+    var reminderEnabled: Bool = false
+    /// Time of day for the daily reminder (only hour/minute are relevant).
+    var reminderTime: Date?
+    /// Stable identifier used for the scheduled local notification.
+    var reminderID: String = UUID().uuidString
 
     init(
         name: String,
@@ -283,6 +288,25 @@ final class Medication {
     var isActive: Bool {
         guard let endDate else { return true }
         return endDate > .now
+    }
+}
+
+// MARK: - Score snapshot
+
+/// A point-in-time record of the generated health score, used to chart
+/// score history on the dashboard. At most one snapshot per day is kept.
+@Model
+final class ScoreSnapshot {
+    var date: Date = Date.now
+    var score: Int = 0
+    var criticalCount: Int = 0
+    var attentionCount: Int = 0
+
+    init(date: Date = .now, score: Int, criticalCount: Int = 0, attentionCount: Int = 0) {
+        self.date = date
+        self.score = score
+        self.criticalCount = criticalCount
+        self.attentionCount = attentionCount
     }
 }
 

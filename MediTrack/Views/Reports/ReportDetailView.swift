@@ -11,6 +11,7 @@ struct ReportDetailView: View {
     let report: MedicalReport
 
     @State private var confirmDelete = false
+    @State private var showingEdit = false
 
     var body: some View {
         List {
@@ -75,6 +76,12 @@ struct ReportDetailView: View {
         .ambientScreen()
         .navigationTitle(report.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            Button("Edit") { showingEdit = true }
+        }
+        .sheet(isPresented: $showingEdit) {
+            AddReportView(report: report)
+        }
         .confirmationDialog(
             "Delete this report and all its results?",
             isPresented: $confirmDelete,

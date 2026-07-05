@@ -36,6 +36,7 @@ struct MedicationsView: View {
                                     .contextMenu {
                                         Button {
                                             medication.endDate = .now
+                                            NotificationService.cancelReminder(id: medication.reminderID)
                                         } label: {
                                             Label("Mark as Ended", systemImage: "checkmark.circle")
                                         }
@@ -77,6 +78,7 @@ struct MedicationsView: View {
 
     private func delete(_ offsets: IndexSet, from list: [Medication]) {
         for index in offsets {
+            NotificationService.cancelReminder(id: list[index].reminderID)
             modelContext.delete(list[index])
         }
     }
@@ -87,8 +89,15 @@ struct MedicationRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(medication.name)
-                .font(.subheadline.weight(.semibold))
+            HStack(spacing: 6) {
+                Text(medication.name)
+                    .font(.subheadline.weight(.semibold))
+                if medication.isActive, medication.reminderEnabled, let time = medication.reminderTime {
+                    Label(time.formatted(date: .omitted, time: .shortened), systemImage: "bell.fill")
+                        .font(.caption2)
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
             if !medication.dosage.isEmpty || !medication.frequency.isEmpty {
                 Text([medication.dosage, medication.frequency].filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.caption)
@@ -122,6 +131,8 @@ struct AddMedicationSheet: View {
     @State private var purpose = ""
     @State private var notes = ""
     @State private var startDate = Date.now
+    @State private var reminderEnabled = false
+    @State private var reminderTime = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: .now) ?? .now
 
     var body: some View {
         NavigationStack {
@@ -135,6 +146,19 @@ struct AddMedicationSheet: View {
                 }
                 .listRowBackground(GlassRowBackground())
                 .listRowSeparator(.hidden)
+                Section {
+                    Toggle("Daily reminder", isOn: $reminderEnabled)
+                    if reminderEnabled {
+                        DatePicker("Time", selection: $reminderTime, displayedComponents: .hourAndMinute)
+                    }
+                } header: {
+                    Text("Reminder")
+                } footer: {
+                    Text("MediTrack sends a local notification every day at this time while the medication is active.")
+                }
+                .listRowBackground(GlassRowBackground())
+                .listRowSeparator(.hidden)
+
                 Section("Notes") {
                     TextField("Notes", text: $notes, axis: .vertical)
                         .lineLimit(2...4)
@@ -166,7 +190,25 @@ struct AddMedicationSheet: View {
             notes: notes,
             startDate: startDate
         )
+        medication.reminderEnabled = reminderEnabled
+        medication.reminderTime = reminderEnabled ? reminderTime : nil
         modelContext.insert(medication)
+        if reminderEnabled {
+            let id = medication.reminderID
+            let name = medication.name
+            let dosage = medication.dosage
+            let time = reminderTime
+            Task {
+                if await NotificationService.requestAuthorization() {
+                    NotificationService.scheduleDailyReminder(
+                        id: id,
+                        medicationName: name,
+                        dosage: dosage,
+                        at: time
+                    )
+                }
+            }
+        }
         dismiss()
     }
 }

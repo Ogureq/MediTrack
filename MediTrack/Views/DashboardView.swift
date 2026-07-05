@@ -1,11 +1,13 @@
 import SwiftUI
 import SwiftData
+import Charts
 
 struct DashboardView: View {
     @Query(sort: \MedicalReport.date, order: .reverse) private var reports: [MedicalReport]
     @Query private var vitals: [VitalSample]
     @Query private var medications: [Medication]
     @Query private var profiles: [HealthProfile]
+    @Query(sort: \ScoreSnapshot.date) private var snapshots: [ScoreSnapshot]
 
     @State private var showingAddReport = false
     @State private var showingAddVital = false
@@ -33,6 +35,7 @@ struct DashboardView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     if review.hasData {
                         scoreCard
+                        scoreHistoryCard
                         alertsSection
                         vitalsGrid
                         recentReportsSection
@@ -93,6 +96,41 @@ struct DashboardView: View {
             .glassCard()
         }
         .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var scoreHistoryCard: some View {
+        if snapshots.count >= 2 {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Score History")
+                    .font(.headline)
+                Chart(snapshots) { snapshot in
+                    AreaMark(
+                        x: .value("Date", snapshot.date),
+                        y: .value("Score", snapshot.score)
+                    )
+                    .interpolationMethod(.monotone)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.teal.opacity(0.35), .clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    LineMark(
+                        x: .value("Date", snapshot.date),
+                        y: .value("Score", snapshot.score)
+                    )
+                    .interpolationMethod(.monotone)
+                    .foregroundStyle(Glass.accentGradient)
+                    .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                }
+                .chartYScale(domain: 0...100)
+                .frame(height: 110)
+                .padding()
+                .glassCard(cornerRadius: 16)
+            }
+        }
     }
 
     @ViewBuilder

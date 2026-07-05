@@ -11,6 +11,7 @@ struct MediTrackApp: App {
             VitalSample.self,
             Medication.self,
             HealthProfile.self,
+            ScoreSnapshot.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {
