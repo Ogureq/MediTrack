@@ -76,8 +76,6 @@ The following are under consideration for future releases and are **not** implem
 - HealthKit import
 - OCR of report PDFs via the Vision framework
 - iCloud sync via SwiftData CloudKit mirroring
-- Medication reminders via local notifications
-- PDF export of reviews
 
 ## Medical Disclaimer
 

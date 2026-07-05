@@ -70,6 +70,17 @@ This document records the phased plan executed to build MediTrack, a privacy-fir
 - [x] Apply ambient backgrounds and glass chip rows across all lists, forms, and sheets
 - [x] Restyle the app lock screen with the glass design system
 
+## Phase 8 — Feature Expansion
+
+- [x] Onboarding flow — 4-page glassmorphic welcome (track reports / detailed reviews / trends / privacy) ending with mandatory medical-disclaimer acknowledgement, shown on first launch (`OnboardingView.swift`)
+- [x] Report editing — edit an existing report's fields, remove lab results or attachments, and add new ones via an Edit button on the report detail screen
+- [x] PDF export — export the Health Review as a formatted PDF (header, score, findings by severity, trends, lab table, disclaimer) via `ReviewPDFExporter.swift`, alongside plain-text sharing
+- [x] Medication reminders — optional daily local-notification reminder per medication at a chosen time, auto-cancelled when the medication is deleted or marked ended (`NotificationService.swift`)
+- [x] Health-score history — `ScoreSnapshot` SwiftData model records at most one score snapshot per day; Dashboard shows a "Score History" gradient area chart
+- [x] Trends time ranges — 3M / 6M / 1Y / All segmented filter on the Trends screen, with statistics and trend classification respecting the selected range
+- [x] Sample data & data management — Profile Data section with "Load Sample Data" (realistic 14-month demo history: 5 reports, 27 lab results, 28 vitals, 3 medications, created only alongside a non-destructive demo profile) and "Erase All Data" with confirmation (`SampleData.swift`)
+- [x] App icon — generated gradient icon (teal→blue with white medical cross and pulse line)
+
 ## Future Milestones
 
 Not part of the current plan; captured here for future scoping:
@@ -77,5 +88,3 @@ Not part of the current plan; captured here for future scoping:
 - HealthKit import
 - OCR of report PDFs via the Vision framework
 - iCloud sync via SwiftData CloudKit mirroring
-- Medication reminders via local notifications
-- PDF export of reviews
