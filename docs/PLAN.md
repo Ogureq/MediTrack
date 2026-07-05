@@ -89,6 +89,15 @@ This document records the phased plan executed to build MediTrack, a privacy-fir
 - [x] Lab synonym dictionary (`LabSynonyms.swift`, 41 aliases) with longest-match word-boundary matching against the lab catalog
 - [x] Scan-results confirmation sheet (`ScannedResultsSheet.swift`) with review-before-add before detected values are added to the report
 
+## Phase 10 — Health Features & UI Polish
+
+- [x] Symptoms journal — log symptoms with a 1–10 severity slider, quick-pick chips for common symptoms, notes, and date (`Views/SymptomsView.swift`); entries from the last two weeks feed the Health Review — a severity-8+ entry raises a needs-attention finding, and 3+ recent entries produce an informational summary
+- [x] Appointments — track upcoming/past appointments with doctor and location, an optional local-notification reminder 24h before, a "Next Appointment" card on the Dashboard, and an informational finding in the Health Review (`Views/AppointmentsView.swift`)
+- [x] New vitals — Respiratory Rate (typical 12–20 breaths/min) and Sleep (7–9 h), each with engine checks (short sleep <6h raises attention; out-of-range respiratory rate raises attention) and available in charts/trends alongside existing vitals
+- [x] Derived lipid insights — engine computes the total-to-HDL cholesterol ratio (ideal <3.5, target <5; ≥5 raises attention) and non-HDL cholesterol (≥160 mg/dL raises attention) whenever both labs are present
+- [x] Medical ID — emergency info card under More (name, DOB/age, sex, blood type prominently, height, allergies, conditions, active medications) with a shareable plain-text summary (`Views/MedicalIDView.swift`)
+- [x] UI polish — app-wide rounded type design; health-score ring animates on appear with numeric content transitions; Trends charts support touch scrubbing with a frosted-glass value tooltip; haptic feedback on saves; lock screen prompts Face ID immediately; Dashboard date header and next-appointment card; More tab reorganized (Vitals/Symptoms/Medications/Appointments + Medical ID/Profile)
+
 ## Future Milestones
 
 Not part of the current plan; captured here for future scoping:
