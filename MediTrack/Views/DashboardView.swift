@@ -8,6 +8,8 @@ struct DashboardView: View {
     @Query private var medications: [Medication]
     @Query private var profiles: [HealthProfile]
     @Query(sort: \ScoreSnapshot.date) private var snapshots: [ScoreSnapshot]
+    @Query private var symptoms: [SymptomEntry]
+    @Query(sort: \Appointment.date) private var appointments: [Appointment]
 
     @State private var showingAddReport = false
     @State private var showingAddVital = false
@@ -17,8 +19,14 @@ struct DashboardView: View {
             profile: profiles.first,
             reports: reports,
             vitals: vitals,
-            medications: medications
+            medications: medications,
+            symptoms: symptoms,
+            appointments: appointments
         )
+    }
+
+    private var nextAppointment: Appointment? {
+        appointments.first(where: \.isUpcoming)
     }
 
     private var navigationTitle: String {
@@ -33,10 +41,14 @@ struct DashboardView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    Text(Date.now.formatted(date: .complete, time: .omitted))
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
                     if review.hasData {
                         scoreCard
                         scoreHistoryCard
                         alertsSection
+                        appointmentCard
                         vitalsGrid
                         recentReportsSection
                     } else {
@@ -162,6 +174,51 @@ struct DashboardView: View {
     }
 
     @ViewBuilder
+    private var appointmentCard: some View {
+        if let next = nextAppointment {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Next Appointment")
+                    .font(.headline)
+                NavigationLink {
+                    AppointmentsView()
+                } label: {
+                    HStack(spacing: 12) {
+                        VStack(spacing: 0) {
+                            Text(next.date.formatted(.dateTime.month(.abbreviated)))
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            Text(next.date.formatted(.dateTime.day()))
+                                .font(.title3.bold())
+                                .foregroundStyle(Color.accentColor)
+                        }
+                        .frame(width: 44, height: 44)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .strokeBorder(Glass.bevelStroke, lineWidth: 1)
+                        )
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(next.title)
+                                .font(.subheadline.weight(.semibold))
+                                .lineLimit(1)
+                            Text(next.date.formatted(date: .abbreviated, time: .shortened))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(12)
+                    .glassCard(cornerRadius: 16)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    @ViewBuilder
     private var vitalsGrid: some View {
         let tiles = VitalType.allCases.compactMap { type -> (VitalType, VitalSample)? in
             guard let latest = vitals.filter({ $0.type == type }).max(by: { $0.date < $1.date }) else {
@@ -272,6 +329,8 @@ struct DashboardView: View {
 struct ScoreRing: View {
     let score: Int
 
+    @State private var progress: CGFloat = 0
+
     private var ringColor: Color {
         switch score {
         case 75...: .green
@@ -286,7 +345,7 @@ struct ScoreRing: View {
             Circle()
                 .stroke(Color.primary.opacity(0.08), lineWidth: 10)
             Circle()
-                .trim(from: 0, to: max(0.02, CGFloat(score) / 100))
+                .trim(from: 0, to: max(0.02, progress))
                 .stroke(
                     AngularGradient(
                         gradient: Gradient(colors: [ringColor.opacity(0.45), ringColor]),
@@ -301,9 +360,20 @@ struct ScoreRing: View {
             VStack(spacing: 0) {
                 Text("\(score)")
                     .font(.title2.bold())
+                    .contentTransition(.numericText())
                 Text("of 100")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+            }
+        }
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.9)) {
+                progress = CGFloat(score) / 100
+            }
+        }
+        .onChange(of: score) { _, newScore in
+            withAnimation(.easeOut(duration: 0.6)) {
+                progress = CGFloat(newScore) / 100
             }
         }
     }

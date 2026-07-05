@@ -312,6 +312,8 @@ enum AnalysisEngine {
         reports: [MedicalReport],
         vitals: [VitalSample],
         medications: [Medication],
+        symptoms: [SymptomEntry] = [],
+        appointments: [Appointment] = [],
         now: Date = .now
     ) -> HealthReview {
         let sex = profile?.sex
@@ -411,6 +413,45 @@ enum AnalysisEngine {
             if lhs.status.isCritical != rhs.status.isCritical { return lhs.status.isCritical }
             if lhs.status.isOutOfRange != rhs.status.isOutOfRange { return lhs.status.isOutOfRange }
             return lhs.name < rhs.name
+        }
+
+        // --- Derived lipid insights ---
+        func latestLabValue(_ key: String) -> Double? {
+            snapshots.first { $0.id == key }?.value
+        }
+        if let totalCholesterol = latestLabValue("totalcholesterol"),
+           let hdl = latestLabValue("hdlcholesterol"), hdl > 0 {
+            let ratio = totalCholesterol / hdl
+            let ratioText = String(format: "%.1f", ratio)
+            if ratio >= 5 {
+                findings.append(Finding(
+                    severity: .attention,
+                    category: .labs,
+                    title: "Cholesterol ratio is high",
+                    detail: "Your total-to-HDL cholesterol ratio is \(ratioText) (target below 5, ideal below 3.5). This ratio is a useful indicator of cardiovascular risk.",
+                    recommendation: "Discuss lipid management with your doctor."
+                ))
+            } else {
+                findings.append(Finding(
+                    severity: .info,
+                    category: .labs,
+                    title: "Cholesterol ratio: \(ratioText)",
+                    detail: ratio < 3.5
+                        ? "A total-to-HDL cholesterol ratio below 3.5 is considered ideal."
+                        : "Your total-to-HDL cholesterol ratio is within the generally recommended target of below 5.",
+                    recommendation: nil
+                ))
+            }
+            let nonHDL = totalCholesterol - hdl
+            if nonHDL >= 160 {
+                findings.append(Finding(
+                    severity: .attention,
+                    category: .labs,
+                    title: "Non-HDL cholesterol is high",
+                    detail: "Non-HDL cholesterol (total minus HDL) is \(Int(nonHDL)) mg/dL; below 130 mg/dL is generally recommended. It captures all cholesterol carried by potentially artery-clogging particles.",
+                    recommendation: "Worth reviewing with your doctor alongside your full lipid panel."
+                ))
+            }
         }
 
         // --- Vitals ---
@@ -550,6 +591,38 @@ enum AnalysisEngine {
             }
         }
 
+        if let respiratory = latestVital(.respiratoryRate) {
+            if respiratory.value < 12 || respiratory.value > 20 {
+                findings.append(Finding(
+                    severity: .attention,
+                    category: .vitals,
+                    title: "Respiratory rate \(respiratory.value < 12 ? "low" : "high")",
+                    detail: "Latest reading \(respiratory.value.compactFormatted) breaths/min is outside the typical resting range of 12–20.",
+                    recommendation: "Re-measure at rest; mention persistent abnormal readings to your doctor."
+                ))
+            }
+        }
+
+        if let sleep = latestVital(.sleepHours) {
+            if sleep.value < 6 {
+                findings.append(Finding(
+                    severity: .attention,
+                    category: .vitals,
+                    title: "Short sleep duration",
+                    detail: "Latest entry \(sleep.value.compactFormatted) hours is below the recommended 7–9 hours for adults. Chronic short sleep affects blood pressure, glucose regulation, and mood.",
+                    recommendation: "Aim for a consistent sleep schedule; discuss persistent sleep problems with your doctor."
+                ))
+            } else if sleep.value > 10 {
+                findings.append(Finding(
+                    severity: .info,
+                    category: .vitals,
+                    title: "Long sleep duration",
+                    detail: "Latest entry \(sleep.value.compactFormatted) hours is above the typical 7–9 hour range.",
+                    recommendation: "Occasional long sleep is normal; consistently needing 10+ hours is worth mentioning at a checkup."
+                ))
+            }
+        }
+
         // --- Vital trends ---
         for type in VitalType.allCases {
             let samples = vitals.filter { $0.type == type }.sorted { $0.date < $1.date }
@@ -597,6 +670,39 @@ enum AnalysisEngine {
                 title: "\(activeMedications.count) active medication\(activeMedications.count == 1 ? "" : "s")",
                 detail: "Currently tracking: \(names).",
                 recommendation: "Review your medication list with your doctor periodically."
+            ))
+        }
+
+        // --- Symptoms ---
+        let recentSymptoms = symptoms.filter { $0.date >= now.addingTimeInterval(-14 * 86_400) }
+        if let severe = recentSymptoms.filter({ $0.severity >= 8 }).max(by: { $0.date < $1.date }) {
+            findings.append(Finding(
+                severity: .attention,
+                category: .general,
+                title: "Severe symptom logged: \(severe.name)",
+                detail: "You rated \(severe.name.lowercased()) at \(severe.severity)/10 on \(severe.date.formatted(date: .abbreviated, time: .omitted)).",
+                recommendation: "If this symptom persists or worsens, contact your healthcare provider."
+            ))
+        } else if recentSymptoms.count >= 3 {
+            let names = Array(Set(recentSymptoms.map(\.name))).sorted().joined(separator: ", ")
+            findings.append(Finding(
+                severity: .info,
+                category: .general,
+                title: "\(recentSymptoms.count) symptoms logged in the last two weeks",
+                detail: "Logged: \(names).",
+                recommendation: "Bring your symptom journal to your next appointment — patterns help your doctor."
+            ))
+        }
+
+        // --- Appointments ---
+        if let next = appointments.filter({ $0.date > now }).min(by: { $0.date < $1.date }) {
+            let doctorText = next.doctor.isEmpty ? "" : " with \(next.doctor)"
+            findings.append(Finding(
+                severity: .info,
+                category: .general,
+                title: "Upcoming: \(next.title)",
+                detail: "Scheduled for \(next.date.formatted(date: .abbreviated, time: .shortened))\(doctorText).",
+                recommendation: nil
             ))
         }
 

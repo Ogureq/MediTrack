@@ -169,6 +169,8 @@ enum VitalType: String, Codable, CaseIterable, Identifiable {
     case bloodGlucose
     case oxygenSaturation
     case temperature
+    case respiratoryRate
+    case sleepHours
 
     var id: String { rawValue }
 
@@ -180,6 +182,8 @@ enum VitalType: String, Codable, CaseIterable, Identifiable {
         case .bloodGlucose: "Blood Glucose"
         case .oxygenSaturation: "Oxygen Saturation"
         case .temperature: "Body Temperature"
+        case .respiratoryRate: "Respiratory Rate"
+        case .sleepHours: "Sleep"
         }
     }
 
@@ -191,6 +195,8 @@ enum VitalType: String, Codable, CaseIterable, Identifiable {
         case .bloodGlucose: "mg/dL"
         case .oxygenSaturation: "%"
         case .temperature: "°C"
+        case .respiratoryRate: "breaths/min"
+        case .sleepHours: "hours"
         }
     }
 
@@ -202,6 +208,8 @@ enum VitalType: String, Codable, CaseIterable, Identifiable {
         case .bloodGlucose: "drop.fill"
         case .oxygenSaturation: "lungs.fill"
         case .temperature: "medical.thermometer.fill"
+        case .respiratoryRate: "wind"
+        case .sleepHours: "bed.double.fill"
         }
     }
 
@@ -214,6 +222,8 @@ enum VitalType: String, Codable, CaseIterable, Identifiable {
         case .bloodGlucose: 70...140
         case .oxygenSaturation: 95...100
         case .temperature: 36.1...37.2
+        case .respiratoryRate: 12...20
+        case .sleepHours: 7...9
         }
     }
 
@@ -288,6 +298,58 @@ final class Medication {
     var isActive: Bool {
         guard let endDate else { return true }
         return endDate > .now
+    }
+}
+
+// MARK: - Symptom journal
+
+@Model
+final class SymptomEntry {
+    var name: String = ""
+    /// Self-rated severity 1...10.
+    var severity: Int = 5
+    var date: Date = Date.now
+    var notes: String = ""
+
+    init(name: String, severity: Int, date: Date = .now, notes: String = "") {
+        self.name = name
+        self.severity = min(10, max(1, severity))
+        self.date = date
+        self.notes = notes
+    }
+}
+
+// MARK: - Appointment
+
+@Model
+final class Appointment {
+    var title: String = ""
+    var doctor: String = ""
+    var location: String = ""
+    var date: Date = Date.now
+    var notes: String = ""
+    var reminderEnabled: Bool = false
+    /// Stable identifier used for the scheduled local notification.
+    var reminderID: String = UUID().uuidString
+
+    init(
+        title: String,
+        doctor: String = "",
+        location: String = "",
+        date: Date,
+        notes: String = "",
+        reminderEnabled: Bool = false
+    ) {
+        self.title = title
+        self.doctor = doctor
+        self.location = location
+        self.date = date
+        self.notes = notes
+        self.reminderEnabled = reminderEnabled
+    }
+
+    var isUpcoming: Bool {
+        date > .now
     }
 }
 

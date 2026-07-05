@@ -34,6 +34,24 @@ enum NotificationService {
         UNUserNotificationCenter.current().add(request)
     }
 
+    /// Schedules a one-shot notification at an absolute time
+    /// (e.g. the day before an appointment). Skipped for past dates.
+    static func scheduleOneTime(id: String, title: String, body: String, at date: Date) {
+        guard date > .now else { return }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        let components = Calendar.current.dateComponents(
+            [.year, .month, .day, .hour, .minute],
+            from: date
+        )
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+        )
+    }
+
     static func cancelReminder(id: String) {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id])
     }

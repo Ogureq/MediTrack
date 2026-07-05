@@ -12,6 +12,8 @@ struct MediTrackApp: App {
             Medication.self,
             HealthProfile.self,
             ScoreSnapshot.self,
+            SymptomEntry.self,
+            Appointment.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {
@@ -24,6 +26,7 @@ struct MediTrackApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .fontDesign(.rounded)
         }
         .modelContainer(sharedModelContainer)
     }

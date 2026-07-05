@@ -41,6 +41,7 @@ struct TrendsView: View {
 
     @State private var selectedSeriesID: String?
     @State private var timeRange: TrendTimeRange = .all
+    @State private var selectedDate: Date?
 
     private var allSeries: [MetricSeries] {
         var series: [MetricSeries] = []
@@ -189,8 +190,39 @@ struct TrendsView: View {
                     y: .value(series.name, point.value)
                 )
             }
+            if let selectedDate, let selected = nearestPoint(to: selectedDate, in: points) {
+                RuleMark(x: .value("Selected", selected.date))
+                    .foregroundStyle(.gray.opacity(0.5))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                    .annotation(
+                        position: .top,
+                        overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                    ) {
+                        VStack(spacing: 2) {
+                            Text(selected.date.formatted(date: .abbreviated, time: .omitted))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text("\(selected.value.compactFormatted) \(series.unit)")
+                                .font(.caption.weight(.bold))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .strokeBorder(Glass.bevelStroke, lineWidth: 1)
+                        )
+                    }
+            }
         }
+        .chartXSelection(value: $selectedDate)
         .chartYAxisLabel(series.unit)
+    }
+
+    private func nearestPoint(to date: Date, in points: [MetricPoint]) -> MetricPoint? {
+        points.min {
+            abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date))
+        }
     }
 
     @ViewBuilder

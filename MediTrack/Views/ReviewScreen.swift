@@ -9,6 +9,8 @@ struct ReviewScreen: View {
     @Query private var medications: [Medication]
     @Query private var profiles: [HealthProfile]
     @Query(sort: \ScoreSnapshot.date) private var snapshots: [ScoreSnapshot]
+    @Query private var symptoms: [SymptomEntry]
+    @Query(sort: \Appointment.date) private var appointments: [Appointment]
     @Environment(\.modelContext) private var modelContext
 
     private var review: HealthReview {
@@ -16,7 +18,9 @@ struct ReviewScreen: View {
             profile: profiles.first,
             reports: reports,
             vitals: vitals,
-            medications: medications
+            medications: medications,
+            symptoms: symptoms,
+            appointments: appointments
         )
     }
 

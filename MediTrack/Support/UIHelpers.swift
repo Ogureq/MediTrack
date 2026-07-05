@@ -1,4 +1,12 @@
 import SwiftUI
+import UIKit
+
+/// Lightweight haptics wrapper used by the save actions across the app.
+enum Haptics {
+    static func success() {
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+}
 
 extension Severity {
     var color: Color {

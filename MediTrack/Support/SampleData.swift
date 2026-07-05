@@ -170,6 +170,18 @@ enum SampleData {
         // Body temperature: 1 entry, 36.6 °C, two weeks ago.
         context.insert(VitalSample(type: .temperature, value: 36.6, date: daysAgo(14)))
 
+        // Respiratory rate: 2 entries, 16 then 15 breaths/min.
+        context.insert(VitalSample(type: .respiratoryRate, value: 16, date: monthsAgo(2)))
+        context.insert(VitalSample(type: .respiratoryRate, value: 15, date: monthsAgo(1)))
+
+        // Sleep: 6 entries over ~3 months, improving 6.2 -> 7.4 hours.
+        let sleep: [(value: Double, daysAgo: Int)] = [
+            (6.2, 90), (6.4, 75), (6.7, 60), (6.9, 45), (7.2, 25), (7.4, 10)
+        ]
+        for entry in sleep {
+            context.insert(VitalSample(type: .sleepHours, value: entry.value, date: daysAgo(entry.daysAgo)))
+        }
+
         // 4. Medications.
 
         // Atorvastatin — active, started 8 months ago.
@@ -201,6 +213,36 @@ enum SampleData {
             startDate: amoxStart,
             endDate: amoxEnd
         ))
+
+        // 5. Symptoms — a mild improvement story over the past two months.
+        context.insert(SymptomEntry(name: "Headache", severity: 6, date: monthsAgo(2), notes: "After long screen days"))
+        context.insert(SymptomEntry(name: "Headache", severity: 5, date: daysAgo(42)))
+        context.insert(SymptomEntry(name: "Fatigue", severity: 5, date: daysAgo(35)))
+        context.insert(SymptomEntry(name: "Headache", severity: 4, date: daysAgo(21)))
+        context.insert(SymptomEntry(name: "Back Pain", severity: 3, date: daysAgo(14), notes: "After gym session"))
+        context.insert(SymptomEntry(name: "Headache", severity: 3, date: daysAgo(5)))
+
+        // 6. Appointments.
+
+        // Upcoming — cardiology follow-up in ~3 weeks. Reminder OFF so sample
+        // data never schedules a real notification.
+        context.insert(Appointment(
+            title: "Cardiology Follow-up",
+            doctor: "Dr. Osei",
+            location: "City Medical Center",
+            date: Calendar.current.date(byAdding: .day, value: 21, to: .now) ?? .now,
+            notes: "Bring home blood-pressure log.",
+            reminderEnabled: false
+        ))
+
+        // Past — annual physical ~14 months ago.
+        context.insert(Appointment(
+            title: "Annual Physical",
+            doctor: "Dr. Chen",
+            location: "City Medical Center",
+            date: monthsAgo(14),
+            reminderEnabled: false
+        ))
     }
 
     /// Deletes ALL data of every model type.
@@ -210,6 +252,8 @@ enum SampleData {
         try? context.delete(model: ReportAttachment.self)
         try? context.delete(model: VitalSample.self)
         try? context.delete(model: Medication.self)
+        try? context.delete(model: SymptomEntry.self)
+        try? context.delete(model: Appointment.self)
         try? context.delete(model: HealthProfile.self)
         try? context.delete(model: ScoreSnapshot.self)
     }

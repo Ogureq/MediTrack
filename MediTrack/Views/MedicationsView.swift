@@ -209,6 +209,7 @@ struct AddMedicationSheet: View {
                 }
             }
         }
+        Haptics.success()
         dismiss()
     }
 }

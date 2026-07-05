@@ -198,6 +198,7 @@ struct AddVitalSheet: View {
             note: note.trimmingCharacters(in: .whitespaces)
         )
         modelContext.insert(sample)
+        Haptics.success()
         dismiss()
     }
 }

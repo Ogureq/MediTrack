@@ -328,6 +328,7 @@ struct AddReportView: View {
             ))
         }
 
+        Haptics.success()
         dismiss()
     }
 }

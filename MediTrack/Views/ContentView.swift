@@ -53,6 +53,14 @@ struct LockScreenView: View {
     @ObservedObject var lock: BiometricLock
 
     var body: some View {
+        lockContent
+            .task {
+                // Prompt for Face ID immediately instead of waiting for a tap.
+                await lock.unlock()
+            }
+    }
+
+    private var lockContent: some View {
         ZStack {
             AmbientBackground()
             Rectangle()
@@ -98,9 +106,29 @@ struct MoreView: View {
                         Label("Vitals", systemImage: "waveform.path.ecg")
                     }
                     NavigationLink {
+                        SymptomsView()
+                    } label: {
+                        Label("Symptoms", systemImage: "list.bullet.clipboard")
+                    }
+                    NavigationLink {
                         MedicationsView()
                     } label: {
                         Label("Medications", systemImage: "pills.fill")
+                    }
+                    NavigationLink {
+                        AppointmentsView()
+                    } label: {
+                        Label("Appointments", systemImage: "calendar")
+                    }
+                }
+                .listRowBackground(GlassRowBackground())
+                .listRowSeparator(.hidden)
+
+                Section {
+                    NavigationLink {
+                        MedicalIDView()
+                    } label: {
+                        Label("Medical ID", systemImage: "cross.case.fill")
                     }
                     NavigationLink {
                         ProfileView()
