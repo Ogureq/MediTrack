@@ -60,6 +60,9 @@ struct AddReportView: View {
     @State private var showingLabEntry = false
     @State private var showingFileImporter = false
     @State private var photoItems: [PhotosPickerItem] = []
+    @State private var isScanning = false
+    @State private var scannedValues: [ScannedLabValue] = []
+    @State private var showingScanResults = false
 
     init(report: MedicalReport? = nil) {
         existingReport = report
@@ -161,6 +164,21 @@ struct AddReportView: View {
                     } label: {
                         Label("Add PDF", systemImage: "doc.badge.plus")
                     }
+                    if !attachments.isEmpty || !remainingAttachments.isEmpty {
+                        Button {
+                            scanAttachments()
+                        } label: {
+                            if isScanning {
+                                HStack(spacing: 8) {
+                                    ProgressView()
+                                    Text("Scanning…")
+                                }
+                            } else {
+                                Label("Scan for Lab Values", systemImage: "doc.text.viewfinder")
+                            }
+                        }
+                        .disabled(isScanning)
+                    }
                 }
                 .listRowBackground(GlassRowBackground())
                 .listRowSeparator(.hidden)
@@ -187,6 +205,17 @@ struct AddReportView: View {
             .sheet(isPresented: $showingLabEntry) {
                 LabEntrySheet { labDrafts.append($0) }
             }
+            .sheet(isPresented: $showingScanResults) {
+                ScannedResultsSheet(values: scannedValues) { selected in
+                    for scanned in selected {
+                        var draft = LabResultDraft()
+                        draft.catalogID = scanned.reference.id
+                        draft.unit = scanned.reference.unit
+                        draft.valueText = scanned.value.compactFormatted
+                        labDrafts.append(draft)
+                    }
+                }
+            }
             .fileImporter(
                 isPresented: $showingFileImporter,
                 allowedContentTypes: [.pdf],
@@ -211,6 +240,21 @@ struct AddReportView: View {
             }
         }
         photoItems = []
+    }
+
+    private func scanAttachments() {
+        isScanning = true
+        let inputs = remainingAttachments.map { (kind: $0.kind, data: $0.data) }
+            + attachments.map { (kind: $0.kind, data: $0.data) }
+        let existingKeys = Set(labDrafts.compactMap { $0.catalogID?.lowercased() })
+            .union(remainingLabResults.compactMap { $0.catalogID?.lowercased() })
+        Task {
+            let found = await LabScanService.scan(attachments: inputs)
+                .filter { !existingKeys.contains($0.reference.id.lowercased()) }
+            scannedValues = found
+            isScanning = false
+            showingScanResults = true
+        }
     }
 
     private func handleFileImport(_ result: Result<[URL], Error>) {

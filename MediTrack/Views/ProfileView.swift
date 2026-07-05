@@ -27,7 +27,10 @@ private struct ProfileForm: View {
     @Bindable var profile: HealthProfile
     @Environment(\.modelContext) private var modelContext
     @AppStorage("appLockEnabled") private var appLockEnabled = false
+    @AppStorage("lastHealthImportAt") private var lastHealthImportAt: Double = 0
     @State private var confirmErase = false
+    @State private var isImportingHealth = false
+    @State private var healthImportMessage: String?
 
     private static let bloodTypes = ["", "A+", "A−", "B+", "B−", "AB+", "AB−", "O+", "O−"]
 
@@ -99,6 +102,19 @@ private struct ProfileForm: View {
 
             Section {
                 Button {
+                    importFromHealth()
+                } label: {
+                    if isImportingHealth {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                            Text("Importing from Apple Health…")
+                        }
+                    } else {
+                        Label("Import from Apple Health", systemImage: "heart.fill")
+                    }
+                }
+                .disabled(!HealthKitService.isAvailable || isImportingHealth)
+                Button {
                     SampleData.load(into: modelContext)
                 } label: {
                     Label("Load Sample Data", systemImage: "sparkles")
@@ -111,7 +127,7 @@ private struct ProfileForm: View {
             } header: {
                 Text("Data")
             } footer: {
-                Text("Sample data fills the app with a realistic demo history so you can explore every feature. Erasing removes all reports, vitals, medications, and your profile from this device.")
+                Text("Health import copies your recent weight, blood pressure, heart rate, glucose, SpO2 and temperature readings from Apple Health. Sample data fills the app with a realistic demo history. Erasing removes all reports, vitals, medications, and your profile from this device.")
             }
             .listRowBackground(GlassRowBackground())
             .listRowSeparator(.hidden)
@@ -137,6 +153,37 @@ private struct ProfileForm: View {
             }
         } message: {
             Text("This cannot be undone.")
+        }
+        .alert(
+            "Apple Health",
+            isPresented: Binding(
+                get: { healthImportMessage != nil },
+                set: { if !$0 { healthImportMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(healthImportMessage ?? "")
+        }
+    }
+
+    private func importFromHealth() {
+        isImportingHealth = true
+        Task {
+            do {
+                try await HealthKitService.requestAuthorization()
+                let since = lastHealthImportAt > 0
+                    ? Date(timeIntervalSince1970: lastHealthImportAt)
+                    : Calendar.current.date(byAdding: .year, value: -1, to: .now) ?? .now
+                let count = try await HealthKitService.importVitals(since: since, into: modelContext)
+                lastHealthImportAt = Date.now.timeIntervalSince1970
+                healthImportMessage = count == 0
+                    ? "No new readings found in Apple Health."
+                    : "Imported \(count) reading\(count == 1 ? "" : "s") from Apple Health."
+            } catch {
+                healthImportMessage = "Import failed: \(error.localizedDescription)"
+            }
+            isImportingHealth = false
         }
     }
 
