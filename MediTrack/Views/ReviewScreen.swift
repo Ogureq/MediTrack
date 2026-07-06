@@ -181,21 +181,29 @@ struct ReviewScreen: View {
                         if index > 0 {
                             Divider()
                         }
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(snapshot.name)
-                                    .font(.subheadline)
-                                Text(snapshot.date.formatted(date: .abbreviated, time: .omitted))
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 3) {
-                                Text("\(snapshot.value.compactFormatted) \(snapshot.unit)")
-                                    .font(.subheadline.weight(.semibold))
-                                StatusPill(text: snapshot.status.label, color: snapshot.status.color)
+                        NavigationLink {
+                            LabDetailView(seriesKey: snapshot.id)
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(snapshot.name)
+                                        .font(.subheadline)
+                                    Text(snapshot.date.formatted(date: .abbreviated, time: .omitted))
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 3) {
+                                    Text("\(snapshot.value.compactFormatted) \(snapshot.unit)")
+                                        .font(.subheadline.weight(.semibold))
+                                    StatusPill(text: snapshot.status.label, color: snapshot.status.color)
+                                }
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.tertiary)
                             }
                         }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding()

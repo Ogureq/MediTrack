@@ -33,7 +33,11 @@ struct ReportDetailView: View {
             if !report.labResults.isEmpty {
                 Section("Lab Results") {
                     ForEach(report.labResults.sorted(by: { $0.displayName < $1.displayName })) { result in
-                        LabResultRow(result: result, sex: profiles.first?.sex)
+                        NavigationLink {
+                            LabDetailView(seriesKey: result.seriesKey)
+                        } label: {
+                            LabResultRow(result: result, sex: profiles.first?.sex)
+                        }
                     }
                 }
                 .listRowBackground(GlassRowBackground())

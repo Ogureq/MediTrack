@@ -220,29 +220,44 @@ struct DashboardView: View {
 
     @ViewBuilder
     private var vitalsGrid: some View {
-        let tiles = VitalType.allCases.compactMap { type -> (VitalType, VitalSample)? in
-            guard let latest = vitals.filter({ $0.type == type }).max(by: { $0.date < $1.date }) else {
-                return nil
-            }
-            return (type, latest)
+        let tiles = VitalType.allCases.compactMap { type -> (type: VitalType, latest: VitalSample, history: [VitalSample])? in
+            let samples = vitals.filter { $0.type == type }.sorted { $0.date < $1.date }
+            guard let latest = samples.last else { return nil }
+            return (type, latest, Array(samples.suffix(12)))
         }
         if !tiles.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Latest Vitals")
                     .font(.headline)
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    ForEach(tiles, id: \.0) { type, sample in
+                    ForEach(tiles, id: \.type) { tile in
                         NavigationLink {
-                            VitalsView(initialType: type)
+                            VitalsView(initialType: tile.type)
                         } label: {
                             VStack(alignment: .leading, spacing: 6) {
-                                Label(type.displayName, systemImage: type.systemImage)
+                                Label(tile.type.displayName, systemImage: tile.type.systemImage)
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
-                                Text(sample.formattedValue)
+                                Text(tile.latest.formattedValue)
                                     .font(.title3.bold())
-                                Text(sample.date.formatted(date: .abbreviated, time: .omitted))
+                                    .contentTransition(.numericText())
+                                if tile.history.count >= 2 {
+                                    Chart(tile.history) { sample in
+                                        LineMark(
+                                            x: .value("Date", sample.date),
+                                            y: .value("Value", sample.value)
+                                        )
+                                        .interpolationMethod(.monotone)
+                                        .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                                    }
+                                    .foregroundStyle(Glass.accentGradient)
+                                    .chartXAxis(.hidden)
+                                    .chartYAxis(.hidden)
+                                    .chartYScale(domain: .automatic(includesZero: false))
+                                    .frame(height: 26)
+                                }
+                                Text(tile.latest.date.formatted(date: .abbreviated, time: .omitted))
                                     .font(.caption2)
                                     .foregroundStyle(.tertiary)
                             }

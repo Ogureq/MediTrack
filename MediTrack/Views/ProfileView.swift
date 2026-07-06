@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 struct ProfileView: View {
     @Environment(\.modelContext) private var modelContext
@@ -31,6 +32,12 @@ private struct ProfileForm: View {
     @State private var confirmErase = false
     @State private var isImportingHealth = false
     @State private var healthImportMessage: String?
+    @State private var exportDocument: BackupJSONDocument?
+    @State private var showingExporter = false
+    @State private var showingImporter = false
+    @State private var pendingRestoreData: Data?
+    @State private var confirmRestore = false
+    @State private var dataMessage: String?
 
     private static let bloodTypes = ["", "A+", "A−", "B+", "B−", "AB+", "AB−", "O+", "O−"]
 
@@ -115,6 +122,16 @@ private struct ProfileForm: View {
                 }
                 .disabled(!HealthKitService.isAvailable || isImportingHealth)
                 Button {
+                    exportBackup()
+                } label: {
+                    Label("Export Backup", systemImage: "square.and.arrow.up.on.square")
+                }
+                Button {
+                    showingImporter = true
+                } label: {
+                    Label("Restore from Backup", systemImage: "square.and.arrow.down.on.square")
+                }
+                Button {
                     SampleData.load(into: modelContext)
                 } label: {
                     Label("Load Sample Data", systemImage: "sparkles")
@@ -127,7 +144,7 @@ private struct ProfileForm: View {
             } header: {
                 Text("Data")
             } footer: {
-                Text("Health import copies your recent weight, blood pressure, heart rate, glucose, SpO2 and temperature readings from Apple Health. Sample data fills the app with a realistic demo history. Erasing removes all reports, vitals, medications, and your profile from this device.")
+                Text("Health import copies your recent readings from Apple Health. Backups are a single JSON file containing everything — including attachments — that you can store anywhere and restore later (reminders need re-enabling after a restore). Erasing removes all data from this device.")
             }
             .listRowBackground(GlassRowBackground())
             .listRowSeparator(.hidden)
@@ -150,9 +167,59 @@ private struct ProfileForm: View {
         ) {
             Button("Erase Everything", role: .destructive) {
                 SampleData.eraseAllData(in: modelContext)
+                // Recreate a blank profile so this screen stays functional.
+                modelContext.insert(HealthProfile())
             }
         } message: {
             Text("This cannot be undone.")
+        }
+        .fileExporter(
+            isPresented: $showingExporter,
+            document: exportDocument,
+            contentType: .json,
+            defaultFilename: "MediTrack Backup"
+        ) { result in
+            if case .success = result {
+                dataMessage = "Backup exported."
+            }
+        }
+        .fileImporter(
+            isPresented: $showingImporter,
+            allowedContentTypes: [.json]
+        ) { result in
+            guard case .success(let url) = result else { return }
+            let accessed = url.startAccessingSecurityScopedResource()
+            defer {
+                if accessed { url.stopAccessingSecurityScopedResource() }
+            }
+            if let data = try? Data(contentsOf: url) {
+                pendingRestoreData = data
+                confirmRestore = true
+            } else {
+                dataMessage = "Couldn't read the selected file."
+            }
+        }
+        .confirmationDialog(
+            "Replace all current data with this backup?",
+            isPresented: $confirmRestore,
+            titleVisibility: .visible
+        ) {
+            Button("Restore Backup", role: .destructive) {
+                restoreBackup()
+            }
+        } message: {
+            Text("Everything currently in MediTrack will be replaced. This cannot be undone.")
+        }
+        .alert(
+            "Data",
+            isPresented: Binding(
+                get: { dataMessage != nil },
+                set: { if !$0 { dataMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(dataMessage ?? "")
         }
         .alert(
             "Apple Health",
@@ -164,6 +231,27 @@ private struct ProfileForm: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(healthImportMessage ?? "")
+        }
+    }
+
+    private func exportBackup() {
+        do {
+            exportDocument = BackupJSONDocument(data: try BackupService.export(from: modelContext))
+            showingExporter = true
+        } catch {
+            dataMessage = "Export failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func restoreBackup() {
+        guard let data = pendingRestoreData else { return }
+        pendingRestoreData = nil
+        do {
+            let count = try BackupService.restore(from: data, into: modelContext)
+            Haptics.success()
+            dataMessage = "Backup restored — \(count) record\(count == 1 ? "" : "s"). Medication and appointment reminders need to be re-enabled."
+        } catch {
+            dataMessage = error.localizedDescription
         }
     }
 
