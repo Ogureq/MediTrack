@@ -29,6 +29,9 @@ private struct ProfileForm: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage("appLockEnabled") private var appLockEnabled = false
     @AppStorage("lastHealthImportAt") private var lastHealthImportAt: Double = 0
+    @AppStorage(Units.weightKey) private var weightUnitRaw = WeightUnit.kilograms.rawValue
+    @AppStorage(Units.temperatureKey) private var temperatureUnitRaw = TemperatureUnit.celsius.rawValue
+    @AppStorage(Units.glucoseKey) private var glucoseUnitRaw = GlucoseUnit.mgdL.rawValue
     @State private var confirmErase = false
     @State private var isImportingHealth = false
     @State private var healthImportMessage: String?
@@ -88,6 +91,30 @@ private struct ProfileForm: View {
                     .lineLimit(1...3)
                 TextField("Existing conditions", text: $profile.conditions, axis: .vertical)
                     .lineLimit(1...3)
+            }
+            .listRowBackground(GlassRowBackground())
+            .listRowSeparator(.hidden)
+
+            Section {
+                Picker("Weight", selection: $weightUnitRaw) {
+                    ForEach(WeightUnit.allCases) { unit in
+                        Text(unit.label).tag(unit.rawValue)
+                    }
+                }
+                Picker("Temperature", selection: $temperatureUnitRaw) {
+                    ForEach(TemperatureUnit.allCases) { unit in
+                        Text(unit.label).tag(unit.rawValue)
+                    }
+                }
+                Picker("Blood glucose", selection: $glucoseUnitRaw) {
+                    ForEach(GlucoseUnit.allCases) { unit in
+                        Text(unit.label).tag(unit.rawValue)
+                    }
+                }
+            } header: {
+                Text("Units")
+            } footer: {
+                Text("Values are stored in metric and converted for display and entry.")
             }
             .listRowBackground(GlassRowBackground())
             .listRowSeparator(.hidden)

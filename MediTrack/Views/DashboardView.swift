@@ -10,6 +10,7 @@ struct DashboardView: View {
     @Query(sort: \ScoreSnapshot.date) private var snapshots: [ScoreSnapshot]
     @Query private var symptoms: [SymptomEntry]
     @Query(sort: \Appointment.date) private var appointments: [Appointment]
+    @Query private var goals: [HealthGoal]
 
     @State private var showingAddReport = false
     @State private var showingAddVital = false
@@ -50,6 +51,7 @@ struct DashboardView: View {
                         alertsSection
                         appointmentCard
                         vitalsGrid
+                        goalsCard
                         recentReportsSection
                     } else {
                         emptyState
@@ -246,7 +248,7 @@ struct DashboardView: View {
                                     Chart(tile.history) { sample in
                                         LineMark(
                                             x: .value("Date", sample.date),
-                                            y: .value("Value", sample.value)
+                                            y: .value("Value", Units.display(sample.value, for: tile.type))
                                         )
                                         .interpolationMethod(.monotone)
                                         .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .round))
@@ -268,6 +270,32 @@ struct DashboardView: View {
                         .buttonStyle(.plain)
                     }
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var goalsCard: some View {
+        let active = Array(goals.filter(\.isActive).prefix(2))
+        if !active.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Goals")
+                    .font(.headline)
+                NavigationLink {
+                    GoalsView()
+                } label: {
+                    VStack(spacing: 12) {
+                        ForEach(active) { goal in
+                            GoalRow(
+                                goal: goal,
+                                latest: vitals.filter { $0.type == goal.type }.max { $0.date < $1.date }?.value
+                            )
+                        }
+                    }
+                    .padding(12)
+                    .glassCard(cornerRadius: 16)
+                }
+                .buttonStyle(.plain)
             }
         }
     }

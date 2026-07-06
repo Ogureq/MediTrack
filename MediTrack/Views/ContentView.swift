@@ -120,6 +120,11 @@ struct MoreView: View {
                     } label: {
                         Label("Appointments", systemImage: "calendar")
                     }
+                    NavigationLink {
+                        GoalsView()
+                    } label: {
+                        Label("Goals", systemImage: "target")
+                    }
                 }
                 .listRowBackground(GlassRowBackground())
                 .listRowSeparator(.hidden)

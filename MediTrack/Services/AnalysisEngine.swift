@@ -514,7 +514,7 @@ enum AnalysisEngine {
                 severity: severity,
                 category: .vitals,
                 title: "BMI: \(bmiValue.compactFormatted) (\(name))",
-                detail: "Based on your latest weight of \(weight.value.compactFormatted) kg and height of \(heightCm.compactFormatted) cm.",
+                detail: "Based on your latest weight of \(Units.formatted(weight.value, for: .weight)) and height of \(heightCm.compactFormatted) cm.",
                 recommendation: severity == .attention ? "Consider discussing weight management with your doctor." : nil
             ))
         }
@@ -532,20 +532,22 @@ enum AnalysisEngine {
         }
 
         if let glucose = latestVital(.bloodGlucose) {
+            let reading = Units.formatted(glucose.value, for: .bloodGlucose)
             if glucose.value >= 250 || glucose.value < 54 {
                 findings.append(Finding(
                     severity: .critical,
                     category: .vitals,
                     title: "Blood glucose at a critical level",
-                    detail: "Latest reading \(glucose.value.compactFormatted) mg/dL is far outside the safe range.",
+                    detail: "Latest reading \(reading) is far outside the safe range.",
                     recommendation: "Contact your healthcare provider promptly."
                 ))
             } else if glucose.value < 70 || glucose.value > 180 {
+                let band = Units.displayRange(70...180, for: .bloodGlucose)
                 findings.append(Finding(
                     severity: .attention,
                     category: .vitals,
                     title: "Blood glucose out of range",
-                    detail: "Latest reading \(glucose.value.compactFormatted) mg/dL is outside the typical range of 70–180 mg/dL.",
+                    detail: "Latest reading \(reading) is outside the typical range of \(band.lowerBound.compactFormatted)–\(band.upperBound.compactFormatted) \(Units.label(for: .bloodGlucose)).",
                     recommendation: "Track further readings and discuss them with your doctor."
                 ))
             }
@@ -572,12 +574,13 @@ enum AnalysisEngine {
         }
 
         if let temperature = latestVital(.temperature) {
+            let reading = Units.formatted(temperature.value, for: .temperature)
             if temperature.value >= 39.5 || temperature.value < 35 {
                 findings.append(Finding(
                     severity: .critical,
                     category: .vitals,
                     title: temperature.value >= 39.5 ? "High fever recorded" : "Very low body temperature recorded",
-                    detail: "Latest reading \(temperature.value.compactFormatted) °C.",
+                    detail: "Latest reading \(reading).",
                     recommendation: "Seek medical advice if this reading is current."
                 ))
             } else if temperature.value >= 38 {
@@ -585,7 +588,7 @@ enum AnalysisEngine {
                     severity: .attention,
                     category: .vitals,
                     title: "Fever recorded",
-                    detail: "Latest reading \(temperature.value.compactFormatted) °C is above the normal range.",
+                    detail: "Latest reading \(reading) is above the normal range.",
                     recommendation: "Rest, hydrate, and consult a doctor if the fever persists."
                 ))
             }

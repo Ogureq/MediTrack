@@ -15,6 +15,18 @@ struct BackupPayload: Codable {
     var symptoms: [BackupSymptom] = []
     var appointments: [BackupAppointment] = []
     var scoreSnapshots: [BackupScoreSnapshot] = []
+    /// Optional so backups made before goals existed still decode.
+    var goals: [BackupGoal]? = []
+}
+
+struct BackupGoal: Codable {
+    var type: String
+    var targetValue: Double
+    var startValue: Double?
+    var createdAt: Date
+    var targetDate: Date?
+    var note: String
+    var isActive: Bool
 }
 
 struct BackupProfile: Codable {
@@ -185,6 +197,17 @@ enum BackupService {
         payload.scoreSnapshots = try context.fetch(FetchDescriptor<ScoreSnapshot>()).map {
             BackupScoreSnapshot(date: $0.date, score: $0.score, criticalCount: $0.criticalCount, attentionCount: $0.attentionCount)
         }
+        payload.goals = try context.fetch(FetchDescriptor<HealthGoal>()).map {
+            BackupGoal(
+                type: $0.typeRaw,
+                targetValue: $0.targetValue,
+                startValue: $0.startValue,
+                createdAt: $0.createdAt,
+                targetDate: $0.targetDate,
+                note: $0.note,
+                isActive: $0.isActive
+            )
+        }
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -213,6 +236,7 @@ enum BackupService {
         try? context.delete(model: SymptomEntry.self)
         try? context.delete(model: Appointment.self)
         try? context.delete(model: ScoreSnapshot.self)
+        try? context.delete(model: HealthGoal.self)
 
         // Update the profile in place (or create one).
         let existingProfile = (try? context.fetch(FetchDescriptor<HealthProfile>()))?.first
@@ -325,6 +349,20 @@ enum BackupService {
                 criticalCount: dto.criticalCount,
                 attentionCount: dto.attentionCount
             ))
+            restored += 1
+        }
+
+        for dto in payload.goals ?? [] {
+            let goal = HealthGoal(
+                type: VitalType(rawValue: dto.type) ?? .weight,
+                targetValue: dto.targetValue,
+                startValue: dto.startValue,
+                targetDate: dto.targetDate,
+                note: dto.note
+            )
+            goal.createdAt = dto.createdAt
+            goal.isActive = dto.isActive
+            context.insert(goal)
             restored += 1
         }
 

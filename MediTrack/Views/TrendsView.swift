@@ -90,9 +90,9 @@ struct TrendsView: View {
                 series.append(MetricSeries(
                     id: "vital:\(type.rawValue)",
                     name: type.displayName,
-                    unit: type.unit,
-                    range: type.healthyRange,
-                    points: samples.map { MetricPoint(date: $0.date, value: $0.value) }
+                    unit: Units.label(for: type),
+                    range: type.healthyRange.map { Units.displayRange($0, for: type) },
+                    points: samples.map { MetricPoint(date: $0.date, value: Units.display($0.value, for: type)) }
                 ))
             }
         }

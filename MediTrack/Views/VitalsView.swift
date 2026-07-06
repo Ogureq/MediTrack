@@ -78,7 +78,8 @@ struct VitalsView: View {
     private var chart: some View {
         let ascending = samples.sorted { $0.date < $1.date }
         return Chart {
-            if let range = selectedType.healthyRange {
+            if let healthyRange = selectedType.healthyRange {
+                let range = Units.displayRange(healthyRange, for: selectedType)
                 RectangleMark(
                     yStart: .value("Range low", range.lowerBound),
                     yEnd: .value("Range high", range.upperBound)
@@ -88,13 +89,13 @@ struct VitalsView: View {
             ForEach(ascending) { sample in
                 LineMark(
                     x: .value("Date", sample.date),
-                    y: .value("Value", sample.value),
+                    y: .value("Value", Units.display(sample.value, for: selectedType)),
                     series: .value("Series", "primary")
                 )
                 .interpolationMethod(.monotone)
                 PointMark(
                     x: .value("Date", sample.date),
-                    y: .value("Value", sample.value)
+                    y: .value("Value", Units.display(sample.value, for: selectedType))
                 )
             }
             if selectedType == .bloodPressure {
@@ -109,7 +110,7 @@ struct VitalsView: View {
                 }
             }
         }
-        .chartYAxisLabel(selectedType.unit)
+        .chartYAxisLabel(Units.label(for: selectedType))
     }
 
     private func deleteSamples(at offsets: IndexSet) {
@@ -159,7 +160,7 @@ struct AddVitalSheet: View {
                         }
                     }
                     TextField(
-                        type.usesSecondaryValue ? "Systolic (\(type.unit))" : "Value (\(type.unit))",
+                        type.usesSecondaryValue ? "Systolic (\(type.unit))" : "Value (\(Units.label(for: type)))",
                         text: $valueText
                     )
                     .keyboardType(.decimalPad)
@@ -192,7 +193,7 @@ struct AddVitalSheet: View {
         guard let value = parsedValue else { return }
         let sample = VitalSample(
             type: type,
-            value: value,
+            value: Units.canonical(value, for: type),
             secondaryValue: type.usesSecondaryValue ? parsedSecondary : nil,
             date: date,
             note: note.trimmingCharacters(in: .whitespaces)

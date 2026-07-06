@@ -243,6 +243,20 @@ enum SampleData {
             date: monthsAgo(14),
             reminderEnabled: false
         ))
+
+        // 7. Goals.
+        context.insert(HealthGoal(
+            type: .weight,
+            targetValue: 78,
+            startValue: 84,
+            targetDate: Calendar.current.date(byAdding: .month, value: 2, to: .now),
+            note: "Doctor-recommended target"
+        ))
+        context.insert(HealthGoal(
+            type: .sleepHours,
+            targetValue: 7.5,
+            startValue: 6.2
+        ))
     }
 
     /// Deletes ALL data of every model type.
@@ -256,6 +270,7 @@ enum SampleData {
         try? context.delete(model: Appointment.self)
         try? context.delete(model: HealthProfile.self)
         try? context.delete(model: ScoreSnapshot.self)
+        try? context.delete(model: HealthGoal.self)
     }
 
     // MARK: - Helpers

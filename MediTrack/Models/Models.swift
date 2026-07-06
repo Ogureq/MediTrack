@@ -256,7 +256,7 @@ final class VitalSample {
         if type == .bloodPressure, let secondaryValue {
             return "\(Int(value))/\(Int(secondaryValue)) \(type.unit)"
         }
-        return "\(value.compactFormatted) \(type.unit)"
+        return Units.formatted(value, for: type)
     }
 }
 
@@ -298,6 +298,57 @@ final class Medication {
     var isActive: Bool {
         guard let endDate else { return true }
         return endDate > .now
+    }
+}
+
+// MARK: - Health goal
+
+/// A personal target for one vital (e.g. reach 78 kg, sleep 7.5 h).
+/// Values are stored in canonical units, like `VitalSample`.
+@Model
+final class HealthGoal {
+    var typeRaw: String = VitalType.weight.rawValue
+    var targetValue: Double = 0
+    /// The latest vital value when the goal was created, used for progress.
+    var startValue: Double?
+    var createdAt: Date = Date.now
+    var targetDate: Date?
+    var note: String = ""
+    var isActive: Bool = true
+
+    var type: VitalType {
+        get { VitalType(rawValue: typeRaw) ?? .weight }
+        set { typeRaw = newValue.rawValue }
+    }
+
+    init(
+        type: VitalType,
+        targetValue: Double,
+        startValue: Double? = nil,
+        targetDate: Date? = nil,
+        note: String = ""
+    ) {
+        self.typeRaw = type.rawValue
+        self.targetValue = targetValue
+        self.startValue = startValue
+        self.targetDate = targetDate
+        self.note = note
+    }
+
+    /// Fraction of the way from the start value to the target, given the
+    /// latest reading. Nil when there is no start value to measure from.
+    func progress(latest: Double?) -> Double? {
+        guard let startValue, let latest, abs(startValue - targetValue) > 1e-9 else { return nil }
+        let fraction = (startValue - latest) / (startValue - targetValue)
+        return min(1, max(0, fraction))
+    }
+
+    func isAchieved(latest: Double?) -> Bool {
+        guard let latest else { return false }
+        if let startValue {
+            return targetValue <= startValue ? latest <= targetValue : latest >= targetValue
+        }
+        return abs(latest - targetValue) < 1e-9
     }
 }
 
