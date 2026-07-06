@@ -98,6 +98,13 @@ This document records the phased plan executed to build MediTrack, a privacy-fir
 - [x] Medical ID — emergency info card under More (name, DOB/age, sex, blood type prominently, height, allergies, conditions, active medications) with a shareable plain-text summary (`Views/MedicalIDView.swift`)
 - [x] UI polish — app-wide rounded type design; health-score ring animates on appear with numeric content transitions; Trends charts support touch scrubbing with a frosted-glass value tooltip; haptic feedback on saves; lock screen prompts Face ID immediately; Dashboard date header and next-appointment card; More tab reorganized (Vitals/Symptoms/Medications/Appointments + Medical ID/Profile)
 
+## Phase 11 — Data Ownership & Hardening
+
+- [x] Lab test detail screens — tapping any lab value in the Health Review or a report's detail opens a dedicated screen (`Views/LabDetailView.swift`) with the latest value and status, a full history chart with the reference-range band, what the test measures, plain-language meaning of high and low values, typical range/unit/category details, and every recorded entry with per-entry status
+- [x] Backup & restore — Profile → Data "Export Backup" (one JSON file containing profile, reports with lab results and attachments, vitals, medications, symptoms, appointments, and score history) and "Restore from Backup" (replace-all with confirmation; reminders must be re-enabled afterward), implemented in `Services/BackupService.swift` with a versioned Codable payload
+- [x] Dashboard sparklines — each vital tile on the Dashboard shows a mini 12-point trend sparkline
+- [x] Full codebase audit — two-agent sweep of all models, services, views, and the Xcode project file for compile errors, API mismatches, SwiftData pitfalls, and crash-level bugs; fixed an invalid SF Symbol name for the temperature vital icon and a Profile-screen hang after "Erase All Data" by recreating a blank profile
+
 ## Future Milestones
 
 Not part of the current plan; captured here for future scoping:
