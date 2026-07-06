@@ -207,7 +207,7 @@ enum VitalType: String, Codable, CaseIterable, Identifiable {
         case .heartRate: "heart.fill"
         case .bloodGlucose: "drop.fill"
         case .oxygenSaturation: "lungs.fill"
-        case .temperature: "medical.thermometer.fill"
+        case .temperature: "thermometer.medium"
         case .respiratoryRate: "wind"
         case .sleepHours: "bed.double.fill"
         }
