@@ -6,6 +6,7 @@ struct AppointmentsView: View {
     @Query(sort: \Appointment.date) private var appointments: [Appointment]
 
     @State private var showingAdd = false
+    @State private var editingAppointment: Appointment?
 
     private var upcoming: [Appointment] {
         appointments.filter(\.isUpcoming)
@@ -32,7 +33,12 @@ struct AppointmentsView: View {
                     if !upcoming.isEmpty {
                         Section("Upcoming") {
                             ForEach(upcoming) { appointment in
-                                AppointmentRow(appointment: appointment, isUpcoming: true)
+                                Button {
+                                    editingAppointment = appointment
+                                } label: {
+                                    AppointmentRow(appointment: appointment, isUpcoming: true)
+                                }
+                                .buttonStyle(.plain)
                             }
                             .onDelete { offsets in
                                 delete(offsets, from: upcoming)
@@ -44,7 +50,12 @@ struct AppointmentsView: View {
                     if !past.isEmpty {
                         Section("Past") {
                             ForEach(past) { appointment in
-                                AppointmentRow(appointment: appointment, isUpcoming: false)
+                                Button {
+                                    editingAppointment = appointment
+                                } label: {
+                                    AppointmentRow(appointment: appointment, isUpcoming: false)
+                                }
+                                .buttonStyle(.plain)
                             }
                             .onDelete { offsets in
                                 delete(offsets, from: past)
@@ -66,6 +77,9 @@ struct AppointmentsView: View {
             }
         }
         .sheet(isPresented: $showingAdd) { AddAppointmentSheet() }
+        .sheet(item: $editingAppointment) { appointment in
+            AddAppointmentSheet(appointment: appointment)
+        }
     }
 
     private func delete(_ offsets: IndexSet, from list: [Appointment]) {
@@ -125,12 +139,25 @@ struct AddAppointmentSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
-    @State private var title = ""
-    @State private var doctor = ""
-    @State private var location = ""
-    @State private var date = Calendar.current.date(byAdding: .day, value: 7, to: .now) ?? .now
-    @State private var notes = ""
-    @State private var reminderEnabled = true
+    private let existingAppointment: Appointment?
+
+    @State private var title: String
+    @State private var doctor: String
+    @State private var location: String
+    @State private var date: Date
+    @State private var notes: String
+    @State private var reminderEnabled: Bool
+
+    init(appointment: Appointment? = nil) {
+        existingAppointment = appointment
+        _title = State(initialValue: appointment?.title ?? "")
+        _doctor = State(initialValue: appointment?.doctor ?? "")
+        _location = State(initialValue: appointment?.location ?? "")
+        _date = State(initialValue: appointment?.date
+            ?? Calendar.current.date(byAdding: .day, value: 7, to: .now) ?? .now)
+        _notes = State(initialValue: appointment?.notes ?? "")
+        _reminderEnabled = State(initialValue: appointment?.reminderEnabled ?? true)
+    }
 
     var body: some View {
         NavigationStack {
@@ -139,7 +166,11 @@ struct AddAppointmentSheet: View {
                     TextField("Title (e.g. Cardiology Follow-up)", text: $title)
                     TextField("Doctor", text: $doctor)
                     TextField("Location", text: $location)
-                    DatePicker("Date & time", selection: $date, in: Date.now...)
+                    if existingAppointment == nil {
+                        DatePicker("Date & time", selection: $date, in: Date.now...)
+                    } else {
+                        DatePicker("Date & time", selection: $date)
+                    }
                 }
                 .listRowBackground(GlassRowBackground())
                 .listRowSeparator(.hidden)
@@ -160,7 +191,7 @@ struct AddAppointmentSheet: View {
                 .listRowSeparator(.hidden)
             }
             .ambientScreen()
-            .navigationTitle("Add Appointment")
+            .navigationTitle(existingAppointment == nil ? "Add Appointment" : "Edit Appointment")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -175,17 +206,30 @@ struct AddAppointmentSheet: View {
     }
 
     private func save() {
-        let appointment = Appointment(
-            title: title.trimmingCharacters(in: .whitespaces),
-            doctor: doctor.trimmingCharacters(in: .whitespaces),
-            location: location.trimmingCharacters(in: .whitespaces),
-            date: date,
-            notes: notes,
-            reminderEnabled: reminderEnabled
-        )
-        modelContext.insert(appointment)
+        let appointment: Appointment
+        if let existingAppointment {
+            appointment = existingAppointment
+            appointment.title = title.trimmingCharacters(in: .whitespaces)
+            appointment.doctor = doctor.trimmingCharacters(in: .whitespaces)
+            appointment.location = location.trimmingCharacters(in: .whitespaces)
+            appointment.date = date
+            appointment.notes = notes
+            appointment.reminderEnabled = reminderEnabled
+        } else {
+            appointment = Appointment(
+                title: title.trimmingCharacters(in: .whitespaces),
+                doctor: doctor.trimmingCharacters(in: .whitespaces),
+                location: location.trimmingCharacters(in: .whitespaces),
+                date: date,
+                notes: notes,
+                reminderEnabled: reminderEnabled
+            )
+            modelContext.insert(appointment)
+        }
 
-        if reminderEnabled {
+        // Reschedule from scratch so edits never leave a stale notification.
+        NotificationService.cancelReminder(id: appointment.reminderID)
+        if reminderEnabled && date > .now {
             let id = appointment.reminderID
             let body = [
                 appointment.title,

@@ -6,6 +6,7 @@ struct MedicationsView: View {
     @Query(sort: \Medication.startDate, order: .reverse) private var medications: [Medication]
 
     @State private var showingAdd = false
+    @State private var editingMedication: Medication?
 
     private var activeMedications: [Medication] {
         medications.filter(\.isActive)
@@ -32,15 +33,20 @@ struct MedicationsView: View {
                     if !activeMedications.isEmpty {
                         Section("Active") {
                             ForEach(activeMedications) { medication in
-                                MedicationRow(medication: medication)
-                                    .contextMenu {
-                                        Button {
-                                            medication.endDate = .now
-                                            NotificationService.cancelReminder(id: medication.reminderID)
-                                        } label: {
-                                            Label("Mark as Ended", systemImage: "checkmark.circle")
-                                        }
+                                Button {
+                                    editingMedication = medication
+                                } label: {
+                                    MedicationRow(medication: medication)
+                                }
+                                .buttonStyle(.plain)
+                                .contextMenu {
+                                    Button {
+                                        medication.endDate = .now
+                                        NotificationService.cancelReminder(id: medication.reminderID)
+                                    } label: {
+                                        Label("Mark as Ended", systemImage: "checkmark.circle")
                                     }
+                                }
                             }
                             .onDelete { offsets in
                                 delete(offsets, from: activeMedications)
@@ -52,7 +58,12 @@ struct MedicationsView: View {
                     if !pastMedications.isEmpty {
                         Section("Past") {
                             ForEach(pastMedications) { medication in
-                                MedicationRow(medication: medication)
+                                Button {
+                                    editingMedication = medication
+                                } label: {
+                                    MedicationRow(medication: medication)
+                                }
+                                .buttonStyle(.plain)
                             }
                             .onDelete { offsets in
                                 delete(offsets, from: pastMedications)
@@ -74,6 +85,9 @@ struct MedicationsView: View {
             }
         }
         .sheet(isPresented: $showingAdd) { AddMedicationSheet() }
+        .sheet(item: $editingMedication) { medication in
+            AddMedicationSheet(medication: medication)
+        }
     }
 
     private func delete(_ offsets: IndexSet, from list: [Medication]) {
@@ -125,14 +139,29 @@ struct AddMedicationSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
-    @State private var name = ""
-    @State private var dosage = ""
-    @State private var frequency = ""
-    @State private var purpose = ""
-    @State private var notes = ""
-    @State private var startDate = Date.now
-    @State private var reminderEnabled = false
-    @State private var reminderTime = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: .now) ?? .now
+    private let existingMedication: Medication?
+
+    @State private var name: String
+    @State private var dosage: String
+    @State private var frequency: String
+    @State private var purpose: String
+    @State private var notes: String
+    @State private var startDate: Date
+    @State private var reminderEnabled: Bool
+    @State private var reminderTime: Date
+
+    init(medication: Medication? = nil) {
+        existingMedication = medication
+        _name = State(initialValue: medication?.name ?? "")
+        _dosage = State(initialValue: medication?.dosage ?? "")
+        _frequency = State(initialValue: medication?.frequency ?? "")
+        _purpose = State(initialValue: medication?.purpose ?? "")
+        _notes = State(initialValue: medication?.notes ?? "")
+        _startDate = State(initialValue: medication?.startDate ?? .now)
+        _reminderEnabled = State(initialValue: medication?.reminderEnabled ?? false)
+        _reminderTime = State(initialValue: medication?.reminderTime
+            ?? Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: .now) ?? .now)
+    }
 
     var body: some View {
         NavigationStack {
@@ -167,7 +196,7 @@ struct AddMedicationSheet: View {
                 .listRowSeparator(.hidden)
             }
             .ambientScreen()
-            .navigationTitle("Add Medication")
+            .navigationTitle(existingMedication == nil ? "Add Medication" : "Edit Medication")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -182,28 +211,42 @@ struct AddMedicationSheet: View {
     }
 
     private func save() {
-        let medication = Medication(
-            name: name.trimmingCharacters(in: .whitespaces),
-            dosage: dosage.trimmingCharacters(in: .whitespaces),
-            frequency: frequency.trimmingCharacters(in: .whitespaces),
-            purpose: purpose.trimmingCharacters(in: .whitespaces),
-            notes: notes,
-            startDate: startDate
-        )
+        let medication: Medication
+        if let existingMedication {
+            medication = existingMedication
+            medication.name = name.trimmingCharacters(in: .whitespaces)
+            medication.dosage = dosage.trimmingCharacters(in: .whitespaces)
+            medication.frequency = frequency.trimmingCharacters(in: .whitespaces)
+            medication.purpose = purpose.trimmingCharacters(in: .whitespaces)
+            medication.notes = notes
+            medication.startDate = startDate
+        } else {
+            medication = Medication(
+                name: name.trimmingCharacters(in: .whitespaces),
+                dosage: dosage.trimmingCharacters(in: .whitespaces),
+                frequency: frequency.trimmingCharacters(in: .whitespaces),
+                purpose: purpose.trimmingCharacters(in: .whitespaces),
+                notes: notes,
+                startDate: startDate
+            )
+            modelContext.insert(medication)
+        }
         medication.reminderEnabled = reminderEnabled
         medication.reminderTime = reminderEnabled ? reminderTime : nil
-        modelContext.insert(medication)
-        if reminderEnabled {
+
+        // Reschedule from scratch so edits never leave a stale notification.
+        NotificationService.cancelReminder(id: medication.reminderID)
+        if reminderEnabled && medication.isActive {
             let id = medication.reminderID
-            let name = medication.name
-            let dosage = medication.dosage
+            let medicationName = medication.name
+            let dosageText = medication.dosage
             let time = reminderTime
             Task {
                 if await NotificationService.requestAuthorization() {
                     NotificationService.scheduleDailyReminder(
                         id: id,
-                        medicationName: name,
-                        dosage: dosage,
+                        medicationName: medicationName,
+                        dosage: dosageText,
                         at: time
                     )
                 }

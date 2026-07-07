@@ -28,6 +28,10 @@ A privacy-first native iOS app that keeps all your medical data on-device and ge
 - **Medical ID** — An emergency info card under More surfacing name, date of birth/age, sex, blood type, height, allergies, conditions, and active medications — with blood type shown prominently — plus a shareable plain-text summary (`Views/MedicalIDView.swift`).
 - **Apple Health import** — A one-tap "Import from Apple Health" action under Profile → Data copies recent vitals — weight, resting heart rate, blood glucose, SpO2, body temperature, and blood-pressure readings (systolic/diastolic correlations) — into the app. The first import covers the past year; subsequent imports only fetch readings since the last import. Requires the HealthKit entitlement. Implemented in `HealthKitService.swift`; imported samples are tagged "Imported from Apple Health".
 - **Share/export** — Share a generated review as plain text via the iOS share sheet, or export it as a formatted PDF document (header, score, findings by severity, trends, lab table, and disclaimer).
+- **Health goals** — Set a target for any vital (goal weight, nightly sleep hours, ...) with progress tracked from your starting value as new readings arrive; active/completed lists, achieved badges, optional target dates, and a Goals progress card on the Dashboard.
+- **Unit preferences** — kg/lb, °C/°F, and mg/dL / mmol/L pickers in Profile; vitals are stored in metric and converted at display and entry across tiles, charts, trends, and review text.
+- **AI summaries (optional)** — Bring your own Anthropic API key to have Claude rewrite the Health Review as a short plain-language summary. Strictly opt-in: only the review text is sent (never documents or the database), the key stays on-device, and leaving it empty keeps the app fully offline.
+- **Full editing** — Reports, medications, and appointments can all be edited after creation; reminder notifications are rescheduled automatically when times change.
 - **Sample data & data management** — A Data section on the Profile screen offers "Load Sample Data" (a realistic 14-month demo history — 5 reports, 27 lab results, 28 vitals, 3 medications — created only alongside a new, non-destructive demo profile) and "Erase All Data" with a confirmation prompt.
 - **Backup & restore** — Profile → Data also offers "Export Backup", which writes a single JSON file containing everything — profile, reports with lab results and attachments, vitals, medications, symptoms, appointments, and score history — and "Restore from Backup", which replaces all app data with a confirmation prompt (reminders must be re-enabled afterward). Implemented in `Services/BackupService.swift` using a versioned Codable payload.
 
@@ -74,7 +78,7 @@ The analysis engine is rule-based and deterministic — no cloud AI is involved.
 
 - 100% on-device storage via SwiftData — nothing leaves the device.
 - Optional Face ID / Touch ID app lock via LocalAuthentication.
-- No network calls, no analytics, no account or sign-in.
+- No network calls by default, no analytics, no account or sign-in. The optional AI summary feature is the single exception: if you add your own Anthropic API key, the review text (and nothing else) is sent to Anthropic's API when you tap Generate.
 - Apple Health data is only read with the user's explicit permission and never leaves the device; OCR lab scanning runs entirely on-device via the Vision framework.
 - Backups are plain local JSON files the user controls — exported to a location of their choosing and never uploaded anywhere.
 

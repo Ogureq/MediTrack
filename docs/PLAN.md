@@ -105,6 +105,14 @@ This document records the phased plan executed to build MediTrack, a privacy-fir
 - [x] Dashboard sparklines — each vital tile on the Dashboard shows a mini 12-point trend sparkline
 - [x] Full codebase audit — two-agent sweep of all models, services, views, and the Xcode project file for compile errors, API mismatches, SwiftData pitfalls, and crash-level bugs; fixed an invalid SF Symbol name for the temperature vital icon and a Profile-screen hang after "Erase All Data" by recreating a blank profile
 
+## Phase 12 — Goals, Units, Editing & Optional AI
+
+- [x] Health goals — `HealthGoal` model with progress from start value to target, Goals screen, Dashboard progress card, backup/sample-data/erase coverage
+- [x] Unit preferences — kg/lb, °C/°F, mg/dL vs mmol/L conversion layer (`Support/Units.swift`) applied to entry sheets, charts, trends, tiles, and engine texts
+- [x] Medication and appointment editing — tap-to-edit sheets with in-place updates and notification rescheduling
+- [x] Optional AI plain-language summaries — bring-your-own Anthropic API key (`Services/AISummaryService.swift`), review-text-only payload, refusal and error handling, glass AI card on the Review screen
+- [x] Structural verification pass across all Swift sources (brace/paren balance)
+
 ## Future Milestones
 
 Not part of the current plan; captured here for future scoping:
