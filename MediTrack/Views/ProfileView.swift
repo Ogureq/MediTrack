@@ -32,6 +32,7 @@ private struct ProfileForm: View {
     @AppStorage(Units.weightKey) private var weightUnitRaw = WeightUnit.kilograms.rawValue
     @AppStorage(Units.temperatureKey) private var temperatureUnitRaw = TemperatureUnit.celsius.rawValue
     @AppStorage(Units.glucoseKey) private var glucoseUnitRaw = GlucoseUnit.mgdL.rawValue
+    @AppStorage(AISummaryService.apiKeyDefaultsKey) private var anthropicAPIKey = ""
     @State private var confirmErase = false
     @State private var isImportingHealth = false
     @State private var healthImportMessage: String?
@@ -115,6 +116,18 @@ private struct ProfileForm: View {
                 Text("Units")
             } footer: {
                 Text("Values are stored in metric and converted for display and entry.")
+            }
+            .listRowBackground(GlassRowBackground())
+            .listRowSeparator(.hidden)
+
+            Section {
+                SecureField("Anthropic API key", text: $anthropicAPIKey)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+            } header: {
+                Text("AI Summary (Optional)")
+            } footer: {
+                Text("Add your own Anthropic API key to enable plain-language AI summaries of your Health Review. When you tap Generate, only the review text is sent to Anthropic — never your documents or database. The key stays on this device. Leave empty to keep MediTrack fully offline.")
             }
             .listRowBackground(GlassRowBackground())
             .listRowSeparator(.hidden)
