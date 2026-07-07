@@ -33,6 +33,21 @@ private struct ProfileForm: View {
     @AppStorage(Units.temperatureKey) private var temperatureUnitRaw = TemperatureUnit.celsius.rawValue
     @AppStorage(Units.glucoseKey) private var glucoseUnitRaw = GlucoseUnit.mgdL.rawValue
     @AppStorage(AISummaryService.apiKeyDefaultsKey) private var anthropicAPIKey = ""
+    @AppStorage(AppLock.rememberMeKey) private var rememberMe = false
+    @AppStorage(AppLock.biometricsEnabledKey) private var biometricsEnabled = true
+    @EnvironmentObject private var lock: AppLock
+    @State private var showingPasscodeSetup = false
+    @State private var refreshToggle = false
+
+    private var securityFooter: String {
+        if !lock.canLock {
+            return "Set a passcode\(AppLock.biometricsAvailable ? " or enable \(AppLock.biometryLabel)" : "") to protect your data. Everything is stored only on this device."
+        }
+        if rememberMe {
+            return "You'll stay signed in across launches until you tap Lock Now or turn this off. All data is stored only on this device."
+        }
+        return "MediTrack asks you to sign in whenever it returns from the background. All data is stored only on this device."
+    }
     @State private var confirmErase = false
     @State private var isImportingHealth = false
     @State private var healthImportMessage: String?
@@ -133,16 +148,35 @@ private struct ProfileForm: View {
             .listRowSeparator(.hidden)
 
             Section {
-                Toggle("Require Face ID / Passcode", isOn: $appLockEnabled)
-                    .disabled(!BiometricLock.isAvailable)
-            } header: {
-                Text("Privacy")
-            } footer: {
-                if BiometricLock.isAvailable {
-                    Text("When enabled, MediTrack locks whenever the app goes to the background. All data is stored only on this device.")
-                } else {
-                    Text("Set up Face ID, Touch ID, or a passcode on this device to enable the app lock.")
+                Toggle("Require login", isOn: $appLockEnabled)
+                if appLockEnabled {
+                    Button {
+                        showingPasscodeSetup = true
+                    } label: {
+                        Label(lock.hasPasscode ? "Change Passcode" : "Set Passcode", systemImage: "key.fill")
+                    }
+                    if lock.hasPasscode {
+                        Button(role: .destructive) {
+                            lock.removePasscode()
+                            refreshToggle.toggle()
+                        } label: {
+                            Label("Remove Passcode", systemImage: "key.slash")
+                        }
+                    }
+                    if AppLock.biometricsAvailable {
+                        Toggle("Use \(AppLock.biometryLabel)", isOn: $biometricsEnabled)
+                    }
+                    Toggle("Stay signed in (Remember me)", isOn: $rememberMe)
+                    Button {
+                        lock.signOut()
+                    } label: {
+                        Label("Lock Now", systemImage: "lock.fill")
+                    }
                 }
+            } header: {
+                Text("Login & Security")
+            } footer: {
+                Text(securityFooter)
             }
             .listRowBackground(GlassRowBackground())
             .listRowSeparator(.hidden)
@@ -199,6 +233,9 @@ private struct ProfileForm: View {
             }
             .listRowBackground(GlassRowBackground())
             .listRowSeparator(.hidden)
+        }
+        .sheet(isPresented: $showingPasscodeSetup) {
+            PasscodeSetupSheet(lock: lock)
         }
         .confirmationDialog(
             "Erase all data from this device?",
