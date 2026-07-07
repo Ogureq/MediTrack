@@ -81,9 +81,9 @@ struct LoginView: View {
         }
         .onAppear {
             rememberMe = rememberPreference
-            // Auto-prompt biometrics when it's the only method, or when there's
-            // no passcode to type.
-            if AppLock.biometricsAvailable && lock.biometricsEnabled && !lock.hasPasscode {
+            // Auto-prompt biometrics when enabled (matches banking-app behavior);
+            // the passcode field stays available as a fallback.
+            if AppLock.biometricsAvailable && lock.biometricsEnabled {
                 Task { await lock.authenticateWithBiometrics(remember: rememberMe) }
             } else if lock.hasPasscode {
                 passcodeFocused = true

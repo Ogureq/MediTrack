@@ -34,6 +34,7 @@ A privacy-first native iOS app that keeps all your medical data on-device and ge
 - **Full editing** — Reports, medications, and appointments can all be edited after creation; reminder notifications are rescheduled automatically when times change.
 - **Sample data & data management** — A Data section on the Profile screen offers "Load Sample Data" (a realistic 14-month demo history — 5 reports, 27 lab results, 28 vitals, 3 medications — created only alongside a new, non-destructive demo profile) and "Erase All Data" with a confirmation prompt.
 - **Backup & restore** — Profile → Data also offers "Export Backup", which writes a single JSON file containing everything — profile, reports with lab results and attachments, vitals, medications, symptoms, appointments, and score history — and "Restore from Backup", which replaces all app data with a confirmation prompt (reminders must be re-enabled afterward). Implemented in `Services/BackupService.swift` using a versioned Codable payload.
+- **Login & Security** — Set a local numeric passcode (4–8 digits), stored as a salted SHA-256 hash in the iOS Keychain (device-only, never synced), with optional Face ID / Touch ID unlock. A dedicated login panel (`Views/LoginView.swift`) appears whenever the app is locked, offering the passcode field, an "Unlock with Face ID/Touch ID" button, and a "Remember me" toggle that keeps you signed in across launches until you tap Lock Now or turn it off; with Remember me off, the app requires login whenever it returns from the background. Profile → "Login & Security" lets you require login, set/change/remove the passcode, toggle Face ID/Touch ID, toggle Remember me, and lock the app immediately. Authentication is entirely on-device — there's no account and no server.
 
 ## Design
 
@@ -68,7 +69,7 @@ MediTrack is a single-target SwiftUI app built entirely on Apple frameworks — 
 | Folder | Contents |
 | --- | --- |
 | `MediTrack/Models/` | SwiftData `@Model` classes — `MedicalReport`, `LabResult`, `ReportAttachment`, `VitalSample`, `Medication`, `HealthProfile` — plus `LabCatalog.swift`, the static reference catalog of common lab tests and ranges, and `LabSynonyms.swift`, a dictionary of common report-form aliases used to match scanned text against the lab catalog. |
-| `MediTrack/Services/` | `AnalysisEngine.swift`, a set of pure functions that produce a `HealthReview` value from stored data; `BiometricLock.swift` for Face ID / Touch ID app-lock handling; `ReviewPDFExporter.swift` for rendering a Health Review as a formatted PDF; `NotificationService.swift` for scheduling and cancelling medication reminder notifications; `HealthKitService.swift` for importing vitals from Apple Health; `LabScanService.swift` for running on-device Vision OCR over report attachments to detect lab values; and `BackupService.swift` for exporting and restoring a full JSON backup of app data. |
+| `MediTrack/Services/` | `AnalysisEngine.swift`, a set of pure functions that produce a `HealthReview` value from stored data; `AppLock.swift` and `KeychainStore.swift` for login/passcode/biometrics handling; `ReviewPDFExporter.swift` for rendering a Health Review as a formatted PDF; `NotificationService.swift` for scheduling and cancelling medication reminder notifications; `HealthKitService.swift` for importing vitals from Apple Health; `LabScanService.swift` for running on-device Vision OCR over report attachments to detect lab values; and `BackupService.swift` for exporting and restoring a full JSON backup of app data. |
 | `MediTrack/Views/` | `Dashboard`, `Reports` (list/detail/add), `Review`, `Trends`, `Vitals`, `Symptoms`, `Medications`, `Appointments`, `MedicalID`, `Profile`, `LabDetailView` (per-test detail with history chart), the onboarding flow, and the root `TabView`. |
 | `MediTrack/Support/` | `Theme.swift`, the glassmorphic design system (glass card and chip modifiers, ambient backgrounds, button styles), `UIHelpers.swift`, and `SampleData.swift` for seeding a demo history or erasing all app data. |
 
@@ -77,7 +78,7 @@ The analysis engine is rule-based and deterministic — no cloud AI is involved.
 ## Privacy
 
 - 100% on-device storage via SwiftData — nothing leaves the device.
-- Optional Face ID / Touch ID app lock via LocalAuthentication.
+- App lock via a local numeric passcode (4–8 digits), stored as a salted SHA-256 hash in the iOS Keychain (device-only, never synced), plus optional Face ID / Touch ID and a "Remember me" stay-signed-in toggle — the entire login system runs on-device, with no account and no server.
 - No network calls by default, no analytics, no account or sign-in. The optional AI summary feature is the single exception: if you add your own Anthropic API key, the review text (and nothing else) is sent to Anthropic's API when you tap Generate.
 - Apple Health data is only read with the user's explicit permission and never leaves the device; OCR lab scanning runs entirely on-device via the Vision framework.
 - Backups are plain local JSON files the user controls — exported to a location of their choosing and never uploaded anywhere.

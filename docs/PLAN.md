@@ -48,7 +48,7 @@ This document records the phased plan executed to build MediTrack, a privacy-fir
 
 ## Phase 5 — Privacy & Polish
 
-- [x] Optional Face ID / Touch ID app lock via `BiometricLock.swift` (LocalAuthentication)
+- [x] Local passcode (salted SHA-256 hash in Keychain) plus optional Face ID / Touch ID and Remember me app lock, implemented in `AppLock.swift` / `KeychainStore.swift`
 - [x] Audit for any network calls or analytics and confirm none exist
 - [x] Add "not medical advice" disclaimer to Review screen and README
 - [x] Empty states for Reports, Vitals, Medications, and Trends when no data exists
@@ -112,6 +112,13 @@ This document records the phased plan executed to build MediTrack, a privacy-fir
 - [x] Medication and appointment editing — tap-to-edit sheets with in-place updates and notification rescheduling
 - [x] Optional AI plain-language summaries — bring-your-own Anthropic API key (`Services/AISummaryService.swift`), review-text-only payload, refusal and error handling, glass AI card on the Review screen
 - [x] Structural verification pass across all Swift sources (brace/paren balance)
+
+## Phase 13 — Login & Remember Me
+
+- [x] Local numeric passcode (4–8 digits) stored as a salted SHA-256 hash in the iOS Keychain, plus optional Face ID / Touch ID login, implemented in `Services/AppLock.swift` (lock coordinator) and `Services/KeychainStore.swift` (Keychain wrapper)
+- [x] Login panel (`Views/LoginView.swift`) with passcode field, "Unlock with Face ID/Touch ID" button, and a "Remember me" toggle that keeps the session signed in across launches until Lock Now is tapped or the toggle is turned off; without Remember me, the app requires login whenever it returns from the background
+- [x] Profile → "Login & Security" section — require-login toggle, Set/Change/Remove Passcode, Use Face ID/Touch ID toggle, Stay-signed-in (Remember me) toggle, and a Lock Now button
+- [x] Fail-open safety — the lock never locks the user out: if no passcode is set and biometrics are unavailable, the app remains accessible
 
 ## Future Milestones
 
