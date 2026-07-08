@@ -16,6 +16,10 @@ struct MedicationsView: View {
         medications.filter { !$0.isActive }
     }
 
+    private var interactions: [DrugInteraction] {
+        MedicationInteractions.check(medicationNames: activeMedications.map(\.name))
+    }
+
     var body: some View {
         Group {
             if medications.isEmpty {
@@ -30,6 +34,20 @@ struct MedicationsView: View {
                 }
             } else {
                 List {
+                    if !interactions.isEmpty {
+                        Section {
+                            ForEach(interactions) { interaction in
+                                InteractionRow(interaction: interaction)
+                            }
+                        } header: {
+                            Label("Possible Interactions", systemImage: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                        } footer: {
+                            Text(MedicationInteractions.disclaimer)
+                        }
+                        .listRowBackground(GlassRowBackground())
+                        .listRowSeparator(.hidden)
+                    }
                     if !activeMedications.isEmpty {
                         Section("Active") {
                             ForEach(activeMedications) { medication in
@@ -95,6 +113,38 @@ struct MedicationsView: View {
             NotificationService.cancelReminder(id: list[index].reminderID)
             modelContext.delete(list[index])
         }
+    }
+}
+
+struct InteractionRow: View {
+    let interaction: DrugInteraction
+
+    private var color: Color {
+        switch interaction.severity {
+        case .major: .red
+        case .moderate: .orange
+        case .minor: .yellow
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Image(systemName: interaction.severity.systemImage)
+                    .foregroundStyle(color)
+                Text("\(interaction.drugA) + \(interaction.drugB)")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                StatusPill(text: interaction.severity.displayName, color: color)
+            }
+            Text(interaction.explanation)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Label(interaction.recommendation, systemImage: "arrow.turn.down.right")
+                .font(.caption)
+                .foregroundStyle(color)
+        }
+        .padding(.vertical, 2)
     }
 }
 

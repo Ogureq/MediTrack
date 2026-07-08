@@ -674,6 +674,17 @@ enum AnalysisEngine {
                 detail: "Currently tracking: \(names).",
                 recommendation: "Review your medication list with your doctor periodically."
             ))
+
+            // Educational drug-interaction check across active medications.
+            for interaction in MedicationInteractions.check(medicationNames: activeMedications.map(\.name)) {
+                findings.append(Finding(
+                    severity: interaction.severity == .major ? .attention : .info,
+                    category: .medications,
+                    title: "\(interaction.severity.displayName) interaction: \(interaction.drugA) + \(interaction.drugB)",
+                    detail: interaction.explanation,
+                    recommendation: interaction.recommendation
+                ))
+            }
         }
 
         // --- Symptoms ---
