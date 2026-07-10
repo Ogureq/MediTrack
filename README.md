@@ -22,6 +22,7 @@ A privacy-first native iOS app that keeps all your medical data on-device and ge
 - **Vitals tracking** — Weight, blood pressure, resting heart rate, blood glucose, SpO2, body temperature, respiratory rate (typical 12–20 breaths/min), and sleep (7–9 h), with Swift Charts visualizations that include healthy-range bands. Each vital's Dashboard tile also shows a mini 12-point trend sparkline.
 - **Symptoms journal** — Log symptoms with a 1–10 severity slider, quick-pick chips for common symptoms, notes, and date (`Views/SymptomsView.swift`); entries from the last two weeks feed the Health Review as described above.
 - **Medications** — Track active and past medications with dosage, frequency, start/end dates, and notes. Optionally schedule a daily local-notification reminder at a chosen time for a medication; reminders are automatically cancelled if the medication is deleted or marked ended.
+- **Medication interaction warnings** — A curated, educational checker (~20 drug classes, 20 well-established interaction rules) that flags risky combinations among active medications, surfaced both in the Medications screen and in the Health Review findings. Educational only, not exhaustive — always confirm with a pharmacist.
 - **Appointments** — Track upcoming and past appointments with doctor and location, with an optional local-notification reminder 24 hours before, a "Next Appointment" card on the Dashboard, and an informational finding in the Health Review (`Views/AppointmentsView.swift`).
 - **Trends** — Per-metric history charts with reference-range band overlays, filterable by a 3M / 6M / 1Y / All segmented time range that also drives the underlying statistics and trend classification.
 - **Health profile** — Date of birth, biological sex (used to resolve sex-specific reference ranges), height, blood type, allergies, and conditions.
@@ -82,6 +83,11 @@ The analysis engine is rule-based and deterministic — no cloud AI is involved.
 - No network calls by default, no analytics, no account or sign-in. The optional AI summary feature is the single exception: if you add your own Anthropic API key, the review text (and nothing else) is sent to Anthropic's API when you tap Generate.
 - Apple Health data is only read with the user's explicit permission and never leaves the device; OCR lab scanning runs entirely on-device via the Vision framework.
 - Backups are plain local JSON files the user controls — exported to a location of their choosing and never uploaded anywhere.
+
+## Testing & CI
+
+- Unit tests live in `MediTrackTests/` using XCTest and cover the analysis engine, services, and data models.
+- GitHub Actions runs `xcodebuild test` on macOS for every push via `.github/workflows/ci.yml`, ensuring all tests pass before code is merged.
 
 ## Roadmap
 

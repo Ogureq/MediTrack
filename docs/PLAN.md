@@ -120,6 +120,13 @@ This document records the phased plan executed to build MediTrack, a privacy-fir
 - [x] Profile → "Login & Security" section — require-login toggle, Set/Change/Remove Passcode, Use Face ID/Touch ID toggle, Stay-signed-in (Remember me) toggle, and a Lock Now button
 - [x] Fail-open safety — the lock never locks the user out: if no passcode is set and biometrics are unavailable, the app remains accessible
 
+## Phase 14 — Hardening
+
+- [x] Medication interaction warnings — a curated, educational checker (~20 drug classes, 20 well-established interaction rules) that flags risky combinations among active medications, surfaced in the Medications screen and Health Review findings. Educational only, not exhaustive — users are prompted to confirm with a pharmacist.
+- [x] Passcode & biometric login finalization — comprehensive on-device authentication (salted SHA-256 in Keychain, Face ID / Touch ID, Remember me toggle) hardening the app's security posture against unauthorized access
+- [x] XCTest unit-test suite — tests covering the analysis engine, services, and data models, implemented in `MediTrackTests/` with comprehensive coverage of critical paths
+- [x] GitHub Actions CI — automated testing workflow (.github/workflows/ci.yml) running `xcodebuild test` on macOS for every push, ensuring all tests pass before merge
+
 ## Future Milestones
 
 Not part of the current plan; captured here for future scoping:
