@@ -41,8 +41,10 @@ struct SymptomsView: View {
                                     text: "\(entry.severity)/10",
                                     color: severityColor(entry.severity)
                                 )
+                                .accessibilityLabel("Severity \(entry.severity) out of 10")
                             }
                             .padding(.vertical, 2)
+                            .accessibilityElement(children: .combine)
                         }
                         .onDelete(perform: delete)
                     } footer: {
@@ -61,6 +63,7 @@ struct SymptomsView: View {
             } label: {
                 Image(systemName: "plus")
             }
+            .accessibilityLabel("Log symptom")
         }
         .sheet(isPresented: $showingAdd) { AddSymptomSheet() }
     }
@@ -140,6 +143,8 @@ struct AddSymptomSheet: View {
                     }
                     Slider(value: $severity, in: 1...10, step: 1)
                         .tint(severityColor(Int(severity)))
+                        .accessibilityLabel("Severity")
+                        .accessibilityValue("\(Int(severity)) out of 10")
                     DatePicker("When", selection: $date, in: ...Date.now)
                     TextField("Notes (optional)", text: $notes, axis: .vertical)
                         .lineLimit(2...4)

@@ -75,6 +75,7 @@ struct AppointmentsView: View {
             } label: {
                 Image(systemName: "plus")
             }
+            .accessibilityLabel("Add appointment")
         }
         .sheet(isPresented: $showingAdd) { AddAppointmentSheet() }
         .sheet(item: $editingAppointment) { appointment in
@@ -110,6 +111,7 @@ struct AppointmentRow: View {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .strokeBorder(Glass.bevelStroke, lineWidth: 1)
             )
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -119,6 +121,7 @@ struct AppointmentRow: View {
                         Image(systemName: "bell.fill")
                             .font(.caption2)
                             .foregroundStyle(Color.accentColor)
+                            .accessibilityLabel("Reminder on")
                     }
                 }
                 Text(appointment.date.formatted(date: .abbreviated, time: .shortened))
@@ -132,6 +135,7 @@ struct AppointmentRow: View {
             }
         }
         .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
     }
 }
 

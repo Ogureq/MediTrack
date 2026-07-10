@@ -103,6 +103,15 @@ struct TrendsView: View {
         allSeries.first { $0.id == selectedSeriesID } ?? allSeries.first
     }
 
+    private var timeRangeDescription: String {
+        switch timeRange {
+        case .threeMonths: "last 3 months"
+        case .sixMonths: "last 6 months"
+        case .year: "last year"
+        case .all: "all time"
+        }
+    }
+
     /// When `series` is one half of a blood-pressure reading, returns the
     /// matching systolic/diastolic pair from `allSeries` so both can be
     /// charted together. Returns `nil` for every other metric, and for
@@ -372,6 +381,7 @@ struct TrendsView: View {
         .chartXSelection(value: $selectedDate)
         .chartYAxisLabel(series.unit)
         .chartYScale(domain: yDomain(values: domainValues, range: series.range))
+        .accessibilityLabel("\(series.name) trend, \(timeRangeDescription)")
     }
 
     private func nearestPoint(to date: Date, in points: [MetricPoint]) -> MetricPoint? {
@@ -402,6 +412,7 @@ struct TrendsView: View {
                     HStack(spacing: 6) {
                         Image(systemName: direction.systemImage)
                             .foregroundStyle(direction.color)
+                            .accessibilityHidden(true)
                         Text("\(direction.displayName) (\(String(format: "%+.0f%%", percentChange)))")
                             .foregroundStyle(direction.color)
                     }

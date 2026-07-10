@@ -141,6 +141,7 @@ struct LabResultRow: View {
             }
         }
         .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -163,7 +164,7 @@ struct AttachmentViewer: View {
                 ContentUnavailableView("Can't Preview File", systemImage: "eye.slash")
             }
         }
-        .background(AmbientBackground())
+        .background(AmbientBackground().accessibilityHidden(true))
         .navigationTitle(attachment.filename)
         .navigationBarTitleDisplayMode(.inline)
     }

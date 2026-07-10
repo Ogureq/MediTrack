@@ -55,6 +55,7 @@ struct VitalsView: View {
                         Text(sample.formattedValue)
                             .font(.subheadline.weight(.semibold))
                     }
+                    .accessibilityElement(children: .combine)
                 }
                 .onDelete(perform: deleteSamples)
             }
@@ -69,6 +70,7 @@ struct VitalsView: View {
             } label: {
                 Image(systemName: "plus")
             }
+            .accessibilityLabel("Add vital")
         }
         .sheet(isPresented: $showingAdd) {
             AddVitalSheet(initialType: selectedType)
@@ -111,6 +113,7 @@ struct VitalsView: View {
             }
         }
         .chartYAxisLabel(Units.label(for: selectedType))
+        .accessibilityLabel("\(selectedType.displayName) trend chart")
     }
 
     private func deleteSamples(at offsets: IndexSet) {

@@ -59,7 +59,7 @@ struct DashboardView: View {
                 }
                 .padding()
             }
-            .background(AmbientBackground())
+            .background(AmbientBackground().accessibilityHidden(true))
             .navigationTitle(navigationTitle)
             .toolbar {
                 Menu {
@@ -76,6 +76,7 @@ struct DashboardView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("Add")
             }
             .sheet(isPresented: $showingAddReport) { AddReportView() }
             .sheet(isPresented: $showingAddVital) { AddVitalSheet() }
@@ -105,9 +106,11 @@ struct DashboardView: View {
                 Image(systemName: "chevron.right")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
             }
             .padding()
             .glassCard()
+            .accessibilityElement(children: .combine)
         }
         .buttonStyle(.plain)
     }
@@ -140,6 +143,7 @@ struct DashboardView: View {
                     .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
                 }
                 .chartYScale(domain: 0...100)
+                .accessibilityLabel("Health score history chart")
                 .frame(height: 110)
                 .padding()
                 .glassCard(cornerRadius: 16)
@@ -170,6 +174,8 @@ struct DashboardView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(12)
                     .tintedGlassCard(finding.severity.color)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(finding.severity.displayName): \(finding.title). \(finding.detail)")
                 }
             }
         }
@@ -199,6 +205,7 @@ struct DashboardView: View {
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
                                 .strokeBorder(Glass.bevelStroke, lineWidth: 1)
                         )
+                        .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(next.title)
                                 .font(.subheadline.weight(.semibold))
@@ -211,9 +218,11 @@ struct DashboardView: View {
                         Image(systemName: "chevron.right")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.tertiary)
+                            .accessibilityHidden(true)
                     }
                     .padding(12)
                     .glassCard(cornerRadius: 16)
+                    .accessibilityElement(children: .combine)
                 }
                 .buttonStyle(.plain)
             }
@@ -258,6 +267,7 @@ struct DashboardView: View {
                                     .chartYAxis(.hidden)
                                     .chartYScale(domain: .automatic(includesZero: false))
                                     .frame(height: 26)
+                                    .accessibilityHidden(true)
                                 }
                                 Text(tile.latest.date.formatted(date: .abbreviated, time: .omitted))
                                     .font(.caption2)
@@ -266,6 +276,7 @@ struct DashboardView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(12)
                             .glassCard(cornerRadius: 16)
+                            .accessibilityElement(children: .combine)
                         }
                         .buttonStyle(.plain)
                     }
@@ -319,6 +330,7 @@ struct DashboardView: View {
                                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                                         .strokeBorder(Glass.bevelStroke, lineWidth: 1)
                                 )
+                                .accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(report.title)
                                     .font(.subheadline.weight(.semibold))
@@ -331,9 +343,11 @@ struct DashboardView: View {
                             Image(systemName: "chevron.right")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.tertiary)
+                                .accessibilityHidden(true)
                         }
                         .padding(12)
                         .glassCard(cornerRadius: 16)
+                        .accessibilityElement(children: .combine)
                     }
                     .buttonStyle(.plain)
                 }
@@ -419,5 +433,7 @@ struct ScoreRing: View {
                 progress = CGFloat(newScore) / 100
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Health score, \(score) out of 100")
     }
 }

@@ -101,6 +101,7 @@ struct MedicationsView: View {
             } label: {
                 Image(systemName: "plus")
             }
+            .accessibilityLabel("Add medication")
         }
         .sheet(isPresented: $showingAdd) { AddMedicationSheet() }
         .sheet(item: $editingMedication) { medication in
@@ -132,6 +133,7 @@ struct InteractionRow: View {
             HStack(spacing: 8) {
                 Image(systemName: interaction.severity.systemImage)
                     .foregroundStyle(color)
+                    .accessibilityHidden(true)
                 Text("\(interaction.drugA) + \(interaction.drugB)")
                     .font(.subheadline.weight(.semibold))
                 Spacer()
@@ -145,6 +147,7 @@ struct InteractionRow: View {
                 .foregroundStyle(color)
         }
         .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -182,6 +185,7 @@ struct MedicationRow: View {
             .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
     }
 }
 

@@ -40,6 +40,7 @@ struct MedicalIDView: View {
                 ShareLink(item: shareText) {
                     Image(systemName: "square.and.arrow.up")
                 }
+                .accessibilityLabel("Share medical ID")
             }
         }
     }
@@ -63,6 +64,7 @@ struct MedicalIDView: View {
                             .foregroundStyle(.white)
                     }
                 }
+                .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     if let profile, !profile.name.isEmpty {
                         Text(profile.name)
@@ -117,6 +119,7 @@ struct MedicalIDView: View {
             Image(systemName: "drop.fill")
                 .font(.title2)
                 .foregroundStyle(.red)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Blood Type")
                     .font(.subheadline.weight(.semibold))
@@ -135,6 +138,7 @@ struct MedicalIDView: View {
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .tintedGlassCard(.red)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Allergies card

@@ -53,7 +53,7 @@ struct ReviewScreen: View {
                 }
             }
         }
-        .background(AmbientBackground())
+        .background(AmbientBackground().accessibilityHidden(true))
         .navigationTitle("Health Review")
         .toolbar {
             if review.hasData {
@@ -70,6 +70,7 @@ struct ReviewScreen: View {
                 } label: {
                     Image(systemName: "square.and.arrow.up")
                 }
+                .accessibilityLabel("Share health review")
             }
         }
         .task(id: review.score) { recordSnapshot() }
@@ -129,6 +130,7 @@ struct ReviewScreen: View {
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard()
+        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
@@ -217,6 +219,7 @@ struct ReviewScreen: View {
                         HStack(alignment: .top, spacing: 10) {
                             Image(systemName: trend.direction.systemImage)
                                 .foregroundStyle(trend.direction.color)
+                                .accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack {
                                     Text(trend.metricName)
@@ -232,6 +235,7 @@ struct ReviewScreen: View {
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityElement(children: .combine)
                     }
                 }
                 .padding()
@@ -272,7 +276,9 @@ struct ReviewScreen: View {
                                 Image(systemName: "chevron.right")
                                     .font(.caption2.weight(.semibold))
                                     .foregroundStyle(.tertiary)
+                                    .accessibilityHidden(true)
                             }
+                            .accessibilityElement(children: .combine)
                         }
                         .buttonStyle(.plain)
                     }
@@ -296,6 +302,14 @@ struct ReviewScreen: View {
 struct FindingRow: View {
     let finding: Finding
 
+    private var accessibilitySummary: String {
+        var text = "\(finding.severity.displayName): \(finding.title). \(finding.detail)"
+        if let recommendation = finding.recommendation {
+            text += " Recommended: \(recommendation)"
+        }
+        return text
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
@@ -313,5 +327,7 @@ struct FindingRow: View {
                     .foregroundStyle(finding.severity.color)
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilitySummary)
     }
 }

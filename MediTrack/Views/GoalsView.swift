@@ -67,6 +67,7 @@ struct GoalsView: View {
             } label: {
                 Image(systemName: "plus")
             }
+            .accessibilityLabel("Add goal")
         }
         .sheet(isPresented: $showingAdd) { AddGoalSheet() }
     }
@@ -103,6 +104,7 @@ struct GoalRow: View {
                     Image(systemName: "arrow.right")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                 }
                 Text(Units.formatted(goal.targetValue, for: goal.type))
                     .font(.caption)
@@ -111,6 +113,8 @@ struct GoalRow: View {
             if let progress = goal.progress(latest: latest) {
                 ProgressView(value: progress)
                     .tint(goal.isAchieved(latest: latest) ? .green : .teal)
+                    .accessibilityLabel("Progress toward goal")
+                    .accessibilityValue("\(Int((progress * 100).rounded())) percent")
             }
             HStack(spacing: 8) {
                 if let targetDate = goal.targetDate {
@@ -125,6 +129,7 @@ struct GoalRow: View {
             .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
     }
 }
 

@@ -55,6 +55,7 @@ struct LabDetailView: View {
                     StatusPill(text: status.label, color: status.color)
                 }
                 .padding(.vertical, 4)
+                .accessibilityElement(children: .combine)
                 if results.count >= 2 {
                     historyChart(range: range)
                         .frame(height: 200)
@@ -144,6 +145,7 @@ struct LabDetailView: View {
             }
         }
         .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
@@ -169,5 +171,6 @@ struct LabDetailView: View {
             }
         }
         .chartYAxisLabel(results.last?.unit ?? "")
+        .accessibilityLabel("\(results.last?.displayName ?? "Lab result") history chart")
     }
 }

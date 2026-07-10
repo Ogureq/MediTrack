@@ -35,6 +35,7 @@ struct ScannedResultsSheet: View {
                                     HStack(spacing: 10) {
                                         Image(systemName: selectedIDs.contains(scanned.id) ? "checkmark.circle.fill" : "circle")
                                             .foregroundStyle(selectedIDs.contains(scanned.id) ? Color.accentColor : Color.secondary)
+                                            .accessibilityHidden(true)
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(scanned.reference.name)
                                                 .foregroundStyle(.primary)
@@ -49,6 +50,8 @@ struct ScannedResultsSheet: View {
                                             .foregroundStyle(.primary)
                                     }
                                 }
+                                .accessibilityElement(children: .combine)
+                                .accessibilityAddTraits(selectedIDs.contains(scanned.id) ? .isSelected : [])
                             }
                         } header: {
                             Text("Detected Lab Values")

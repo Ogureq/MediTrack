@@ -55,6 +55,7 @@ struct ReportsListView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("Add report")
             }
             .sheet(isPresented: $showingAdd) { AddReportView() }
         }
@@ -80,6 +81,7 @@ struct ReportRow: View {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .strokeBorder(Glass.bevelStroke, lineWidth: 1)
                 )
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(report.title)
                     .font(.subheadline.weight(.semibold))
@@ -98,9 +100,11 @@ struct ReportRow: View {
                     Text(report.date.formatted(date: .abbreviated, time: .omitted))
                     if !report.labResults.isEmpty {
                         Label("\(report.labResults.count)", systemImage: "testtube.2")
+                            .accessibilityLabel("\(report.labResults.count) lab results")
                     }
                     if !report.attachments.isEmpty {
                         Label("\(report.attachments.count)", systemImage: "paperclip")
+                            .accessibilityLabel("\(report.attachments.count) attachments")
                     }
                 }
                 .font(.caption2)
@@ -108,5 +112,6 @@ struct ReportRow: View {
             }
         }
         .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
     }
 }
