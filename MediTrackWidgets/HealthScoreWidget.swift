@@ -131,6 +131,8 @@ struct HealthScoreWidgetView: View {
         .containerBackground(for: .widget) {
             backgroundGradient
         }
+        // Tapping the widget lands on the Review tab (handled in ContentView).
+        .widgetURL(URL(string: "meditrack://review"))
     }
 
     private var backgroundGradient: LinearGradient {

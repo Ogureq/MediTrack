@@ -1,26 +1,45 @@
 import SwiftUI
 
+enum AppTab: Hashable {
+    case dashboard, reports, review, trends, more
+}
+
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("appLockEnabled") private var appLockEnabled = false
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @StateObject private var lock = AppLock()
     @State private var showingOnboarding = false
+    @State private var selectedTab: AppTab = .dashboard
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             DashboardView()
                 .tabItem { Label("Dashboard", systemImage: "house.fill") }
+                .tag(AppTab.dashboard)
             ReportsListView()
                 .tabItem { Label("Reports", systemImage: "doc.text.fill") }
+                .tag(AppTab.reports)
             NavigationStack { ReviewScreen() }
                 .tabItem { Label("Review", systemImage: "heart.text.square.fill") }
+                .tag(AppTab.review)
             TrendsView()
                 .tabItem { Label("Trends", systemImage: "chart.line.uptrend.xyaxis") }
+                .tag(AppTab.trends)
             MoreView()
                 .tabItem { Label("More", systemImage: "ellipsis.circle.fill") }
+                .tag(AppTab.more)
         }
         .environmentObject(lock)
+        .onOpenURL { url in
+            // Deep link from the home-screen widget (meditrack://review).
+            guard url.scheme == "meditrack" else { return }
+            switch url.host {
+            case "review": selectedTab = .review
+            case "trends": selectedTab = .trends
+            default: break
+            }
+        }
         .overlay {
             if appLockEnabled && lock.isLocked {
                 LoginView(lock: lock)
