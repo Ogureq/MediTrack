@@ -94,6 +94,17 @@ struct ReviewScreen: View {
                 attentionCount: current.attentionFindings.count
             ))
         }
+
+        // Mirror the latest score onto the home-screen widget. Uses the
+        // vitals already queried by this screen — no extra fetching.
+        let widgetVitals: [WidgetVital] = Dictionary(grouping: vitals, by: \.type)
+            .compactMap { _, samples in samples.max(by: { $0.date < $1.date }) }
+            .sorted { $0.date > $1.date }
+            .prefix(3)
+            .map { sample in
+                WidgetVital(name: sample.type.displayName, value: sample.formattedValue, systemImage: sample.type.systemImage)
+            }
+        WidgetBridge.update(score: current.score, headline: current.scoreLabel, vitals: widgetVitals)
     }
 
     // MARK: Cards
