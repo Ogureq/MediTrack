@@ -47,6 +47,16 @@
 		A1000000000000000000AC01 /* MediTrackWidgetsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MediTrackWidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A1000000000000000000AC0E /* Exceptions for "MediTrackWidgets" folder in "MediTrackWidgetsExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A1000000000000000000AC03 /* MediTrackWidgetsExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A1000000000000000000AA04 /* MediTrack */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
@@ -60,6 +70,9 @@
 		};
 		A1000000000000000000AC02 /* MediTrackWidgets */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A1000000000000000000AC0E /* Exceptions for "MediTrackWidgets" folder in "MediTrackWidgetsExtension" target */,
+			);
 			path = MediTrackWidgets;
 			sourceTree = "<group>";
 		};
