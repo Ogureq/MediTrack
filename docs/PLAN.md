@@ -127,6 +127,12 @@ This document records the phased plan executed to build MediTrack, a privacy-fir
 - [x] XCTest unit-test suite — tests covering the analysis engine, services, and data models, implemented in `MediTrackTests/` with comprehensive coverage of critical paths
 - [x] GitHub Actions CI — automated testing workflow (.github/workflows/ci.yml) running `xcodebuild test` on macOS for every push, ensuring all tests pass before merge
 
+## Phase 15 — Widgets & Deeper Health Integration
+
+- [x] HealthKit write-back — implemented opt-in toggle in Profile to save logged vitals (blood pressure as systolic/diastolic correlation) back to Apple Health, extending the bidirectional health data flow
+- [x] Richer trend charts — enhanced Trends visualization with healthy-range band, period average line, min/max markers, gradient fill, and dual-series blood-pressure charting for deeper trend analysis
+- [x] Home-screen widget extension — created Health Score widget (small & medium sizes) displaying latest score ring, headline, and recent vitals via a shared app-group snapshot, enabling quick health status glance from home screen
+
 ## Future Milestones
 
 Not part of the current plan; captured here for future scoping:

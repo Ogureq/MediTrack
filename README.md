@@ -28,6 +28,9 @@ A privacy-first native iOS app that keeps all your medical data on-device and ge
 - **Health profile** — Date of birth, biological sex (used to resolve sex-specific reference ranges), height, blood type, allergies, and conditions.
 - **Medical ID** — An emergency info card under More surfacing name, date of birth/age, sex, blood type, height, allergies, conditions, and active medications — with blood type shown prominently — plus a shareable plain-text summary (`Views/MedicalIDView.swift`).
 - **Apple Health import** — A one-tap "Import from Apple Health" action under Profile → Data copies recent vitals — weight, resting heart rate, blood glucose, SpO2, body temperature, and blood-pressure readings (systolic/diastolic correlations) — into the app. The first import covers the past year; subsequent imports only fetch readings since the last import. Requires the HealthKit entitlement. Implemented in `HealthKitService.swift`; imported samples are tagged "Imported from Apple Health".
+- **HealthKit write-back** — Optionally save vitals you log back to Apple Health (blood pressure as a systolic/diastolic correlation); opt-in toggle in Profile.
+- **Richer trend charts** — Healthy-range band, period average line, min/max markers, gradient fill, and dual-series blood pressure visualization for deeper trend analysis.
+- **Home-screen widget** — A Health Score widget (small & medium) showing your latest score ring, headline, and recent vitals via a shared app group.
 - **Share/export** — Share a generated review as plain text via the iOS share sheet, or export it as a formatted PDF document (header, score, findings by severity, trends, lab table, and disclaimer).
 - **Health goals** — Set a target for any vital (goal weight, nightly sleep hours, ...) with progress tracked from your starting value as new readings arrive; active/completed lists, achieved badges, optional target dates, and a Goals progress card on the Dashboard.
 - **Unit preferences** — kg/lb, °C/°F, and mg/dL / mmol/L pickers in Profile; vitals are stored in metric and converted at display and entry across tiles, charts, trends, and review text.
@@ -62,6 +65,8 @@ To build and run:
 2. Select the **MediTrack** scheme.
 3. Choose an iOS 17+ simulator or a connected device.
 4. Run (`Cmd+R`).
+
+**Note:** Widgets require an App Group; select your signing team for both the app and widget targets in Xcode the first time you build.
 
 ## Architecture
 
