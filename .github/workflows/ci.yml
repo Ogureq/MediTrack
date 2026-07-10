@@ -20,7 +20,8 @@ jobs:
       - name: Pick simulator
         id: sim
         run: |
-          DEVICE=$(xcrun simctl list devices available | grep -E '^\s+iPhone' | head -1 | sed -E 's/ \([^(]*\) \([^(]*\)$//' | xargs)
+          xcrun simctl list devices available --json > /tmp/sims.json
+          DEVICE=$(python3 -c "import json; d = json.load(open('/tmp/sims.json'))['devices']; print(next(dev['name'] for devs in d.values() for dev in devs if dev['name'].startswith('iPhone')))")
           echo "Using simulator: $DEVICE"
           echo "device=$DEVICE" >> "$GITHUB_OUTPUT"
 
