@@ -14,8 +14,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.2.app || sudo xcode-select -s /Applications/Xcode_16.1.app
+      # Use the runner's default (latest) Xcode — pinning an older Xcode
+      # fails because the image only ships simulator runtimes for the
+      # newest SDKs. Pick whatever iPhone simulator the image provides.
+      - name: Pick simulator
+        id: sim
+        run: |
+          DEVICE=$(xcrun simctl list devices available | grep -E '^\s+iPhone' | head -1 | sed -E 's/ \([^(]*\) \([^(]*\)$//' | xargs)
+          echo "Using simulator: $DEVICE"
+          echo "device=$DEVICE" >> "$GITHUB_OUTPUT"
 
       - name: Run tests
-        run: xcodebuild test -project MediTrack.xcodeproj -scheme MediTrack -destination 'platform=iOS Simulator,name=iPhone 16' CODE_SIGNING_ALLOWED=NO
+        run: xcodebuild test -project MediTrack.xcodeproj -scheme MediTrack -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.device }}" CODE_SIGNING_ALLOWED=NO
