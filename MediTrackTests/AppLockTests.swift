@@ -15,6 +15,16 @@ final class AppLockTests: XCTestCase {
     override func setUpWithError() throws {
         try super.setUpWithError()
         resetPersistedState()
+
+        // The Keychain rejects writes from unsigned test hosts (e.g. CI runs
+        // with CODE_SIGNING_ALLOWED=NO), so probe it and skip rather than
+        // fail. Signed local runs in Xcode exercise the full suite.
+        let probeAccount = "test.keychain.probe"
+        let probe = Data("probe".utf8)
+        KeychainStore.set(probe, for: probeAccount)
+        let readable = KeychainStore.get(probeAccount) == probe
+        KeychainStore.delete(probeAccount)
+        try XCTSkipUnless(readable, "Keychain is unavailable in this test environment (unsigned test host).")
     }
 
     override func tearDownWithError() throws {
