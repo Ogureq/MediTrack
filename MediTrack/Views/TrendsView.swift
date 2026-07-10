@@ -103,6 +103,20 @@ struct TrendsView: View {
         allSeries.first { $0.id == selectedSeriesID } ?? allSeries.first
     }
 
+    /// When `series` is one half of a blood-pressure reading, returns the
+    /// matching systolic/diastolic pair from `allSeries` so both can be
+    /// charted together. Returns `nil` for every other metric, and for
+    /// blood-pressure vitals that never recorded a diastolic value.
+    private func bloodPressurePair(for series: MetricSeries) -> (systolic: MetricSeries, diastolic: MetricSeries)? {
+        let prefix = "vital:\(VitalType.bloodPressure.rawValue):"
+        guard series.id.hasPrefix(prefix),
+              let systolic = allSeries.first(where: { $0.id == "\(prefix)systolic" }),
+              let diastolic = allSeries.first(where: { $0.id == "\(prefix)diastolic" }) else {
+            return nil
+        }
+        return (systolic, diastolic)
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -169,8 +183,48 @@ struct TrendsView: View {
         return series.points.filter { $0.date >= cutoff }
     }
 
+    private func periodAverage(_ points: [MetricPoint]) -> Double? {
+        guard !points.isEmpty else { return nil }
+        let total = points.reduce(0) { $0 + $1.value }
+        return total / Double(points.count)
+    }
+
+    private func periodMinPoint(_ points: [MetricPoint]) -> MetricPoint? {
+        points.min { $0.value < $1.value }
+    }
+
+    private func periodMaxPoint(_ points: [MetricPoint]) -> MetricPoint? {
+        points.max { $0.value < $1.value }
+    }
+
+    /// Y-axis domain padded beyond the visible values (and the healthy-range
+    /// band, when present) so nothing sits flush against the chart edges.
+    private func yDomain(values: [Double], range: ClosedRange<Double>?) -> ClosedRange<Double> {
+        var low = values.min() ?? 0
+        var high = values.max() ?? 1
+        if let range {
+            low = min(low, range.lowerBound)
+            high = max(high, range.upperBound)
+        }
+        if low == high {
+            low -= 1
+            high += 1
+        }
+        let padding = (high - low) * 0.12
+        return (low - padding)...(high + padding)
+    }
+
     @ViewBuilder
     private func chart(for series: MetricSeries, points: [MetricPoint]) -> some View {
+        let pair = bloodPressurePair(for: series)
+        let systolicPoints = pair.map { visiblePoints(for: $0.systolic) } ?? []
+        let diastolicPoints = pair.map { visiblePoints(for: $0.diastolic) } ?? []
+        let domainValues = pair == nil ? points.map(\.value) : (systolicPoints + diastolicPoints).map(\.value)
+        let average = periodAverage(points)
+        let minPoint = periodMinPoint(points)
+        let maxPoint = periodMaxPoint(points)
+        let maxDiffersFromMin = maxPoint?.id != minPoint?.id
+
         Chart {
             if let range = series.range {
                 RectangleMark(
@@ -179,17 +233,116 @@ struct TrendsView: View {
                 )
                 .foregroundStyle(.green.opacity(0.1))
             }
-            ForEach(points) { point in
-                LineMark(
-                    x: .value("Date", point.date),
-                    y: .value(series.name, point.value)
-                )
-                .interpolationMethod(.monotone)
-                PointMark(
-                    x: .value("Date", point.date),
-                    y: .value(series.name, point.value)
-                )
+
+            if let pair {
+                // Blood pressure: systolic and diastolic charted as two
+                // color-coded series with an automatic legend.
+                ForEach(systolicPoints) { point in
+                    LineMark(
+                        x: .value("Date", point.date),
+                        y: .value(pair.systolic.name, point.value)
+                    )
+                    .interpolationMethod(.monotone)
+                    .foregroundStyle(by: .value("Reading", pair.systolic.name))
+                    PointMark(
+                        x: .value("Date", point.date),
+                        y: .value(pair.systolic.name, point.value)
+                    )
+                    .foregroundStyle(by: .value("Reading", pair.systolic.name))
+                }
+                ForEach(diastolicPoints) { point in
+                    LineMark(
+                        x: .value("Date", point.date),
+                        y: .value(pair.diastolic.name, point.value)
+                    )
+                    .interpolationMethod(.monotone)
+                    .foregroundStyle(by: .value("Reading", pair.diastolic.name))
+                    PointMark(
+                        x: .value("Date", point.date),
+                        y: .value(pair.diastolic.name, point.value)
+                    )
+                    .foregroundStyle(by: .value("Reading", pair.diastolic.name))
+                }
+            } else {
+                ForEach(points) { point in
+                    AreaMark(
+                        x: .value("Date", point.date),
+                        y: .value(series.name, point.value)
+                    )
+                    .interpolationMethod(.monotone)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Color.teal.opacity(0.30), Color.teal.opacity(0)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                }
+                ForEach(points) { point in
+                    LineMark(
+                        x: .value("Date", point.date),
+                        y: .value(series.name, point.value)
+                    )
+                    .interpolationMethod(.monotone)
+                    .foregroundStyle(Glass.accentGradient)
+                    PointMark(
+                        x: .value("Date", point.date),
+                        y: .value(series.name, point.value)
+                    )
+                    .foregroundStyle(Glass.accentGradient)
+                }
             }
+
+            if let average {
+                RuleMark(y: .value("Average", average))
+                    .foregroundStyle(.orange.opacity(0.55))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                    .annotation(
+                        position: .top,
+                        overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                    ) {
+                        Text("avg \(average.compactFormatted)")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.orange)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(.ultraThinMaterial, in: Capsule())
+                    }
+            }
+
+            if let minPoint {
+                PointMark(
+                    x: .value("Date", minPoint.date),
+                    y: .value(series.name, minPoint.value)
+                )
+                .symbolSize(90)
+                .foregroundStyle(.purple)
+                .annotation(
+                    position: .bottom,
+                    overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                ) {
+                    Text(minPoint.value.compactFormatted)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.purple)
+                }
+            }
+            if let maxPoint, maxDiffersFromMin {
+                PointMark(
+                    x: .value("Date", maxPoint.date),
+                    y: .value(series.name, maxPoint.value)
+                )
+                .symbolSize(90)
+                .foregroundStyle(.purple)
+                .annotation(
+                    position: .top,
+                    overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                ) {
+                    Text(maxPoint.value.compactFormatted)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.purple)
+                }
+            }
+
             if let selectedDate, let selected = nearestPoint(to: selectedDate, in: points) {
                 RuleMark(x: .value("Selected", selected.date))
                     .foregroundStyle(.gray.opacity(0.5))
@@ -215,8 +368,10 @@ struct TrendsView: View {
                     }
             }
         }
+        .chartLegend(pair == nil ? .hidden : .visible)
         .chartXSelection(value: $selectedDate)
         .chartYAxisLabel(series.unit)
+        .chartYScale(domain: yDomain(values: domainValues, range: series.range))
     }
 
     private func nearestPoint(to date: Date, in points: [MetricPoint]) -> MetricPoint? {
