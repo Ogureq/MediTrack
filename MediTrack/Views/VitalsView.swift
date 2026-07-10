@@ -123,6 +123,7 @@ struct VitalsView: View {
 struct AddVitalSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @AppStorage("health.writeBackEnabled") private var healthWriteBackEnabled = false
 
     @State private var type: VitalType
     @State private var valueText = ""
@@ -200,6 +201,22 @@ struct AddVitalSheet: View {
         )
         modelContext.insert(sample)
         Haptics.success()
+        if healthWriteBackEnabled && HealthKitService.isWritable(type) {
+            writeToHealth(sample)
+        }
         dismiss()
+    }
+
+    /// Best-effort mirror of a newly logged vital into Apple Health. The
+    /// local save has already succeeded, so any failure here is silent.
+    private func writeToHealth(_ sample: VitalSample) {
+        Task {
+            do {
+                try await HealthKitService.requestWriteAuthorization()
+                try await HealthKitService.write(sample: sample)
+            } catch {
+                // Non-fatal: the vital is already saved locally.
+            }
+        }
     }
 }

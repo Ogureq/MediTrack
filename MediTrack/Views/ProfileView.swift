@@ -29,6 +29,7 @@ private struct ProfileForm: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage("appLockEnabled") private var appLockEnabled = false
     @AppStorage("lastHealthImportAt") private var lastHealthImportAt: Double = 0
+    @AppStorage("health.writeBackEnabled") private var healthWriteBackEnabled = false
     @AppStorage(Units.weightKey) private var weightUnitRaw = WeightUnit.kilograms.rawValue
     @AppStorage(Units.temperatureKey) private var temperatureUnitRaw = TemperatureUnit.celsius.rawValue
     @AppStorage(Units.glucoseKey) private var glucoseUnitRaw = GlucoseUnit.mgdL.rawValue
@@ -195,6 +196,14 @@ private struct ProfileForm: View {
                     }
                 }
                 .disabled(!HealthKitService.isAvailable || isImportingHealth)
+                Toggle("Save new vitals to Apple Health", isOn: $healthWriteBackEnabled)
+                    .disabled(!HealthKitService.isAvailable)
+                    .onChange(of: healthWriteBackEnabled) { _, isEnabled in
+                        guard isEnabled else { return }
+                        Task {
+                            try? await HealthKitService.requestWriteAuthorization()
+                        }
+                    }
                 Button {
                     exportBackup()
                 } label: {
@@ -218,7 +227,7 @@ private struct ProfileForm: View {
             } header: {
                 Text("Data")
             } footer: {
-                Text("Health import copies your recent readings from Apple Health. Backups are a single JSON file containing everything — including attachments — that you can store anywhere and restore later (reminders need re-enabling after a restore). Erasing removes all data from this device.")
+                Text("Health import copies your recent readings from Apple Health. When \"Save new vitals to Apple Health\" is on, vitals you log in MediTrack are also written to the Health app. Backups are a single JSON file containing everything — including attachments — that you can store anywhere and restore later (reminders need re-enabling after a restore). Erasing removes all data from this device.")
             }
             .listRowBackground(GlassRowBackground())
             .listRowSeparator(.hidden)
