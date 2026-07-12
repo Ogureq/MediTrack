@@ -145,6 +145,12 @@ This document records the phased plan executed to build MediTrack, a privacy-fir
 - [x] Privacy & Your Data explainer — dedicated educational screen documenting on-device storage, data protection, data ownership, and control
 - [x] Re-test and score-change notifications — optional push notifications alert on lab re-test recommendations (90-day intervals) and meaningful score changes
 
+## Phase 17 — Roadmap P2 Wave 1: Effortless Data Entry
+
+- [x] Quick Add — a Dashboard sheet where the user types one natural sentence ("aspirin 100mg twice daily", "bp 128/82", "dentist tomorrow 3pm") and a deterministic on-device parser (`Services/QuickAddParser.swift`, 43 unit tests) turns it into a live-previewed draft medication, vital, symptom, appointment, or reminder — confirm to save
+- [x] AI-assist fill (optional) — when the deterministic parser can't read a genuine attempt and an API key is configured, a "Fill with AI" button sends the sentence to a small model under a strict single-JSON-object contract; the response is re-validated against the same plausibility bounds as the parser (20 networking-free unit tests) and labeled "AI-filled — please double-check"
+- [x] Modernized add/edit sheets — all six add sheets (medications, vitals, symptoms, appointments, goals, reminders) redesigned from dense forms into scrollable glass-card layouts with one-tap suggestion chips, icon-chip pickers, and an auto-expanding "Add details" disclosure for secondary fields; save and validation logic unchanged
+
 ## Future Milestones
 
 Not part of the current plan; captured here for future scoping:
