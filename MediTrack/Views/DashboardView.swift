@@ -17,6 +17,7 @@ struct DashboardView: View {
     @State private var showingAddReport = false
     @State private var showingAddVital = false
     @State private var showingQuickAdd = false
+    @State private var showingQuarterlyReview = false
 
     private var review: HealthReview {
         AnalysisEngine.generateReview(
@@ -31,6 +32,22 @@ struct DashboardView: View {
 
     private var nextAppointment: Appointment? {
         appointments.first(where: \.isUpcoming)
+    }
+
+    /// Earliest data point already fetched by this view — reused so the
+    /// Quarterly Review "is it due" check needs no extra `@Query`.
+    private var earliestDataDate: Date? {
+        let dates = [snapshots.first?.date, vitals.map(\.date).min()].compactMap { $0 }
+        return dates.min()
+    }
+
+    private var isQuarterlyReviewDue: Bool {
+        QuarterlyReview.isDue(
+            lastCompleted: QuarterlyReview.lastCompleted(defaults: .standard),
+            earliestData: earliestDataDate,
+            now: .now,
+            calendar: .current
+        )
     }
 
     /// Anonymous rollup stats for the shareable score card — counts and a
@@ -99,6 +116,7 @@ struct DashboardView: View {
                     if review.hasData {
                         scoreCard
                         remindersCard
+                        quarterlyReviewCard
                         scoreHistoryCard
                         alertsSection
                         appointmentCard
@@ -133,6 +151,7 @@ struct DashboardView: View {
             .sheet(isPresented: $showingAddReport) { AddReportView() }
             .sheet(isPresented: $showingAddVital) { AddVitalSheet() }
             .sheet(isPresented: $showingQuickAdd) { QuickAddView() }
+            .sheet(isPresented: $showingQuarterlyReview) { QuarterlyReviewView() }
         }
     }
 
@@ -298,6 +317,41 @@ struct DashboardView: View {
         } else {
             modelContext.insert(ReminderCompletion(date: day, reminder: reminder))
             Haptics.success()
+        }
+    }
+
+    @ViewBuilder
+    private var quarterlyReviewCard: some View {
+        if isQuarterlyReviewDue {
+            Button {
+                showingQuarterlyReview = true
+            } label: {
+                HStack(spacing: 14) {
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(Glass.accentGradient)
+                        .frame(width: 40, height: 40)
+                        .background(.ultraThinMaterial, in: Circle())
+                        .overlay(Circle().strokeBorder(Glass.bevelStroke, lineWidth: 1))
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Quarterly Review is ready")
+                            .font(.subheadline.weight(.semibold))
+                        Text("See how your last 90 days trended.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
+                .padding(12)
+                .tintedGlassCard(.teal, cornerRadius: 16)
+                .accessibilityElement(children: .combine)
+            }
+            .buttonStyle(.plain)
         }
     }
 
