@@ -311,7 +311,7 @@ enum QuarterlyReview {
         for goal in goals {
             let samples = vitals.filter { $0.type == goal.type }.sorted { $0.date < $1.date }
             let beforeWindowValue = samples.last(where: { $0.date < periodStart })?.value ?? goal.startValue
-            guard let latestInWindow = samples.last(where: inWindow) else { continue }
+            guard let latestInWindow = samples.last(where: { inWindow($0.date) }) else { continue }
 
             let wasAchieved = goal.isAchieved(latest: beforeWindowValue)
             let isAchievedNow = goal.isAchieved(latest: latestInWindow.value)
