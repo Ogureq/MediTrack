@@ -141,6 +141,14 @@ struct TrendsView: View {
             }
             .ambientScreen()
             .navigationTitle("Trends")
+            .toolbar {
+                NavigationLink {
+                    TimelineView()
+                } label: {
+                    Image(systemName: "clock.arrow.circlepath")
+                }
+                .accessibilityLabel("View health timeline")
+            }
         }
     }
 
