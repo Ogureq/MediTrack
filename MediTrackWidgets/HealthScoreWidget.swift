@@ -118,12 +118,19 @@ struct HealthScoreWidgetView: View {
     var body: some View {
         Group {
             if let snapshot = entry.snapshot {
-                switch family {
-                case .systemMedium:
-                    MediumHealthScoreView(snapshot: snapshot, snapshotDate: entry.snapshotDate)
-                default:
-                    SmallHealthScoreView(snapshot: snapshot)
+                Group {
+                    switch family {
+                    case .systemMedium:
+                        MediumHealthScoreView(snapshot: snapshot, snapshotDate: entry.snapshotDate)
+                    default:
+                        SmallHealthScoreView(snapshot: snapshot)
+                    }
                 }
+                // Health data must not be readable off a locked device: the
+                // system swaps these views for redacted placeholders until
+                // the device is unlocked. The empty state carries no data
+                // and stays legible.
+                .privacySensitive()
             } else {
                 EmptyStateView()
             }
