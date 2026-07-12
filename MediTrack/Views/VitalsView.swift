@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import Charts
+import UIKit
 
 struct VitalsView: View {
     @Environment(\.modelContext) private var modelContext
@@ -133,6 +134,7 @@ struct AddVitalSheet: View {
     @State private var secondaryText = ""
     @State private var date = Date.now
     @State private var note = ""
+    @State private var showingDetails = false
 
     init(initialType: VitalType = .weight) {
         _type = State(initialValue: initialType)
@@ -156,30 +158,80 @@ struct AddVitalSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    Picker("Vital", selection: $type) {
-                        ForEach(VitalType.allCases) { type in
-                            Label(type.displayName, systemImage: type.systemImage).tag(type)
+            ScrollView {
+                VStack(spacing: 16) {
+                    SheetHeader(
+                        icon: type.systemImage,
+                        tint: .blue,
+                        title: "Add Vital",
+                        subtitle: "Log a new \(type.displayName.lowercased()) reading."
+                    )
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        SheetFieldLabel("Type")
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(VitalType.allCases) { option in
+                                    VitalTypeChip(type: option, isSelected: type == option) {
+                                        SheetHaptics.selection()
+                                        type = option
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 2)
                         }
                     }
-                    TextField(
-                        type.usesSecondaryValue ? "Systolic (\(type.unit))" : "Value (\(Units.label(for: type)))",
-                        text: $valueText
-                    )
-                    .keyboardType(.decimalPad)
-                    if type.usesSecondaryValue {
-                        TextField("Diastolic (\(type.unit))", text: $secondaryText)
-                            .keyboardType(.decimalPad)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassCard()
+
+                    VStack(alignment: .leading, spacing: 14) {
+                        SheetFieldLabel(type.usesSecondaryValue ? "Systolic (\(type.unit))" : "Value (\(Units.label(for: type)))")
+                        TextField(
+                            type.usesSecondaryValue ? "Systolic (\(type.unit))" : "Value (\(Units.label(for: type)))",
+                            text: $valueText
+                        )
+                        .font(.title3.weight(.semibold))
+                        .keyboardType(.decimalPad)
+
+                        if type.usesSecondaryValue {
+                            Divider().opacity(0.5)
+                            SheetFieldLabel("Diastolic (\(type.unit))")
+                            TextField("Diastolic (\(type.unit))", text: $secondaryText)
+                                .font(.title3.weight(.semibold))
+                                .keyboardType(.decimalPad)
+                        }
                     }
-                    DatePicker("Date", selection: $date)
-                    TextField("Note (optional)", text: $note)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassCard()
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        SheetFieldLabel("Date")
+                        DatePicker("Date", selection: $date)
+                            .labelsHidden()
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassCard()
+
+                    DisclosureGroup("Add details", isExpanded: $showingDetails) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            SheetFieldLabel("Note")
+                            TextField("Note (optional)", text: $note)
+                                .font(.body)
+                        }
+                        .padding(.top, 12)
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .tint(.primary)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassCard()
                 }
-                .listRowBackground(GlassRowBackground())
-                .listRowSeparator(.hidden)
+                .padding()
             }
             .ambientScreen()
-            .navigationTitle("Add Vital")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -191,6 +243,9 @@ struct AddVitalSheet: View {
                 }
             }
         }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(.ultraThinMaterial)
     }
 
     private func save() {
@@ -221,5 +276,91 @@ struct AddVitalSheet: View {
                 // Non-fatal: the vital is already saved locally.
             }
         }
+    }
+}
+
+// MARK: - Shared sheet UI
+
+/// Friendly header shown at the top of the add/edit sheet: a tinted icon
+/// tile plus a bold title and one-line subtitle, replacing a bare nav title.
+private struct SheetHeader: View {
+    let icon: String
+    let tint: Color
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: icon)
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 52, height: 52)
+                .background(tint.gradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.title2.bold())
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Small uppercase caption used above a field inside a glass block.
+private struct SheetFieldLabel: View {
+    let text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        Text(text.uppercased())
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+    }
+}
+
+/// Horizontally scrolling icon chip used to pick the vital type without a
+/// system Picker wheel.
+private struct VitalTypeChip: View {
+    let type: VitalType
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: type.systemImage)
+                    .font(.title3)
+                    .frame(width: 40, height: 40)
+                    .foregroundStyle(isSelected ? .white : Color.accentColor)
+                    .background(
+                        Circle().fill(isSelected ? AnyShapeStyle(Glass.accentGradient) : AnyShapeStyle(.ultraThinMaterial))
+                    )
+                    .overlay(Circle().strokeBorder(Glass.bevelStroke, lineWidth: 1))
+                Text(type.displayName)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(isSelected ? .primary : .secondary)
+                    .lineLimit(1)
+            }
+            .frame(width: 72)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(type.displayName)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+}
+
+/// Light selection feedback for chip taps — UIHelpers only defines the
+/// success notification haptic, so this stays local to each sheet file.
+private enum SheetHaptics {
+    static func selection() {
+        UISelectionFeedbackGenerator().selectionChanged()
     }
 }

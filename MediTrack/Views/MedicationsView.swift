@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct MedicationsView: View {
     @Environment(\.modelContext) private var modelContext
@@ -203,6 +204,12 @@ struct AddMedicationSheet: View {
     @State private var startDate: Date
     @State private var reminderEnabled: Bool
     @State private var reminderTime: Date
+    @State private var showingDetails: Bool
+
+    private static let frequencyOptions = [
+        "Once daily", "Twice daily", "Every morning", "Every night", "As needed",
+    ]
+    private static let dosageUnits = ["mg", "mcg", "ml", "tablets"]
 
     init(medication: Medication? = nil) {
         existingMedication = medication
@@ -215,42 +222,104 @@ struct AddMedicationSheet: View {
         _reminderEnabled = State(initialValue: medication?.reminderEnabled ?? false)
         _reminderTime = State(initialValue: medication?.reminderTime
             ?? Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: .now) ?? .now)
+        _showingDetails = State(initialValue: !(medication?.purpose ?? "").isEmpty || !(medication?.notes ?? "").isEmpty)
     }
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Medication") {
-                    TextField("Name", text: $name)
-                    TextField("Dosage (e.g. 500 mg)", text: $dosage)
-                    TextField("Frequency (e.g. twice daily)", text: $frequency)
-                    TextField("Purpose (e.g. blood pressure)", text: $purpose)
-                    DatePicker("Start date", selection: $startDate, displayedComponents: .date)
-                }
-                .listRowBackground(GlassRowBackground())
-                .listRowSeparator(.hidden)
-                Section {
-                    Toggle("Daily reminder", isOn: $reminderEnabled)
-                    if reminderEnabled {
-                        DatePicker("Time", selection: $reminderTime, displayedComponents: .hourAndMinute)
-                    }
-                } header: {
-                    Text("Reminder")
-                } footer: {
-                    Text("MediTrack sends a local notification every day at this time while the medication is active.")
-                }
-                .listRowBackground(GlassRowBackground())
-                .listRowSeparator(.hidden)
+            ScrollView {
+                VStack(spacing: 16) {
+                    SheetHeader(
+                        icon: "pills.fill",
+                        tint: .teal,
+                        title: existingMedication == nil ? "Add Medication" : "Edit Medication",
+                        subtitle: "Track dosage, schedule, and reminders."
+                    )
 
-                Section("Notes") {
-                    TextField("Notes", text: $notes, axis: .vertical)
-                        .lineLimit(2...4)
+                    VStack(alignment: .leading, spacing: 14) {
+                        SheetFieldLabel("Name")
+                        TextField("e.g. Lisinopril", text: $name)
+                            .font(.body)
+
+                        Divider().opacity(0.5)
+
+                        SheetFieldLabel("Dosage")
+                        TextField("e.g. 500 mg", text: $dosage)
+                            .font(.body)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(Self.dosageUnits, id: \.self) { unit in
+                                    SuggestionChip(label: unit, isSelected: false) {
+                                        appendUnit(unit)
+                                    }
+                                }
+                            }
+                        }
+
+                        Divider().opacity(0.5)
+
+                        SheetFieldLabel("Frequency")
+                        TextField("e.g. Twice daily", text: $frequency)
+                            .font(.body)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(Self.frequencyOptions, id: \.self) { option in
+                                    SuggestionChip(label: option, isSelected: frequency == option) {
+                                        frequency = option
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassCard()
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        SheetFieldLabel("Start Date")
+                        DatePicker("Start date", selection: $startDate, displayedComponents: .date)
+                            .labelsHidden()
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassCard()
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle("Daily reminder", isOn: $reminderEnabled.animation())
+                            .font(.body.weight(.semibold))
+                        if reminderEnabled {
+                            DatePicker("Time", selection: $reminderTime, displayedComponents: .hourAndMinute)
+                        }
+                        Text("MediTrack sends a local notification every day at this time while the medication is active.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassCard()
+
+                    DisclosureGroup("Add details", isExpanded: $showingDetails) {
+                        VStack(alignment: .leading, spacing: 14) {
+                            SheetFieldLabel("Purpose")
+                            TextField("e.g. Blood pressure", text: $purpose)
+                                .font(.body)
+
+                            SheetFieldLabel("Notes")
+                            TextField("Notes", text: $notes, axis: .vertical)
+                                .font(.body)
+                                .lineLimit(2...4)
+                        }
+                        .padding(.top, 12)
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .tint(.primary)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassCard()
                 }
-                .listRowBackground(GlassRowBackground())
-                .listRowSeparator(.hidden)
+                .padding()
             }
             .ambientScreen()
-            .navigationTitle(existingMedication == nil ? "Add Medication" : "Edit Medication")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -262,6 +331,16 @@ struct AddMedicationSheet: View {
                 }
             }
         }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(.ultraThinMaterial)
+    }
+
+    /// Replaces any existing unit suffix on the dosage field with the tapped one.
+    private func appendUnit(_ unit: String) {
+        SheetHaptics.selection()
+        let numberPart = dosage.trimmingCharacters(in: .whitespaces).split(separator: " ").first.map(String.init) ?? ""
+        dosage = numberPart.isEmpty ? unit : "\(numberPart) \(unit)"
     }
 
     private func save() {
@@ -308,5 +387,91 @@ struct AddMedicationSheet: View {
         }
         Haptics.success()
         dismiss()
+    }
+}
+
+// MARK: - Shared sheet UI
+
+/// Friendly header shown at the top of the add/edit sheet: a tinted icon
+/// tile plus a bold title and one-line subtitle, replacing a bare nav title.
+private struct SheetHeader: View {
+    let icon: String
+    let tint: Color
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: icon)
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 52, height: 52)
+                .background(tint.gradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.title2.bold())
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Small uppercase caption used above a field inside a glass block.
+private struct SheetFieldLabel: View {
+    let text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        Text(text.uppercased())
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+    }
+}
+
+/// Tappable capsule chip used to fill a field without typing.
+private struct SuggestionChip: View {
+    let label: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            SheetHaptics.selection()
+            action()
+        } label: {
+            Text(label)
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(.ultraThinMaterial, in: Capsule())
+                .background(isSelected ? Color.accentColor.opacity(0.22) : Color.clear, in: Capsule())
+                .overlay(
+                    Capsule().strokeBorder(
+                        isSelected ? Color.accentColor.opacity(0.7) : Color.primary.opacity(0.12),
+                        lineWidth: 1
+                    )
+                )
+                .foregroundStyle(isSelected ? Color.accentColor : .primary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+}
+
+/// Light selection feedback for chip taps — UIHelpers only defines the
+/// success notification haptic, so this stays local to each sheet file.
+private enum SheetHaptics {
+    static func selection() {
+        UISelectionFeedbackGenerator().selectionChanged()
     }
 }

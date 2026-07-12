@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 /// Full list of reminders — active and inactive — reachable from the
 /// dashboard's "Today" card via its "Manage" link. Supports adding, editing,
@@ -238,6 +239,12 @@ struct AddReminderSheet: View {
         "bed.double.fill", "heart.fill", "cup.and.saucer.fill", "stethoscope",
     ]
 
+    @State private var showingDetails: Bool
+
+    private static let timePresets: [(label: String, hour: Int, minute: Int)] = [
+        ("Morning 8:00", 8, 0), ("Noon", 12, 0), ("Evening 20:00", 20, 0),
+    ]
+
     init(reminder: Reminder? = nil) {
         existingReminder = reminder
         _title = State(initialValue: reminder?.title ?? "")
@@ -246,57 +253,99 @@ struct AddReminderSheet: View {
         _reminderEnabled = State(initialValue: reminder?.timeOfDay != nil)
         _reminderTime = State(initialValue: reminder?.timeOfDay
             ?? Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: .now) ?? .now)
+        _showingDetails = State(initialValue: !(reminder?.detail ?? "").isEmpty)
     }
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Reminder") {
-                    TextField("Title (e.g. Take Vitamin D)", text: $title)
-                    TextField("Detail (optional)", text: $detail, axis: .vertical)
-                        .lineLimit(2...4)
-                }
-                .listRowBackground(GlassRowBackground())
-                .listRowSeparator(.hidden)
+            ScrollView {
+                VStack(spacing: 16) {
+                    SheetHeader(
+                        icon: systemImage,
+                        tint: .indigo,
+                        title: existingReminder == nil ? "Add Reminder" : "Edit Reminder",
+                        subtitle: "Keep track of medications, checkups, or habits."
+                    )
 
-                Section("Icon") {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 12) {
-                        ForEach(Self.iconOptions, id: \.self) { icon in
-                            iconButton(icon)
+                    VStack(alignment: .leading, spacing: 14) {
+                        SheetFieldLabel("Title")
+                        TextField("e.g. Take Vitamin D", text: $title)
+                            .font(.body)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassCard()
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        SheetFieldLabel("Icon")
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 12) {
+                            ForEach(Self.iconOptions, id: \.self) { icon in
+                                iconButton(icon)
+                            }
                         }
+                        .padding(.vertical, 4)
                     }
-                    .padding(.vertical, 6)
-                }
-                .listRowBackground(GlassRowBackground())
-                .listRowSeparator(.hidden)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassCard()
 
-                Section {
-                    Toggle("Daily notification", isOn: $reminderEnabled)
-                    if reminderEnabled {
-                        DatePicker("Time", selection: $reminderTime, displayedComponents: .hourAndMinute)
-                    }
-                } footer: {
-                    Text("MediTrack sends a local notification every day at this time while the reminder is active.")
-                }
-                .listRowBackground(GlassRowBackground())
-                .listRowSeparator(.hidden)
-
-                if let existingReminder, existingReminder.isAISuggested, !existingReminder.suggestionReason.isEmpty {
-                    Section {
-                        Label(existingReminder.suggestionReason, systemImage: "sparkles")
-                            .font(.footnote)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Toggle("Daily notification", isOn: $reminderEnabled.animation())
+                            .font(.body.weight(.semibold))
+                        if reminderEnabled {
+                            DatePicker("Time", selection: $reminderTime, displayedComponents: .hourAndMinute)
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(Self.timePresets, id: \.label) { preset in
+                                        SuggestionChip(label: preset.label, isSelected: false) {
+                                            setTime(hour: preset.hour, minute: preset.minute)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Text("MediTrack sends a local notification every day at this time while the reminder is active.")
+                            .font(.caption)
                             .foregroundStyle(.secondary)
-                    } header: {
-                        Text("Why AI Suggested This")
-                    } footer: {
-                        Text("This is an educational suggestion, not medical advice — worth discussing with your doctor before changing your routine.")
                     }
-                    .listRowBackground(GlassRowBackground())
-                    .listRowSeparator(.hidden)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassCard()
+
+                    if let existingReminder, existingReminder.isAISuggested, !existingReminder.suggestionReason.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Why AI Suggested This", systemImage: "sparkles")
+                                .font(.subheadline.weight(.semibold))
+                            Text(existingReminder.suggestionReason)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            Text("This is an educational suggestion, not medical advice — worth discussing with your doctor before changing your routine.")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .tintedGlassCard(.purple, cornerRadius: Glass.cardRadius)
+                    }
+
+                    DisclosureGroup("Add details", isExpanded: $showingDetails) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            SheetFieldLabel("Detail")
+                            TextField("Detail (optional)", text: $detail, axis: .vertical)
+                                .font(.body)
+                                .lineLimit(2...4)
+                        }
+                        .padding(.top, 12)
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .tint(.primary)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassCard()
                 }
+                .padding()
             }
             .ambientScreen()
-            .navigationTitle(existingReminder == nil ? "Add Reminder" : "Edit Reminder")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -308,6 +357,14 @@ struct AddReminderSheet: View {
                 }
             }
         }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(.ultraThinMaterial)
+    }
+
+    private func setTime(hour: Int, minute: Int) {
+        SheetHaptics.selection()
+        reminderTime = Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: .now) ?? reminderTime
     }
 
     private func iconButton(_ icon: String) -> some View {
@@ -361,5 +418,91 @@ struct AddReminderSheet: View {
         }
         Haptics.success()
         dismiss()
+    }
+}
+
+// MARK: - Shared sheet UI
+
+/// Friendly header shown at the top of the add/edit sheet: a tinted icon
+/// tile plus a bold title and one-line subtitle, replacing a bare nav title.
+private struct SheetHeader: View {
+    let icon: String
+    let tint: Color
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: icon)
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 52, height: 52)
+                .background(tint.gradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.title2.bold())
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Small uppercase caption used above a field inside a glass block.
+private struct SheetFieldLabel: View {
+    let text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        Text(text.uppercased())
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+    }
+}
+
+/// Tappable capsule chip used to fill a field without typing.
+private struct SuggestionChip: View {
+    let label: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            SheetHaptics.selection()
+            action()
+        } label: {
+            Text(label)
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(.ultraThinMaterial, in: Capsule())
+                .background(isSelected ? Color.accentColor.opacity(0.22) : Color.clear, in: Capsule())
+                .overlay(
+                    Capsule().strokeBorder(
+                        isSelected ? Color.accentColor.opacity(0.7) : Color.primary.opacity(0.12),
+                        lineWidth: 1
+                    )
+                )
+                .foregroundStyle(isSelected ? Color.accentColor : .primary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+}
+
+/// Light selection feedback for chip taps — UIHelpers only defines the
+/// success notification haptic, so this stays local to each sheet file.
+private enum SheetHaptics {
+    static func selection() {
+        UISelectionFeedbackGenerator().selectionChanged()
     }
 }
