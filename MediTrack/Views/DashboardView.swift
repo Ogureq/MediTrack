@@ -16,6 +16,7 @@ struct DashboardView: View {
 
     @State private var showingAddReport = false
     @State private var showingAddVital = false
+    @State private var showingQuickAdd = false
 
     private var review: HealthReview {
         AnalysisEngine.generateReview(
@@ -94,6 +95,7 @@ struct DashboardView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     greetingHeader
+                    quickAddButton
                     if review.hasData {
                         scoreCard
                         remindersCard
@@ -130,10 +132,26 @@ struct DashboardView: View {
             }
             .sheet(isPresented: $showingAddReport) { AddReportView() }
             .sheet(isPresented: $showingAddVital) { AddVitalSheet() }
+            .sheet(isPresented: $showingQuickAdd) { QuickAddView() }
         }
     }
 
     // MARK: Sections
+
+    private var quickAddButton: some View {
+        Button {
+            showingQuickAdd = true
+        } label: {
+            Label("Quick Add", systemImage: "sparkles")
+                .font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 13)
+                .tintedGlassCard(.teal, cornerRadius: 999)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Quick Add")
+        .accessibilityHint("Add a medication, vital, symptom, appointment, or reminder by typing a sentence.")
+    }
 
     private var greetingHeader: some View {
         VStack(alignment: .leading, spacing: 2) {
