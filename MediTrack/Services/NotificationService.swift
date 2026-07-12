@@ -34,6 +34,21 @@ enum NotificationService {
         UNUserNotificationCenter.current().add(request)
     }
 
+    /// Schedules (or replaces) a repeating daily reminder with a caller-supplied
+    /// title and body. Generic counterpart to the medication-specific overload
+    /// above — used by custom reminders (e.g. the "Today" reminders list).
+    static func scheduleDailyReminder(id: String, title: String, body: String, at time: Date) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+
+        let components = Calendar.current.dateComponents([.hour, .minute], from: time)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+        let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(request)
+    }
+
     /// Schedules a one-shot notification at an absolute time
     /// (e.g. the day before an appointment). Skipped for past dates.
     static func scheduleOneTime(id: String, title: String, body: String, at date: Date) {
