@@ -518,8 +518,13 @@ enum BackupService {
             )
             reminder.createdAt = dto.createdAt
             context.insert(reminder)
+            // Insert each completion explicitly and link via the inverse —
+            // appending uninserted children through the optional relationship
+            // crashes SwiftData on newer runtimes.
             for completionDate in dto.completions {
-                reminder.completions?.append(ReminderCompletion(date: completionDate))
+                let completion = ReminderCompletion(date: completionDate)
+                context.insert(completion)
+                completion.reminder = reminder
             }
             restored += 1
         }

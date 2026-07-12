@@ -62,7 +62,7 @@ final class RemindersTests: XCTestCase {
 
         let reminder = Reminder(title: "Take Atorvastatin")
         context.insert(reminder)
-        reminder.completions?.append(ReminderCompletion(date: lateEveningSameDay))
+        context.insert(ReminderCompletion(date: lateEveningSameDay, reminder: reminder))
         try context.save()
 
         XCTAssertTrue(reminder.isCompleted(on: morning))
@@ -74,7 +74,7 @@ final class RemindersTests: XCTestCase {
 
         let reminder = Reminder(title: "Take Vitamin D3")
         context.insert(reminder)
-        reminder.completions?.append(ReminderCompletion(date: today))
+        context.insert(ReminderCompletion(date: today, reminder: reminder))
         try context.save()
 
         XCTAssertFalse(reminder.isCompleted(on: yesterday))
@@ -87,8 +87,8 @@ final class RemindersTests: XCTestCase {
 
         let reminder = Reminder(title: "Take Warfarin")
         context.insert(reminder)
-        reminder.completions?.append(ReminderCompletion(date: twoDaysAgo))
-        reminder.completions?.append(ReminderCompletion(date: today))
+        context.insert(ReminderCompletion(date: twoDaysAgo, reminder: reminder))
+        context.insert(ReminderCompletion(date: today, reminder: reminder))
         try context.save()
 
         XCTAssertTrue(reminder.isCompleted(on: today))
@@ -102,8 +102,8 @@ final class RemindersTests: XCTestCase {
 
         let reminder = Reminder(title: "Take Atorvastatin")
         context.insert(reminder)
-        reminder.completions?.append(ReminderCompletion(date: day))
-        reminder.completions?.append(ReminderCompletion(date: day))
+        context.insert(ReminderCompletion(date: day, reminder: reminder))
+        context.insert(ReminderCompletion(date: day, reminder: reminder))
         try context.save()
 
         XCTAssertEqual(try context.fetch(FetchDescriptor<ReminderCompletion>()).count, 2)
@@ -147,7 +147,7 @@ final class RemindersTests: XCTestCase {
             suggestionReason: "Taking statins consistently with food can improve tolerability."
         )
         sourceContext.insert(reminder)
-        reminder.completions?.append(ReminderCompletion(date: completionDate))
+        context.insert(ReminderCompletion(date: completionDate, reminder: reminder))
         try sourceContext.save()
 
         let data = try BackupService.export(from: sourceContext, passphrase: "correct horse battery staple")

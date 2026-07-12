@@ -21,7 +21,17 @@ jobs:
         id: sim
         run: |
           xcrun simctl list devices available --json > /tmp/sims.json
-          DEVICE=$(python3 -c "import json; d = json.load(open('/tmp/sims.json'))['devices']; print(next(dev['name'] for devs in d.values() for dev in devs if dev['name'].startswith('iPhone')))")
+          DEVICE=$(python3 -c "
+          import json, re
+          d = json.load(open('/tmp/sims.json'))['devices']
+          def ver(runtime):
+              m = re.search(r'iOS-(\d+)-(\d+)', runtime)
+              return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
+          # Deterministic: newest iOS runtime first, then alphabetical device name.
+          candidates = sorted(
+              ((ver(rt), dev['name']) for rt, devs in d.items() for dev in devs if dev['name'].startswith('iPhone')),
+              key=lambda t: (t[0], t[1]), reverse=True)
+          print(candidates[0][1])")
           echo "Using simulator: $DEVICE"
           echo "device=$DEVICE" >> "$GITHUB_OUTPUT"
 
