@@ -1,155 +1,387 @@
 import SwiftUI
+import SwiftData
 
-// MARK: - Onboarding
+// MARK: - Onboarding quiz
+//
+// First-run flow: a short welcome, a personalized quiz that seeds the
+// on-device `HealthProfile`, a privacy reminder, and a preview of what
+// MediTrack will show once real data comes in. Every quiz step can be
+// skipped — skipping simply leaves that step's fields at the "unset"
+// sentinel values already documented on `HealthProfile` (empty string /
+// zero / nil), so a fully-skipped quiz produces the same profile as an
+// untouched one. Nothing is written until the final "Open MediTrack" tap.
 
-/// First-run walkthrough: what MediTrack does, how the on-device analysis
-/// works, and the privacy/disclaimer page the user must see before entering
-/// the app.
 struct OnboardingView: View {
     let onFinish: () -> Void
 
-    @State private var pageIndex = 0
+    @Environment(\.modelContext) private var modelContext
+    @Query private var existingProfiles: [HealthProfile]
+
+    @State private var step: QuizStep = .welcome
+
+    // Step: About you
+    @State private var name = ""
+    @State private var dateOfBirth: Date?
+    @State private var sex: BiologicalSex = .unspecified
+
+    // Step: Body basics
+    @State private var heightText = ""
+    @State private var weightText = ""
+
+    // Step: Daily rhythm
+    @State private var activityLevel: ActivityLevel?
+    @State private var typicalSleepHours: Double = 7
+    @State private var exerciseDaysPerWeek: Int = 3
+
+    // Step: Diet
+    @State private var dietStyle = ""
+
+    // Steps: Goals / concerns / supplements
+    @State private var goalTags: [String] = []
+    @State private var concernTags: [String] = []
+    @State private var supplements: [String] = []
+    @State private var customSupplementText = ""
+
+    private var defaultDateOfBirth: Date {
+        Calendar.current.date(byAdding: .year, value: -30, to: .now) ?? .now
+    }
 
     var body: some View {
         ZStack {
             AmbientBackground()
 
-            TabView(selection: $pageIndex) {
-                OnboardingPage(
-                    systemImage: "heart.text.square.fill",
-                    title: "Your Health, In One Place",
-                    description: "Log medical reports, lab results, and prescriptions as they come in. Attach the original documents so everything stays organized and easy to find later."
-                ) {
-                    withAnimation { pageIndex += 1 }
-                }
-                .tag(0)
+            VStack(spacing: 0) {
+                progressBar
+                    .padding(.horizontal, 24)
+                    .padding(.top, 14)
 
-                OnboardingPage(
-                    systemImage: "stethoscope",
-                    title: "Detailed Health Reviews",
-                    description: "MediTrack analyzes your reports on-device, giving you a health score, findings explained in plain language, and checks against normal reference ranges."
-                ) {
-                    withAnimation { pageIndex += 1 }
+                ScrollView {
+                    stepContent
+                        .padding(.bottom, 24)
                 }
-                .tag(1)
-
-                OnboardingPage(
-                    systemImage: "chart.line.uptrend.xyaxis",
-                    title: "Spot Trends Early",
-                    description: "Track your vitals and lab values over time with simple charts, so you can see what's improving and what's drifting before it becomes a problem."
-                ) {
-                    withAnimation { pageIndex += 1 }
-                }
-                .tag(2)
-
-                PrivacyPage(onFinish: onFinish)
-                    .tag(3)
             }
-            .tabViewStyle(.page(indexDisplayMode: .always))
+        }
+        .animation(.easeInOut(duration: 0.25), value: step)
+    }
 
-            if pageIndex < 3 {
-                VStack {
-                    HStack {
-                        Spacer()
-                        Button("Skip") {
-                            withAnimation { pageIndex = 3 }
-                        }
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .padding(.trailing, 20)
-                        .padding(.top, 8)
+    // MARK: Progress
+
+    private var progressBar: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.primary.opacity(0.08))
+                Capsule()
+                    .fill(Glass.accentGradient)
+                    .frame(width: geometry.size.width * progressFraction)
+            }
+        }
+        .frame(height: 6)
+        .accessibilityHidden(true)
+    }
+
+    private var progressFraction: CGFloat {
+        let all = QuizStep.allCases
+        guard let index = all.firstIndex(of: step), all.count > 1 else { return 0 }
+        return CGFloat(index) / CGFloat(all.count - 1)
+    }
+
+    @ViewBuilder
+    private var stepContent: some View {
+        switch step {
+        case .welcome: welcomeStep
+        case .aboutYou: aboutYouStep
+        case .bodyBasics: bodyBasicsStep
+        case .dailyRhythm: dailyRhythmStep
+        case .diet: dietStep
+        case .goals: goalsStep
+        case .concerns: concernsStep
+        case .supplements: supplementsStep
+        case .privacy: privacyStep
+        case .preview: previewStep
+        }
+    }
+
+    private func advance(resetting reset: (() -> Void)? = nil) {
+        reset?()
+        step = step.next
+    }
+
+    // MARK: Steps
+
+    private var welcomeStep: some View {
+        QuizStepScaffold(
+            systemImage: "heart.text.square.fill",
+            title: "Let's Personalize MediTrack",
+            subtitle: "Answer a few quick questions so your Health Review, reminders, and trends are tailored to you. Every question is optional — skip anything you'd rather not answer.",
+            primaryTitle: "Get Started",
+            onPrimary: { advance() }
+        ) {
+            EmptyView()
+        }
+    }
+
+    private var aboutYouStep: some View {
+        QuizStepScaffold(
+            systemImage: "person.text.rectangle.fill",
+            title: "About You",
+            subtitle: "This helps MediTrack greet you by name and pick the right reference ranges for lab results.",
+            primaryTitle: "Continue",
+            onPrimary: { advance() },
+            onSkip: { advance(resetting: {
+                name = ""
+                dateOfBirth = nil
+                sex = .unspecified
+            }) }
+        ) {
+            VStack(spacing: 14) {
+                TextField("Name", text: $name)
+                    .padding(12)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                DatePicker(
+                    "Date of birth",
+                    selection: Binding(
+                        get: { dateOfBirth ?? defaultDateOfBirth },
+                        set: { dateOfBirth = $0 }
+                    ),
+                    in: ...Date.now,
+                    displayedComponents: .date
+                )
+                .padding(12)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                Picker("Biological sex", selection: $sex) {
+                    ForEach(BiologicalSex.allCases) { option in
+                        Text(option.displayName).tag(option)
                     }
+                }
+                .pickerStyle(.segmented)
+            }
+        }
+    }
+
+    private var bodyBasicsStep: some View {
+        QuizStepScaffold(
+            systemImage: "ruler.fill",
+            title: "Body Basics",
+            subtitle: "Height and weight let MediTrack calculate BMI and chart trends over time.",
+            primaryTitle: "Continue",
+            onPrimary: { advance() },
+            onSkip: { advance(resetting: {
+                heightText = ""
+                weightText = ""
+            }) }
+        ) {
+            VStack(spacing: 14) {
+                HStack {
+                    Text("Height")
                     Spacer()
+                    TextField("cm", text: $heightText)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 90)
+                    Text("cm")
+                        .foregroundStyle(.secondary)
+                }
+                .padding(12)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                HStack {
+                    Text("Weight")
+                    Spacer()
+                    TextField(Units.label(for: .weight), text: $weightText)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 90)
+                    Text(Units.label(for: .weight))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(12)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+        }
+    }
+
+    private var dailyRhythmStep: some View {
+        QuizStepScaffold(
+            systemImage: "figure.run",
+            title: "Daily Rhythm",
+            subtitle: "Activity and sleep patterns give context to your vitals and findings.",
+            primaryTitle: "Continue",
+            onPrimary: { advance() },
+            onSkip: { advance(resetting: {
+                activityLevel = nil
+                typicalSleepHours = 0
+                exerciseDaysPerWeek = 0
+            }) }
+        ) {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Activity level")
+                        .font(.subheadline.weight(.semibold))
+                    FlowLayout(spacing: 8) {
+                        ForEach(ActivityLevel.allCases) { level in
+                            SelectableChip(
+                                title: level.displayName,
+                                isSelected: activityLevel == level
+                            ) {
+                                activityLevel = (activityLevel == level) ? nil : level
+                            }
+                        }
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Typical sleep")
+                            .font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Text(typicalSleepHours > 0 ? "\(typicalSleepHours.compactFormatted) h" : "Not set")
+                            .foregroundStyle(.secondary)
+                    }
+                    Slider(value: $typicalSleepHours, in: 4...10, step: 0.5)
+                        .accessibilityLabel("Typical sleep hours")
+                        .accessibilityValue("\(typicalSleepHours.compactFormatted) hours")
+                }
+
+                Stepper(
+                    "Exercise: \(exerciseDaysPerWeek) day\(exerciseDaysPerWeek == 1 ? "" : "s")/week",
+                    value: $exerciseDaysPerWeek,
+                    in: 0...7
+                )
+            }
+            .padding(16)
+            .glassCard(cornerRadius: 16)
+        }
+    }
+
+    private var dietStep: some View {
+        QuizStepScaffold(
+            systemImage: "fork.knife.circle.fill",
+            title: "Diet Style",
+            subtitle: "Pick the description that fits best — you can change this anytime in Profile & Settings.",
+            primaryTitle: "Continue",
+            onPrimary: { advance() },
+            onSkip: { advance(resetting: { dietStyle = "" }) }
+        ) {
+            FlowLayout(spacing: 10) {
+                ForEach(dietOptions) { option in
+                    SelectableChip(
+                        title: option.label,
+                        systemImage: option.systemImage,
+                        isSelected: dietStyle == option.label
+                    ) {
+                        dietStyle = (dietStyle == option.label) ? "" : option.label
+                    }
                 }
             }
         }
     }
-}
 
-// MARK: - Feature page
-
-private struct OnboardingPage: View {
-    let systemImage: String
-    let title: String
-    let description: String
-    let onContinue: () -> Void
-
-    var body: some View {
-        VStack(spacing: 28) {
-            Spacer()
-
-            ZStack {
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        Circle().strokeBorder(Glass.bevelStroke, lineWidth: 1)
-                    )
-                    .shadow(color: .black.opacity(0.14), radius: 12, x: 0, y: 6)
-                    .frame(width: 110, height: 110)
-
-                Image(systemName: systemImage)
-                    .font(.system(size: 54, weight: .semibold))
-                    .foregroundStyle(Glass.accentGradient)
+    private var goalsStep: some View {
+        QuizStepScaffold(
+            systemImage: "target",
+            title: "Your Goals",
+            subtitle: "Select as many as apply — MediTrack will highlight progress toward them.",
+            primaryTitle: "Continue",
+            onPrimary: { advance() },
+            onSkip: { advance(resetting: { goalTags = [] }) }
+        ) {
+            FlowLayout(spacing: 10) {
+                ForEach(goalOptions) { option in
+                    SelectableChip(
+                        title: option.label,
+                        systemImage: option.systemImage,
+                        isSelected: goalTags.contains(option.label)
+                    ) {
+                        toggle(option.label, in: $goalTags)
+                    }
+                }
             }
-
-            VStack(spacing: 12) {
-                Text(title)
-                    .font(.title2.bold())
-                    .multilineTextAlignment(.center)
-
-                Text(description)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 28)
-            }
-
-            Spacer()
-
-            Button("Continue", action: onContinue)
-                .buttonStyle(GlassProminentButtonStyle())
-                .frame(maxWidth: 280)
-                .padding(.bottom, 40)
         }
-        .padding(.top, 60)
     }
-}
 
-// MARK: - Privacy / disclaimer page
-
-private struct PrivacyPage: View {
-    let onFinish: () -> Void
-
-    var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            ZStack {
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        Circle().strokeBorder(Glass.bevelStroke, lineWidth: 1)
-                    )
-                    .shadow(color: .black.opacity(0.14), radius: 12, x: 0, y: 6)
-                    .frame(width: 110, height: 110)
-
-                Image(systemName: "lock.shield.fill")
-                    .font(.system(size: 54, weight: .semibold))
-                    .foregroundStyle(Glass.accentGradient)
+    private var concernsStep: some View {
+        QuizStepScaffold(
+            systemImage: "stethoscope",
+            title: "What Are You Watching?",
+            subtitle: "MediTrack will pay closer attention to findings related to these areas.",
+            primaryTitle: "Continue",
+            onPrimary: { advance() },
+            onSkip: { advance(resetting: { concernTags = [] }) }
+        ) {
+            FlowLayout(spacing: 10) {
+                ForEach(concernOptions) { option in
+                    SelectableChip(
+                        title: option.label,
+                        systemImage: option.systemImage,
+                        isSelected: concernTags.contains(option.label)
+                    ) {
+                        toggle(option.label, in: $concernTags)
+                    }
+                }
             }
+        }
+    }
 
-            VStack(spacing: 12) {
-                Text("Private by Design")
-                    .font(.title2.bold())
-                    .multilineTextAlignment(.center)
+    private var supplementsStep: some View {
+        QuizStepScaffold(
+            systemImage: "pills.fill",
+            title: "Supplements",
+            subtitle: "MediTrack can set up a daily reminder for each one you take.",
+            primaryTitle: "Continue",
+            onPrimary: { advance() },
+            onSkip: { advance(resetting: {
+                supplements = []
+                customSupplementText = ""
+            }) }
+        ) {
+            VStack(alignment: .leading, spacing: 16) {
+                FlowLayout(spacing: 10) {
+                    ForEach(supplementOptions) { option in
+                        SelectableChip(
+                            title: option.label,
+                            systemImage: option.systemImage,
+                            isSelected: supplements.contains(option.label)
+                        ) {
+                            toggle(option.label, in: $supplements)
+                        }
+                    }
+                    ForEach(customSupplements, id: \.self) { custom in
+                        SelectableChip(title: custom, systemImage: "checkmark", isSelected: true) {
+                            toggle(custom, in: $supplements)
+                        }
+                    }
+                }
 
-                Text("Everything stays on this device, protected by Face ID.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 28)
+                HStack(spacing: 10) {
+                    TextField("Add another…", text: $customSupplementText)
+                        .padding(12)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .onSubmit { addCustomSupplement() }
+                    Button {
+                        addCustomSupplement()
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(Glass.accentGradient)
+                    }
+                    .accessibilityLabel("Add supplement")
+                    .disabled(customSupplementText.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
             }
+        }
+    }
 
+    private var privacyStep: some View {
+        QuizStepScaffold(
+            systemImage: "lock.shield.fill",
+            title: "Private by Design",
+            subtitle: "Everything you just entered — and everything MediTrack tracks — stays on this device.",
+            primaryTitle: "Continue",
+            onPrimary: { advance() }
+        ) {
             ScrollView {
                 Text(HealthReview.disclaimer)
                     .font(.footnote)
@@ -157,21 +389,424 @@ private struct PrivacyPage: View {
                     .multilineTextAlignment(.leading)
                     .padding()
             }
-            .frame(maxHeight: 180)
+            .frame(maxHeight: 160)
+            .glassCard(cornerRadius: 16)
+        }
+    }
+
+    private var previewStep: some View {
+        VStack(spacing: 24) {
+            Text("Your Starting Point")
+                .font(.title2.bold())
+                .padding(.top, 24)
+
+            QuizPreviewRing(percent: completenessPercent)
+                .frame(width: 130, height: 130)
+
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(previewLines, id: \.self) { line in
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "sparkle")
+                            .foregroundStyle(Glass.accentGradient)
+                            .accessibilityHidden(true)
+                        Text(line)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(18)
             .glassCard(cornerRadius: 16)
             .padding(.horizontal, 24)
 
-            Spacer()
+            Spacer(minLength: 12)
 
-            Button("I Understand — Get Started", action: onFinish)
-                .buttonStyle(GlassProminentButtonStyle())
-                .frame(maxWidth: 300)
-                .padding(.bottom, 40)
+            Button("Open MediTrack") {
+                completeQuiz()
+            }
+            .buttonStyle(GlassProminentButtonStyle())
+            .frame(maxWidth: 300)
+            .padding(.horizontal, 24)
+            .padding(.bottom, 40)
         }
-        .padding(.top, 60)
+        .padding(.top, 12)
+    }
+
+    // MARK: Supplements helpers
+
+    private var customSupplements: [String] {
+        let catalogLabels = Set(supplementOptions.map(\.label))
+        return supplements.filter { !catalogLabels.contains($0) }
+    }
+
+    private func addCustomSupplement() {
+        let trimmed = customSupplementText.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        if !supplements.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) {
+            supplements.append(trimmed)
+        }
+        customSupplementText = ""
+    }
+
+    // MARK: Preview helpers
+
+    private var completenessPercent: Int {
+        let total = 8
+        var answered = 0
+        if !name.trimmingCharacters(in: .whitespaces).isEmpty { answered += 1 }
+        if dateOfBirth != nil { answered += 1 }
+        if sex != .unspecified { answered += 1 }
+        if parsedHeightCm != nil || parsedWeight != nil { answered += 1 }
+        if activityLevel != nil { answered += 1 }
+        if !dietStyle.isEmpty { answered += 1 }
+        if !goalTags.isEmpty || !concernTags.isEmpty { answered += 1 }
+        if !supplements.isEmpty { answered += 1 }
+        return Int((Double(answered) / Double(total) * 100).rounded())
+    }
+
+    private var parsedHeightCm: Double? {
+        Double(heightText.replacingOccurrences(of: ",", with: "."))
+    }
+
+    private var parsedWeight: Double? {
+        Double(weightText.replacingOccurrences(of: ",", with: "."))
+    }
+
+    /// Descriptive, educational lines only — never medical advice. Falls back
+    /// to a generic encouragement if the whole quiz was skipped.
+    private var previewLines: [String] {
+        var lines: [String] = []
+
+        if let heightCm = parsedHeightCm, heightCm > 0, let weightValue = parsedWeight {
+            let weightKg = Units.canonical(weightValue, for: .weight)
+            let heightM = heightCm / 100
+            if heightM > 0 {
+                let bmi = weightKg / (heightM * heightM)
+                lines.append("Your BMI is in the \(bmiRangeLabel(bmi)) range — you'll see this reflected in your Health Review.")
+            }
+        }
+
+        if typicalSleepHours > 0, let healthyRange = VitalType.sleepHours.healthyRange {
+            let hours = typicalSleepHours.compactFormatted
+            if healthyRange.contains(typicalSleepHours) {
+                lines.append("You typically sleep \(hours) hours — right in the 7–9 hour range MediTrack looks for.")
+            } else if typicalSleepHours < healthyRange.lowerBound {
+                lines.append("You typically sleep \(hours) hours — a little under the 7–9 hour range MediTrack looks for.")
+            } else {
+                lines.append("You typically sleep \(hours) hours — a little over the 7–9 hour range MediTrack looks for.")
+            }
+        }
+
+        if !supplements.isEmpty {
+            lines.append("We've set up \(supplements.count) reminder\(supplements.count == 1 ? "" : "s") for the supplements you take.")
+        } else if !goalTags.isEmpty {
+            lines.append("MediTrack will keep an eye on your \(goalTags.count) selected goal\(goalTags.count == 1 ? "" : "s") as new data comes in.")
+        } else if !concernTags.isEmpty {
+            lines.append("MediTrack will pay closer attention to findings related to the \(concernTags.count) area\(concernTags.count == 1 ? "" : "s") you flagged.")
+        }
+
+        if lines.isEmpty {
+            lines.append("Add reports, vitals, and medications anytime — your Health Review builds itself as you go.")
+        }
+
+        return Array(lines.prefix(3))
+    }
+
+    private func bmiRangeLabel(_ bmi: Double) -> String {
+        switch bmi {
+        case ..<18.5: "below-typical"
+        case 18.5..<25: "healthy"
+        case 25..<30: "above-typical"
+        default: "higher"
+        }
+    }
+
+    // MARK: Completion
+
+    private func completeQuiz() {
+        let profile: HealthProfile
+        if let existing = existingProfiles.first {
+            profile = existing
+        } else {
+            profile = HealthProfile()
+            modelContext.insert(profile)
+        }
+
+        profile.name = name.trimmingCharacters(in: .whitespaces)
+        profile.dateOfBirth = dateOfBirth
+        profile.sex = sex
+        profile.heightCm = parsedHeightCm
+        profile.activityLevel = activityLevel?.rawValue ?? ""
+        profile.typicalSleepHours = typicalSleepHours
+        profile.dietStyle = dietStyle
+        profile.exerciseDaysPerWeek = exerciseDaysPerWeek
+        profile.healthGoalTags = goalTags
+        profile.healthConcerns = concernTags
+        profile.supplements = supplements
+        profile.hasCompletedQuiz = true
+
+        if let weightValue = parsedWeight {
+            modelContext.insert(VitalSample(type: .weight, value: Units.canonical(weightValue, for: .weight)))
+        }
+
+        for supplement in supplements {
+            modelContext.insert(Reminder(title: supplement, systemImage: "pills.fill"))
+        }
+
+        Haptics.success()
+        onFinish()
+    }
+}
+
+// MARK: - Quiz step sequence
+
+private enum QuizStep: CaseIterable, Equatable {
+    case welcome, aboutYou, bodyBasics, dailyRhythm, diet, goals, concerns, supplements, privacy, preview
+
+    var next: QuizStep {
+        let all = QuizStep.allCases
+        guard let index = all.firstIndex(of: self), index + 1 < all.count else { return self }
+        return all[index + 1]
+    }
+}
+
+// MARK: - Shared step scaffold
+
+private struct QuizStepScaffold<Content: View>: View {
+    let systemImage: String
+    let title: String
+    let subtitle: String
+    let primaryTitle: String
+    let onPrimary: () -> Void
+    var onSkip: (() -> Void)?
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 22) {
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        Circle().strokeBorder(Glass.bevelStroke, lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.14), radius: 10, x: 0, y: 5)
+                    .frame(width: 78, height: 78)
+
+                Image(systemName: systemImage)
+                    .font(.system(size: 34, weight: .semibold))
+                    .foregroundStyle(Glass.accentGradient)
+            }
+            .padding(.top, 20)
+
+            VStack(spacing: 6) {
+                Text(title)
+                    .font(.title2.bold())
+                    .multilineTextAlignment(.center)
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 12)
+
+            content()
+
+            VStack(spacing: 10) {
+                Button(primaryTitle, action: onPrimary)
+                    .buttonStyle(GlassProminentButtonStyle())
+                if let onSkip {
+                    Button("Skip", action: onSkip)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.top, 8)
+            .padding(.bottom, 32)
+        }
+        .padding(.horizontal, 24)
+    }
+}
+
+// MARK: - Selectable chip
+
+private struct SelectableChip: View {
+    let title: String
+    var systemImage: String?
+    let isSelected: Bool
+    let action: () -> Void
+
+    init(title: String, systemImage: String? = nil, isSelected: Bool, action: @escaping () -> Void) {
+        self.title = title
+        self.systemImage = systemImage
+        self.isSelected = isSelected
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .accessibilityHidden(true)
+                }
+                Text(title)
+            }
+            .font(.subheadline.weight(.medium))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .foregroundStyle(isSelected ? .white : .primary)
+            .background {
+                if isSelected {
+                    Capsule().fill(Glass.accentGradient)
+                } else {
+                    Capsule().fill(.ultraThinMaterial)
+                }
+            }
+            .overlay(
+                Capsule().strokeBorder(isSelected ? Color.clear : Glass.bevelStroke, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+}
+
+// MARK: - Flow layout
+
+/// Wraps its children left-to-right, moving to a new row when a child would
+/// overflow the available width. Used to lay out variable-length chip sets.
+private struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var rowWidth: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var totalWidth: CGFloat = 0
+        var totalHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if rowWidth > 0, rowWidth + spacing + size.width > maxWidth {
+                totalHeight += rowHeight + spacing
+                totalWidth = max(totalWidth, rowWidth)
+                rowWidth = 0
+                rowHeight = 0
+            }
+            rowWidth += (rowWidth > 0 ? spacing : 0) + size.width
+            rowHeight = max(rowHeight, size.height)
+        }
+        totalHeight += rowHeight
+        totalWidth = max(totalWidth, rowWidth)
+        return CGSize(width: totalWidth, height: totalHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+    }
+}
+
+// MARK: - Preview ring
+//
+// A small, self-contained ring for the quiz's final preview screen. It
+// visualizes profile completeness, not a health score, so it is kept
+// intentionally separate from Dashboard's `ScoreRing`.
+
+private struct QuizPreviewRing: View {
+    let percent: Int
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Color.primary.opacity(0.08), lineWidth: 9)
+            Circle()
+                .trim(from: 0, to: max(0.02, CGFloat(percent) / 100))
+                .stroke(Glass.accentGradient, style: StrokeStyle(lineWidth: 9, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            VStack(spacing: 0) {
+                Text("\(percent)%")
+                    .font(.title3.bold())
+                Text("Profile")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Profile \(percent) percent complete")
+    }
+}
+
+// MARK: - Chip catalogs
+
+private struct QuizChipOption: Identifiable, Hashable {
+    let label: String
+    let systemImage: String
+    var id: String { label }
+}
+
+private let dietOptions: [QuizChipOption] = [
+    QuizChipOption(label: "Balanced", systemImage: "fork.knife"),
+    QuizChipOption(label: "Vegetarian", systemImage: "leaf.fill"),
+    QuizChipOption(label: "Vegan", systemImage: "leaf.circle.fill"),
+    QuizChipOption(label: "Low-Carb", systemImage: "chart.pie.fill"),
+    QuizChipOption(label: "Other", systemImage: "ellipsis.circle.fill"),
+]
+
+private let goalOptions: [QuizChipOption] = [
+    QuizChipOption(label: "Lose Weight", systemImage: "arrow.down.circle.fill"),
+    QuizChipOption(label: "Build Muscle", systemImage: "figure.strengthtraining.traditional"),
+    QuizChipOption(label: "Improve Sleep", systemImage: "bed.double.fill"),
+    QuizChipOption(label: "Reduce Stress", systemImage: "brain.head.profile"),
+    QuizChipOption(label: "Eat Healthier", systemImage: "fork.knife"),
+    QuizChipOption(label: "Increase Energy", systemImage: "bolt.fill"),
+    QuizChipOption(label: "Manage a Condition", systemImage: "cross.case.fill"),
+    QuizChipOption(label: "Stay Active", systemImage: "figure.walk"),
+]
+
+private let concernOptions: [QuizChipOption] = [
+    QuizChipOption(label: "Blood Pressure", systemImage: "waveform.path.ecg"),
+    QuizChipOption(label: "Cholesterol", systemImage: "heart.fill"),
+    QuizChipOption(label: "Blood Sugar", systemImage: "drop.fill"),
+    QuizChipOption(label: "Weight", systemImage: "scalemass.fill"),
+    QuizChipOption(label: "Sleep", systemImage: "bed.double.fill"),
+    QuizChipOption(label: "Stress & Mood", systemImage: "brain.head.profile"),
+    QuizChipOption(label: "Joint & Muscle Pain", systemImage: "bandage.fill"),
+    QuizChipOption(label: "Digestive Health", systemImage: "cross.case.fill"),
+    QuizChipOption(label: "Family History", systemImage: "person.2.fill"),
+]
+
+private let supplementOptions: [QuizChipOption] = [
+    QuizChipOption(label: "Vitamin D", systemImage: "sun.max.fill"),
+    QuizChipOption(label: "Magnesium", systemImage: "pills.fill"),
+    QuizChipOption(label: "Omega-3", systemImage: "fish.fill"),
+    QuizChipOption(label: "Iron", systemImage: "pills.fill"),
+    QuizChipOption(label: "B12", systemImage: "pills.fill"),
+    QuizChipOption(label: "Multivitamin", systemImage: "pills.fill"),
+]
+
+private func toggle(_ value: String, in binding: Binding<[String]>) {
+    if let index = binding.wrappedValue.firstIndex(of: value) {
+        binding.wrappedValue.remove(at: index)
+    } else {
+        binding.wrappedValue.append(value)
     }
 }
 
 #Preview {
     OnboardingView(onFinish: {})
+        .modelContainer(for: [HealthProfile.self, VitalSample.self, Reminder.self], inMemory: true)
 }
