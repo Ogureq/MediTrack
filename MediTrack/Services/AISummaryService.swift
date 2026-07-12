@@ -1,10 +1,15 @@
 import Foundation
 
-// MARK: - AI plain-language summary (opt-in)
+// MARK: - AI Health Analyst report (opt-in)
 //
 // Strictly opt-in: the user supplies their own Anthropic API key in
-// Profile & Settings. Only the generated review text is sent — never
-// documents, attachments, or the raw database.
+// Profile & Settings. Only a structured summary of the already-computed,
+// rule-based review is sent to the model — score, finding titles/details,
+// and flagged lab values — never raw documents, attachments, OCR text, or
+// the on-device database. The deterministic `AnalysisEngine` remains the
+// source of every number and every clinical judgment; the model's job is
+// narration and organization only. See docs/ROADMAP.md Part 3 §1 for the
+// design this implements.
 
 enum AISummaryError: LocalizedError {
     case missingKey
@@ -24,6 +29,28 @@ enum AISummaryError: LocalizedError {
             "AI request failed (\(status)): \(message)"
         }
     }
+}
+
+// MARK: - Structured report
+
+/// The parsed, verified output of an AI Health Analyst report request.
+/// Every `relatedFindingIDs` entry is guaranteed (by `findingIDsCheck`) to
+/// reference a finding id that was actually sent in the request, and every
+/// number in `overview`/`sections`/`doctorQuestions` is guaranteed (by
+/// `numbersEchoCheck`) to have appeared somewhere in the input JSON. A value
+/// only ever reaches a caller after both guards pass — on any failure the
+/// caller receives a thrown `AISummaryError` instead and falls back to the
+/// always-available rule-based review.
+struct AIHealthReport: Equatable {
+    struct Section: Equatable {
+        let title: String
+        let body: String
+        let relatedFindingIDs: [String]
+    }
+
+    let overview: String
+    let sections: [Section]
+    let doctorQuestions: [String]
 }
 
 enum AISummaryService {
@@ -71,17 +98,41 @@ enum AISummaryService {
     private static let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
     private static let model = "claude-opus-4-8"
 
-    private static let systemPrompt = """
-        You are a friendly health-literacy assistant inside a personal health-tracking app. \
-        The user will give you a structured, rule-based review of their own health data. \
-        Rewrite it as a short plain-language summary (at most ~180 words) for the patient: \
-        warm, clear, and non-alarmist. Structure it as: what looks good, what is worth \
-        watching, and what to bring up with their doctor. Never diagnose, never suggest \
-        medication changes or treatments, and close with a one-line reminder to discuss \
-        results with their clinician. Plain text only, no markdown headers.
+    /// Persona, hard safety rails, and the exact input/output JSON shape.
+    /// The input shape mirrors `ReportInput`'s Swift property names
+    /// (camelCase); the output shape mirrors `RawReport`/`RawSection` below
+    /// so `parseReportJSON` can decode it with the default key strategy.
+    private static let reportSystemPrompt = """
+        You are an educational health analyst inside MediTrack, a personal health-tracking \
+        app. The user message is a JSON object already computed by a deterministic, \
+        rule-based analysis engine — you did not compute any of it and must not recompute, \
+        re-derive, or contradict it. Its shape is:
+        { "score": Int, "scoreLabel": String, "profileSummary": String or null, \
+        "findings": [{"id", "severity", "category", "title", "detail"}], \
+        "labValues": [{"id", "name", "value", "unit", "status"}], "deltas": [String] }
+
+        Hard rules:
+        1. Never diagnose. Do not state or imply the user has a specific medical condition.
+        2. Never prescribe or recommend starting, stopping, or changing any medication or \
+        treatment.
+        3. Never invent a number. Every number you write must already appear in the input \
+        JSON.
+        4. Every section you write must cite the finding ids ("f0", "f1", ...) it draws \
+        from in relatedFindingIDs. Never introduce a concern with no corresponding finding \
+        id.
+        5. Always end with at least three specific follow-up questions the user can bring \
+        to their doctor.
+        6. Keep the tone warm, plain-language, and non-alarmist — this is educational only, \
+        not medical advice.
+
+        Respond with a single JSON object and nothing else (no markdown, no commentary, no \
+        code fence) matching exactly this shape:
+        { "overview": String, \
+        "sections": [{"title": String, "body": String, "relatedFindingIDs": [String]}], \
+        "doctorQuestions": [String] }
         """
 
-    // MARK: Request/response shapes (Messages API)
+    // MARK: Request/response shapes (Messages API envelope)
 
     private struct RequestMessage: Encodable {
         let role: String
@@ -112,11 +163,217 @@ enum AISummaryService {
         let error: Inner
     }
 
+    // MARK: Structured input payload (our own schema, sent as the user message text)
+
+    struct FindingPayload: Encodable, Equatable {
+        let id: String
+        let severity: String
+        let category: String
+        let title: String
+        let detail: String
+    }
+
+    struct LabValuePayload: Encodable, Equatable {
+        let id: String
+        let name: String
+        let value: Double
+        let unit: String
+        let status: String
+    }
+
+    struct ReportInput: Encodable, Equatable {
+        let score: Int
+        let scoreLabel: String
+        let profileSummary: String?
+        let findings: [FindingPayload]
+        let labValues: [LabValuePayload]
+        let deltas: [String]
+    }
+
+    // MARK: Output payload (parsed from the model's response text)
+
+    private struct RawSection: Decodable {
+        let title: String
+        let body: String
+        let relatedFindingIDs: [String]
+    }
+
+    private struct RawReport: Decodable {
+        let overview: String
+        let sections: [RawSection]
+        let doctorQuestions: [String]
+    }
+
+    // MARK: Building the request payload
+
+    /// Assigns each finding a stable, request-scoped id ("f0", "f1", ...) —
+    /// `Finding.id` is a fresh UUID on every `generateReview()` call and
+    /// can't be cited across a request/response round trip. Only lab
+    /// values currently outside their reference range are included: the
+    /// model only needs to narrate what's flagged, not restate the whole
+    /// panel. `deltas` is a small caller-supplied list of plain-text facts
+    /// (e.g. a score change since the last review) — empty by default so
+    /// callers that only have a `HealthReview` handy don't need to compute
+    /// anything extra.
+    static func buildReportInput(
+        review: HealthReview,
+        profileSummary: String? = nil,
+        deltas: [String] = []
+    ) -> ReportInput {
+        let findingPayloads = review.findings.enumerated().map { index, finding in
+            FindingPayload(
+                id: "f\(index)",
+                severity: severityToken(finding.severity),
+                category: finding.category.rawValue,
+                title: finding.title,
+                detail: finding.detail
+            )
+        }
+        let labPayloads = review.labSnapshots
+            .filter { $0.status.isOutOfRange }
+            .map { snapshot in
+                LabValuePayload(
+                    id: snapshot.id,
+                    name: snapshot.name,
+                    value: snapshot.value,
+                    unit: snapshot.unit,
+                    status: labStatusToken(snapshot.status)
+                )
+            }
+        return ReportInput(
+            score: review.score,
+            scoreLabel: review.scoreLabel,
+            profileSummary: profileSummary,
+            findings: findingPayloads,
+            labValues: labPayloads,
+            deltas: deltas
+        )
+    }
+
+    static func severityToken(_ severity: Severity) -> String {
+        switch severity {
+        case .info: "info"
+        case .attention: "attention"
+        case .critical: "critical"
+        }
+    }
+
+    static func labStatusToken(_ status: LabStatus) -> String {
+        switch status {
+        case .criticalLow: "criticalLow"
+        case .low: "low"
+        case .normal: "normal"
+        case .high: "high"
+        case .criticalHigh: "criticalHigh"
+        case .unknown: "unknown"
+        }
+    }
+
+    // MARK: Guards (pure, no network — unit-testable directly)
+
+    /// Every `relatedFindingIDs` citation in the model's output must name a
+    /// finding id that was actually present in the request. This turns
+    /// "never introduce a risk with no basis" from a prompt request into a
+    /// structurally checkable contract.
+    static func findingIDsCheck(ids: [String], validIDs: Set<String>) -> Bool {
+        ids.allSatisfy { validIDs.contains($0) }
+    }
+
+    /// Every decimal number token that appears in the model's free-text
+    /// output must also appear — within floating-point rounding tolerance,
+    /// so "120" matches an input of 120.0 — somewhere in `allowedNumbers`.
+    /// Small integers 1...10 are always allowed since they're commonly used
+    /// for list counts ("3 questions") rather than clinical figures.
+    static func numbersEchoCheck(output: String, allowedNumbers: Set<Double>) -> Bool {
+        for value in decimalTokens(in: output) {
+            if value.truncatingRemainder(dividingBy: 1) == 0, (1...10).contains(value) {
+                continue
+            }
+            if allowedNumbers.contains(where: { abs($0 - value) < 0.05 }) {
+                continue
+            }
+            return false
+        }
+        return true
+    }
+
+    /// Extracts the allow-set for `numbersEchoCheck` straight from the input
+    /// JSON string that was sent to the model — this naturally covers the
+    /// score, every finding's numbers, every lab value, and any numbers
+    /// embedded in caller-supplied `deltas` text, with no separate
+    /// bookkeeping required.
+    static func allowedNumbers(fromInputJSON json: String) -> Set<Double> {
+        Set(decimalTokens(in: json))
+    }
+
+    static func decimalTokens(in text: String) -> [Double] {
+        guard let regex = try? NSRegularExpression(pattern: #"-?\d+(?:\.\d+)?"#) else { return [] }
+        let ns = text as NSString
+        return regex.matches(in: text, range: NSRange(location: 0, length: ns.length))
+            .compactMap { Double(ns.substring(with: $0.range)) }
+    }
+
+    // MARK: Parsing the model's JSON response
+
+    /// Tolerates a fenced ```json ... ``` wrapper, which models sometimes
+    /// emit even when asked to respond with raw JSON only.
+    static func stripCodeFence(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("```") else { return trimmed }
+        var lines = trimmed.components(separatedBy: .newlines)
+        if !lines.isEmpty { lines.removeFirst() }
+        if let last = lines.last, last.trimmingCharacters(in: .whitespaces).hasPrefix("```") {
+            lines.removeLast()
+        }
+        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func parseReportJSON(_ raw: String) throws -> AIHealthReport {
+        let cleaned = stripCodeFence(raw)
+        guard let data = cleaned.data(using: .utf8) else {
+            throw AISummaryError.badResponse
+        }
+        let decoded: RawReport
+        do {
+            decoded = try JSONDecoder().decode(RawReport.self, from: data)
+        } catch {
+            throw AISummaryError.badResponse
+        }
+        return AIHealthReport(
+            overview: decoded.overview,
+            sections: decoded.sections.map {
+                AIHealthReport.Section(title: $0.title, body: $0.body, relatedFindingIDs: $0.relatedFindingIDs)
+            },
+            doctorQuestions: decoded.doctorQuestions
+        )
+    }
+
     // MARK: Call
 
-    static func summarize(_ review: HealthReview) async throws -> String {
+    /// Generates a structured "AI Health Analyst" report from a
+    /// `HealthReview`. `profileSummary` is a short caller-built description
+    /// (e.g. age/sex/conditions) and `deltas` are optional caller-supplied
+    /// plain-text facts (e.g. a score change since the last review) — both
+    /// default to empty/nil so the API stays small for callers that only
+    /// have a `HealthReview` on hand.
+    ///
+    /// Throws `AISummaryError` on *any* failure — missing key, network,
+    /// refusal, malformed JSON, or a failed guard — so callers can
+    /// uniformly fall back to the always-available rule-based review. No
+    /// partially verified report is ever returned.
+    static func generateReport(
+        review: HealthReview,
+        profileSummary: String? = nil,
+        deltas: [String] = []
+    ) async throws -> AIHealthReport {
         guard let key = apiKey, !key.isEmpty else {
             throw AISummaryError.missingKey
+        }
+
+        let input = buildReportInput(review: review, profileSummary: profileSummary, deltas: deltas)
+        let inputData = try JSONEncoder().encode(input)
+        guard let inputJSON = String(data: inputData, encoding: .utf8) else {
+            throw AISummaryError.badResponse
         }
 
         var request = URLRequest(url: endpoint)
@@ -126,13 +383,13 @@ enum AISummaryService {
         request.setValue(key, forHTTPHeaderField: "x-api-key")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
 
-        let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
-        request.httpBody = try encoder.encode(RequestBody(
+        let bodyEncoder = JSONEncoder()
+        bodyEncoder.keyEncodingStrategy = .convertToSnakeCase
+        request.httpBody = try bodyEncoder.encode(RequestBody(
             model: model,
-            maxTokens: 1024,
-            system: systemPrompt,
-            messages: [RequestMessage(role: "user", content: review.shareText)]
+            maxTokens: 1536,
+            system: reportSystemPrompt,
+            messages: [RequestMessage(role: "user", content: inputJSON)]
         ))
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -162,6 +419,25 @@ enum AISummaryService {
         guard !text.isEmpty else {
             throw AISummaryError.badResponse
         }
-        return text
+
+        let report = try parseReportJSON(text)
+
+        let validIDs = Set(input.findings.map(\.id))
+        let citedIDs = report.sections.flatMap(\.relatedFindingIDs)
+        guard findingIDsCheck(ids: citedIDs, validIDs: validIDs) else {
+            throw AISummaryError.badResponse
+        }
+
+        let outputText = ([report.overview] + report.sections.flatMap { [$0.title, $0.body] } + report.doctorQuestions)
+            .joined(separator: "\n")
+        guard numbersEchoCheck(output: outputText, allowedNumbers: allowedNumbers(fromInputJSON: inputJSON)) else {
+            throw AISummaryError.badResponse
+        }
+
+        guard !report.doctorQuestions.isEmpty else {
+            throw AISummaryError.badResponse
+        }
+
+        return report
     }
 }
