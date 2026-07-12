@@ -3,6 +3,7 @@ import SwiftData
 import Charts
 
 struct DashboardView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \MedicalReport.date, order: .reverse) private var reports: [MedicalReport]
     @Query private var vitals: [VitalSample]
     @Query private var medications: [Medication]
@@ -11,6 +12,7 @@ struct DashboardView: View {
     @Query private var symptoms: [SymptomEntry]
     @Query(sort: \Appointment.date) private var appointments: [Appointment]
     @Query private var goals: [HealthGoal]
+    @Query(sort: \Reminder.createdAt) private var reminders: [Reminder]
 
     @State private var showingAddReport = false
     @State private var showingAddVital = false
@@ -30,23 +32,39 @@ struct DashboardView: View {
         appointments.first(where: \.isUpcoming)
     }
 
-    private var navigationTitle: String {
+    private var activeReminders: [Reminder] {
+        reminders.filter(\.isActive)
+    }
+
+    private var firstName: String {
         let name = profiles.first?.name.trimmingCharacters(in: .whitespaces) ?? ""
-        guard let firstName = name.components(separatedBy: " ").first, !firstName.isEmpty else {
-            return "Dashboard"
+        return name.components(separatedBy: " ").first ?? ""
+    }
+
+    /// Time-of-day-aware greeting shown in the scrollable header. Reads the
+    /// wall clock directly since this is presentation, not analysis — unlike
+    /// `AnalysisEngine`, which must stay deterministic.
+    private var greeting: String {
+        let hour = Calendar.current.component(.hour, from: .now)
+        let timeGreeting: String
+        switch hour {
+        case 5..<12: timeGreeting = "Good morning"
+        case 12..<17: timeGreeting = "Good afternoon"
+        case 17..<22: timeGreeting = "Good evening"
+        default: timeGreeting = "Good night"
         }
-        return "Hi, \(firstName)"
+        guard !firstName.isEmpty else { return timeGreeting }
+        return "\(timeGreeting), \(firstName)"
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text(Date.now.formatted(date: .complete, time: .omitted))
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.secondary)
+                    greetingHeader
                     if review.hasData {
                         scoreCard
+                        remindersCard
                         scoreHistoryCard
                         alertsSection
                         appointmentCard
@@ -60,7 +78,7 @@ struct DashboardView: View {
                 .padding()
             }
             .background(AmbientBackground().accessibilityHidden(true))
-            .navigationTitle(navigationTitle)
+            .navigationTitle("Dashboard")
             .toolbar {
                 Menu {
                     Button {
@@ -84,6 +102,18 @@ struct DashboardView: View {
     }
 
     // MARK: Sections
+
+    private var greetingHeader: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(greeting)
+                .font(.title2.bold())
+            Text(Date.now.formatted(date: .complete, time: .omitted))
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
 
     private var scoreCard: some View {
         NavigationLink {
@@ -113,6 +143,88 @@ struct DashboardView: View {
             .accessibilityElement(children: .combine)
         }
         .buttonStyle(.plain)
+    }
+
+    private var remindersCard: some View {
+        let today = Date.now
+        let doneCount = activeReminders.filter { $0.isCompleted(on: today) }.count
+        let hasAISuggestions = activeReminders.contains(where: \.isAISuggested)
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Today")
+                    .font(.headline)
+                Spacer()
+                NavigationLink {
+                    RemindersView()
+                } label: {
+                    Text("Manage")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.accentColor)
+                }
+                .buttonStyle(.plain)
+            }
+
+            if activeReminders.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("No reminders yet — add one to stay on top of medications, checkups, and healthy habits.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    NavigationLink {
+                        RemindersView()
+                    } label: {
+                        Label("Add a Reminder", systemImage: "bell.badge.plus")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 13)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .strokeBorder(Glass.bevelStroke, lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else {
+                Text("\(doneCount) of \(activeReminders.count) done")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                VStack(spacing: 10) {
+                    ForEach(Array(activeReminders.enumerated()), id: \.offset) { index, reminder in
+                        if index > 0 {
+                            Divider()
+                        }
+                        TodayReminderRow(
+                            reminder: reminder,
+                            isCompleted: reminder.isCompleted(on: today)
+                        ) {
+                            toggleReminderCompletion(reminder, on: today)
+                        }
+                    }
+                }
+                if hasAISuggestions {
+                    Text("AI-suggested reminders are educational, not medical advice — worth discussing with your doctor before changing your routine.")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .padding()
+        .glassCard()
+    }
+
+    /// Toggles today's completion for a reminder: inserts a `ReminderCompletion`
+    /// when marking done, deletes today's completion when un-marking. Day
+    /// comparisons go through `Calendar`, never string/date-equality, so this
+    /// stays correct across time zones and DST changes.
+    private func toggleReminderCompletion(_ reminder: Reminder, on day: Date) {
+        let calendar = Calendar.current
+        if let existing = (reminder.completions ?? []).first(where: { calendar.isDate($0.date, inSameDayAs: day) }) {
+            modelContext.delete(existing)
+        } else {
+            modelContext.insert(ReminderCompletion(date: day, reminder: reminder))
+            Haptics.success()
+        }
     }
 
     @ViewBuilder
@@ -380,6 +492,67 @@ struct DashboardView: View {
         .padding(20)
         .glassCard()
         .padding(.top, 32)
+    }
+}
+
+/// A single row in the dashboard's "Today" reminders card: icon, title
+/// (with an AI-suggested sparkles badge), optional time, and a tap-to-toggle
+/// completion circle.
+struct TodayReminderRow: View {
+    let reminder: Reminder
+    let isCompleted: Bool
+    let onToggle: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: reminder.systemImage)
+                .foregroundStyle(Glass.accentGradient)
+                .frame(width: 32, height: 32)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .strokeBorder(Glass.bevelStroke, lineWidth: 1)
+                )
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(reminder.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(isCompleted ? .secondary : .primary)
+                        .strikethrough(isCompleted)
+                        .lineLimit(1)
+                    if reminder.isAISuggested {
+                        Image(systemName: "sparkles")
+                            .font(.caption2)
+                            .foregroundStyle(Glass.accentGradient)
+                            .accessibilityHidden(true)
+                    }
+                }
+                if let timeOfDay = reminder.timeOfDay {
+                    Text(timeOfDay.formatted(date: .omitted, time: .shortened))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer()
+
+            Button(action: onToggle) {
+                Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
+                    .font(.title2)
+                    .foregroundStyle(isCompleted ? Color.green : Color.secondary.opacity(0.5))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isCompleted ? "Completed" : "Mark as done")
+            .accessibilityAddTraits(isCompleted ? [.isSelected] : [])
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "\(reminder.title)\(reminder.isAISuggested ? ", AI suggested" : "")\(reminder.timeOfDay.map { ", " + $0.formatted(date: .omitted, time: .shortened) } ?? "")"
+        )
+        .accessibilityValue(isCompleted ? "Done" : "Not done")
+        .accessibilityAction(named: isCompleted ? "Mark as not done" : "Mark as done", onToggle)
     }
 }
 
