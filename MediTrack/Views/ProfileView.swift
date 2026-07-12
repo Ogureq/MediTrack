@@ -37,7 +37,9 @@ private struct ProfileForm: View {
     @AppStorage(AppLock.rememberMeKey) private var rememberMe = false
     @AppStorage(AppLock.biometricsEnabledKey) private var biometricsEnabled = true
     @EnvironmentObject private var lock: AppLock
+    @ObservedObject private var premiumStore = PremiumStore.shared
     @State private var showingPasscodeSetup = false
+    @State private var showingPaywall = false
     @State private var refreshToggle = false
 
     private var securityFooter: String {
@@ -154,6 +156,29 @@ private struct ProfileForm: View {
             .listRowSeparator(.hidden)
 
             Section {
+                Button {
+                    showingPaywall = true
+                } label: {
+                    HStack {
+                        Label("MediTrack Premium", systemImage: "crown.fill")
+                        Spacer()
+                        if premiumStore.isPremium {
+                            StatusPill(text: "Active", color: .green)
+                        } else {
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .foregroundStyle(.primary)
+            } footer: {
+                Text("Unlimited AI health reports and future AI features. All core tracking stays free forever.")
+            }
+            .listRowBackground(GlassRowBackground())
+            .listRowSeparator(.hidden)
+
+            Section {
                 Toggle("Require login", isOn: $appLockEnabled)
                 if appLockEnabled {
                     Button {
@@ -258,6 +283,9 @@ private struct ProfileForm: View {
         }
         .sheet(isPresented: $showingPasscodeSetup) {
             PasscodeSetupSheet(lock: lock)
+        }
+        .sheet(isPresented: $showingPaywall) {
+            PaywallView()
         }
         .sheet(isPresented: $showingExportPassphraseSheet) {
             BackupExportPassphraseSheet(onExport: performExport)
