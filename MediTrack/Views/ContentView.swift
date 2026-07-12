@@ -96,6 +96,11 @@ struct MoreView: View {
                     } label: {
                         Label("Goals", systemImage: "target")
                     }
+                    NavigationLink {
+                        DocumentsView()
+                    } label: {
+                        Label("Documents", systemImage: "folder.fill")
+                    }
                 }
                 .listRowBackground(GlassRowBackground())
                 .listRowSeparator(.hidden)
