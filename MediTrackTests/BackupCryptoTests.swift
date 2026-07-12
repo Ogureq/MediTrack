@@ -30,9 +30,10 @@ final class BackupCryptoTests: XCTestCase {
         )
     }
 
-    private func makeContext() throws -> ModelContext {
-        try Self.makeInMemoryContainer().mainContext
-    }
+    // Each test binds the container itself, not just its `mainContext`:
+    // the container owns the store and only caches the context, so a
+    // discarded temporary container tears the store down mid-test and
+    // crashes the process on newer runtimes.
 
     /// Seeds a profile plus one non-profile record (the restore record count
     /// only tallies non-profile rows) so round trips have something to check.
@@ -46,7 +47,8 @@ final class BackupCryptoTests: XCTestCase {
     // MARK: Round trip
 
     func testEncryptDecryptRoundTripWithCorrectPassphrase() throws {
-        let sourceContext = try makeContext()
+        let sourceContainer = try Self.makeInMemoryContainer()
+        let sourceContext = sourceContainer.mainContext
         seedMinimalData(in: sourceContext)
         try sourceContext.save()
 
@@ -60,7 +62,8 @@ final class BackupCryptoTests: XCTestCase {
         XCTAssertFalse(envelope.salt.isEmpty)
         XCTAssertFalse(envelope.sealed.isEmpty)
 
-        let destinationContext = try makeContext()
+        let destinationContainer = try Self.makeInMemoryContainer()
+        let destinationContext = destinationContainer.mainContext
         let restoredCount = try BackupService.restore(from: data, passphrase: correctPassphrase, into: destinationContext)
         XCTAssertGreaterThan(restoredCount, 0)
 
@@ -74,13 +77,15 @@ final class BackupCryptoTests: XCTestCase {
     // MARK: Wrong passphrase
 
     func testWrongPassphraseThrowsTypedError() throws {
-        let sourceContext = try makeContext()
+        let sourceContainer = try Self.makeInMemoryContainer()
+        let sourceContext = sourceContainer.mainContext
         seedMinimalData(in: sourceContext)
         try sourceContext.save()
 
         let data = try BackupService.export(from: sourceContext, passphrase: correctPassphrase)
 
-        let destinationContext = try makeContext()
+        let destinationContainer = try Self.makeInMemoryContainer()
+        let destinationContext = destinationContainer.mainContext
         XCTAssertThrowsError(
             try BackupService.restore(from: data, passphrase: "totally wrong passphrase", into: destinationContext)
         ) { error in
@@ -115,7 +120,8 @@ final class BackupCryptoTests: XCTestCase {
         }
         """
 
-        let context = try makeContext()
+        let container = try Self.makeInMemoryContainer()
+        let context = container.mainContext
         // The passphrase is deliberately nonsense here: legacy payloads
         // aren't encrypted, so it must be ignored rather than rejected.
         let restoredCount = try BackupService.restore(
@@ -132,7 +138,8 @@ final class BackupCryptoTests: XCTestCase {
     // MARK: Tampered ciphertext
 
     func testTamperedCiphertextThrows() throws {
-        let sourceContext = try makeContext()
+        let sourceContainer = try Self.makeInMemoryContainer()
+        let sourceContext = sourceContainer.mainContext
         seedMinimalData(in: sourceContext)
         try sourceContext.save()
 
@@ -148,7 +155,8 @@ final class BackupCryptoTests: XCTestCase {
         envelope.sealed = sealedBytes.base64EncodedString()
         let tamperedData = try JSONEncoder().encode(envelope)
 
-        let destinationContext = try makeContext()
+        let destinationContainer = try Self.makeInMemoryContainer()
+        let destinationContext = destinationContainer.mainContext
         XCTAssertThrowsError(
             try BackupService.restore(from: tamperedData, passphrase: correctPassphrase, into: destinationContext)
         ) { error in
@@ -159,7 +167,8 @@ final class BackupCryptoTests: XCTestCase {
     // MARK: Corrupt / unreadable data
 
     func testGarbageDataThrowsUnreadableFile() throws {
-        let context = try makeContext()
+        let container = try Self.makeInMemoryContainer()
+        let context = container.mainContext
         XCTAssertThrowsError(
             try BackupService.restore(from: Data("not a backup".utf8), passphrase: "whatever", into: context)
         ) { error in
