@@ -43,6 +43,8 @@ final class BackupServiceTests: XCTestCase {
                  SymptomEntry.self,
                  Appointment.self,
                  ScoreSnapshot.self,
+                 Reminder.self,
+                 ReminderCompletion.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
     }

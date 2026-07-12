@@ -17,6 +17,8 @@ struct BackupPayload: Codable {
     var scoreSnapshots: [BackupScoreSnapshot] = []
     /// Optional so backups made before goals existed still decode.
     var goals: [BackupGoal]? = []
+    /// Optional so backups made before reminders existed still decode.
+    var reminders: [BackupReminder]? = []
 }
 
 struct BackupGoal: Codable {
@@ -37,6 +39,29 @@ struct BackupProfile: Codable {
     var bloodType: String
     var allergies: String
     var conditions: String
+    /// Quiz-derived fields. Optional so backups made before the onboarding
+    /// quiz existed still decode; nil is treated as "unset" on restore.
+    var activityLevel: String?
+    var typicalSleepHours: Double?
+    var dietStyle: String?
+    var exerciseDaysPerWeek: Int?
+    var healthGoalTags: [String]?
+    var healthConcerns: [String]?
+    var supplements: [String]?
+    var hasCompletedQuiz: Bool?
+}
+
+struct BackupReminder: Codable {
+    var title: String
+    var detail: String
+    var systemImage: String
+    var timeOfDay: Date?
+    var isAISuggested: Bool
+    var suggestionReason: String
+    var isActive: Bool
+    var createdAt: Date
+    /// Dates of logged completions, day-granularity comparison is done by `Reminder.isCompleted(on:)`.
+    var completions: [Date]
 }
 
 struct BackupLabResult: Codable {
@@ -137,7 +162,15 @@ enum BackupService {
                 heightCm: profile.heightCm,
                 bloodType: profile.bloodType,
                 allergies: profile.allergies,
-                conditions: profile.conditions
+                conditions: profile.conditions,
+                activityLevel: profile.activityLevel,
+                typicalSleepHours: profile.typicalSleepHours,
+                dietStyle: profile.dietStyle,
+                exerciseDaysPerWeek: profile.exerciseDaysPerWeek,
+                healthGoalTags: profile.healthGoalTags,
+                healthConcerns: profile.healthConcerns,
+                supplements: profile.supplements,
+                hasCompletedQuiz: profile.hasCompletedQuiz
             )
         }
 
@@ -208,6 +241,19 @@ enum BackupService {
                 isActive: $0.isActive
             )
         }
+        payload.reminders = try context.fetch(FetchDescriptor<Reminder>()).map { reminder in
+            BackupReminder(
+                title: reminder.title,
+                detail: reminder.detail,
+                systemImage: reminder.systemImage,
+                timeOfDay: reminder.timeOfDay,
+                isAISuggested: reminder.isAISuggested,
+                suggestionReason: reminder.suggestionReason,
+                isActive: reminder.isActive,
+                createdAt: reminder.createdAt,
+                completions: (reminder.completions ?? []).map { $0.date }
+            )
+        }
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -237,6 +283,8 @@ enum BackupService {
         try? context.delete(model: Appointment.self)
         try? context.delete(model: ScoreSnapshot.self)
         try? context.delete(model: HealthGoal.self)
+        try? context.delete(model: Reminder.self)
+        try? context.delete(model: ReminderCompletion.self)
 
         // Update the profile in place (or create one).
         let existingProfile = (try? context.fetch(FetchDescriptor<HealthProfile>()))?.first
@@ -255,6 +303,14 @@ enum BackupService {
             profile.bloodType = dto.bloodType
             profile.allergies = dto.allergies
             profile.conditions = dto.conditions
+            profile.activityLevel = dto.activityLevel ?? ""
+            profile.typicalSleepHours = dto.typicalSleepHours ?? 0
+            profile.dietStyle = dto.dietStyle ?? ""
+            profile.exerciseDaysPerWeek = dto.exerciseDaysPerWeek ?? 0
+            profile.healthGoalTags = dto.healthGoalTags ?? []
+            profile.healthConcerns = dto.healthConcerns ?? []
+            profile.supplements = dto.supplements ?? []
+            profile.hasCompletedQuiz = dto.hasCompletedQuiz ?? false
         } else {
             profile.name = ""
             profile.dateOfBirth = nil
@@ -263,6 +319,14 @@ enum BackupService {
             profile.bloodType = ""
             profile.allergies = ""
             profile.conditions = ""
+            profile.activityLevel = ""
+            profile.typicalSleepHours = 0
+            profile.dietStyle = ""
+            profile.exerciseDaysPerWeek = 0
+            profile.healthGoalTags = []
+            profile.healthConcerns = []
+            profile.supplements = []
+            profile.hasCompletedQuiz = false
         }
 
         var restored = 0
@@ -363,6 +427,24 @@ enum BackupService {
             goal.createdAt = dto.createdAt
             goal.isActive = dto.isActive
             context.insert(goal)
+            restored += 1
+        }
+
+        for dto in payload.reminders ?? [] {
+            let reminder = Reminder(
+                title: dto.title,
+                detail: dto.detail,
+                systemImage: dto.systemImage,
+                timeOfDay: dto.timeOfDay,
+                isAISuggested: dto.isAISuggested,
+                suggestionReason: dto.suggestionReason,
+                isActive: dto.isActive
+            )
+            reminder.createdAt = dto.createdAt
+            context.insert(reminder)
+            for completionDate in dto.completions {
+                reminder.completions?.append(ReminderCompletion(date: completionDate))
+            }
             restored += 1
         }
 

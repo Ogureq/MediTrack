@@ -435,16 +435,126 @@ final class HealthProfile {
     var allergies: String = ""
     var conditions: String = ""
 
+    // Quiz-derived lifestyle fields. All default so existing stores migrate
+    // cleanly via SwiftData lightweight migration; `typicalSleepHours == 0`
+    // and `activityLevel == ""` both mean "unset".
+    var activityLevel: String = ""
+    var typicalSleepHours: Double = 0
+    var dietStyle: String = ""
+    var exerciseDaysPerWeek: Int = 0
+    var healthGoalTags: [String] = []
+    var healthConcerns: [String] = []
+    var supplements: [String] = []
+    var hasCompletedQuiz: Bool = false
+
     var sex: BiologicalSex {
         get { BiologicalSex(rawValue: sexRaw) ?? .unspecified }
         set { sexRaw = newValue.rawValue }
     }
 
-    init() {}
+    init(
+        activityLevel: String = "",
+        typicalSleepHours: Double = 0,
+        dietStyle: String = "",
+        exerciseDaysPerWeek: Int = 0,
+        healthGoalTags: [String] = [],
+        healthConcerns: [String] = [],
+        supplements: [String] = [],
+        hasCompletedQuiz: Bool = false
+    ) {
+        self.activityLevel = activityLevel
+        self.typicalSleepHours = typicalSleepHours
+        self.dietStyle = dietStyle
+        self.exerciseDaysPerWeek = exerciseDaysPerWeek
+        self.healthGoalTags = healthGoalTags
+        self.healthConcerns = healthConcerns
+        self.supplements = supplements
+        self.hasCompletedQuiz = hasCompletedQuiz
+    }
 
     var age: Int? {
         guard let dateOfBirth else { return nil }
         return Calendar.current.dateComponents([.year], from: dateOfBirth, to: .now).year
+    }
+}
+
+// MARK: - Activity level
+
+/// Self-reported activity level captured by the onboarding quiz.
+enum ActivityLevel: String, Codable, CaseIterable, Identifiable {
+    case sedentary
+    case light
+    case moderate
+    case active
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .sedentary: "Sedentary"
+        case .light: "Lightly Active"
+        case .moderate: "Moderately Active"
+        case .active: "Very Active"
+        }
+    }
+}
+
+// MARK: - Reminder
+
+@Model
+final class Reminder {
+    var title: String = ""
+    var detail: String = ""
+    var systemImage: String = "pills.fill"
+    /// Time of day for the notification (only hour/minute are relevant); nil means no notification.
+    var timeOfDay: Date?
+    var isAISuggested: Bool = false
+    /// Educational rationale shown for AI-suggested items.
+    var suggestionReason: String = ""
+    var isActive: Bool = true
+    var createdAt: Date = Date.now
+    /// Stable identifier used for the scheduled local notification.
+    var reminderID: String = UUID().uuidString
+
+    @Relationship(deleteRule: .cascade, inverse: \ReminderCompletion.reminder)
+    var completions: [ReminderCompletion]? = []
+
+    init(
+        title: String,
+        detail: String = "",
+        systemImage: String = "pills.fill",
+        timeOfDay: Date? = nil,
+        isAISuggested: Bool = false,
+        suggestionReason: String = "",
+        isActive: Bool = true,
+        createdAt: Date = .now
+    ) {
+        self.title = title
+        self.detail = detail
+        self.systemImage = systemImage
+        self.timeOfDay = timeOfDay
+        self.isAISuggested = isAISuggested
+        self.suggestionReason = suggestionReason
+        self.isActive = isActive
+        self.createdAt = createdAt
+    }
+
+    /// Whether a completion was logged for the given calendar day.
+    func isCompleted(on day: Date, calendar: Calendar = .current) -> Bool {
+        (completions ?? []).contains { calendar.isDate($0.date, inSameDayAs: day) }
+    }
+}
+
+// MARK: - Reminder completion
+
+@Model
+final class ReminderCompletion {
+    var date: Date = Date.now
+    var reminder: Reminder?
+
+    init(date: Date = .now, reminder: Reminder? = nil) {
+        self.date = date
+        self.reminder = reminder
     }
 }
 

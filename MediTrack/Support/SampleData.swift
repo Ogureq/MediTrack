@@ -271,6 +271,8 @@ enum SampleData {
         try? context.delete(model: HealthProfile.self)
         try? context.delete(model: ScoreSnapshot.self)
         try? context.delete(model: HealthGoal.self)
+        try? context.delete(model: Reminder.self)
+        try? context.delete(model: ReminderCompletion.self)
     }
 
     // MARK: - Helpers

@@ -15,6 +15,8 @@ struct MediTrackApp: App {
             SymptomEntry.self,
             Appointment.self,
             HealthGoal.self,
+            Reminder.self,
+            ReminderCompletion.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {
