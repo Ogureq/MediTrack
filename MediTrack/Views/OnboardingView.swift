@@ -663,7 +663,7 @@ private struct SelectableChip: View {
                 }
             }
             .overlay(
-                Capsule().strokeBorder(isSelected ? Color.clear : Glass.bevelStroke, lineWidth: 1)
+                Capsule().strokeBorder(isSelected ? AnyShapeStyle(Color.clear) : AnyShapeStyle(Glass.bevelStroke), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
