@@ -118,6 +118,7 @@ struct DashboardView: View {
                         remindersCard
                         quarterlyReviewCard
                         scoreHistoryCard
+                        BiomarkerCarouselSection()
                         alertsSection
                         appointmentCard
                         vitalsGrid

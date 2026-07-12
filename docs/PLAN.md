@@ -158,6 +158,12 @@ This document records the phased plan executed to build MediTrack, a privacy-fir
 - [x] Free AI-report quota — 3 lifetime AI reports free (pure, unit-tested `AIReportQuota`), spent only on successful generation; premium unlocks unlimited reports while every local tracking feature stays free forever
 - [x] Widget lock-screen privacy — the home-screen widget's score and vitals are `privacySensitive` and render redacted while the device is locked
 
+## Phase 19 — Roadmap P2 Wave 3: Rituals & Biomarkers
+
+- [x] Quarterly Review ritual — every 90 days the Dashboard invites a deterministic recap of the quarter (`Services/QuarterlyReview.swift`, `Views/QuarterlyReviewView.swift`): score trajectory, vital/lab changes with conservative direction semantics (only medically unambiguous metrics judged; weight neutral), streak and goal wins, and doctor questions from worsened items only; plain-text share, 19 fixed-date unit tests, no AI or network
+- [x] Biomarker carousel — horizontally scrolling Dashboard cards, one per lab test with results (`Views/BiomarkerCarousel.swift`): latest value, sex-specific status pill via the existing catalog classification, mini sparkline, tap-through to the lab detail screen; grouping logic unit-tested
+- [x] AI usage readout — free users see "X of 3 free AI reports used" under the MediTrack Premium row in Profile
+
 ## Future Milestones
 
 Not part of the current plan; captured here for future scoping:
