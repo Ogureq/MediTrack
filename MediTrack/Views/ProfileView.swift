@@ -172,6 +172,16 @@ private struct ProfileForm: View {
                     }
                 }
                 .foregroundStyle(.primary)
+                if !premiumStore.isPremium {
+                    HStack {
+                        Label("Free AI reports used", systemImage: "sparkles")
+                        Spacer()
+                        Text("\(AIReportQuota.usedCount(defaults: .standard)) of \(AIReportQuota.freeLifetimeLimit)")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    .accessibilityElement(children: .combine)
+                }
             } footer: {
                 Text("Unlimited AI health reports and future AI features. All core tracking stays free forever.")
             }
