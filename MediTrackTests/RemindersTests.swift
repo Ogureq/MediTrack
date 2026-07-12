@@ -150,8 +150,8 @@ final class RemindersTests: XCTestCase {
         reminder.completions?.append(ReminderCompletion(date: completionDate))
         try sourceContext.save()
 
-        let data = try BackupService.export(from: sourceContext)
-        let restoredCount = try BackupService.restore(from: data, into: destinationContext)
+        let data = try BackupService.export(from: sourceContext, passphrase: "correct horse battery staple")
+        let restoredCount = try BackupService.restore(from: data, passphrase: "correct horse battery staple", into: destinationContext)
         XCTAssertGreaterThan(restoredCount, 0)
 
         let restoredProfiles = try destinationContext.fetch(FetchDescriptor<HealthProfile>())

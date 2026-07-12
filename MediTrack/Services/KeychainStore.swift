@@ -1,9 +1,9 @@
 import Foundation
 import Security
 
-/// Minimal Keychain wrapper for small secrets (the passcode hash + salt).
-/// Items are stored `WhenUnlockedThisDeviceOnly` so they never sync or leave
-/// the device.
+/// Minimal Keychain wrapper for small secrets (the passcode hash + salt, the
+/// opt-in Anthropic API key). Items are stored `WhenUnlockedThisDeviceOnly`
+/// so they never sync or leave the device.
 enum KeychainStore {
     private static let service = "com.ogureq.meditrack.lock"
 
@@ -44,5 +44,17 @@ enum KeychainStore {
             kSecAttrAccount as String: account,
         ]
         SecItemDelete(query as CFDictionary)
+    }
+
+    // MARK: String convenience
+
+    @discardableResult
+    static func set(_ string: String, for account: String) -> Bool {
+        set(Data(string.utf8), for: account)
+    }
+
+    static func getString(_ account: String) -> String? {
+        guard let data = get(account) else { return nil }
+        return String(data: data, encoding: .utf8)
     }
 }

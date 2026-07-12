@@ -12,7 +12,6 @@ struct ReviewScreen: View {
     @Query private var symptoms: [SymptomEntry]
     @Query(sort: \Appointment.date) private var appointments: [Appointment]
     @Environment(\.modelContext) private var modelContext
-    @AppStorage(AISummaryService.apiKeyDefaultsKey) private var anthropicAPIKey = ""
 
     @State private var aiSummary: String?
     @State private var isGeneratingSummary = false
@@ -135,7 +134,7 @@ struct ReviewScreen: View {
 
     @ViewBuilder
     private var aiSummaryCard: some View {
-        if !anthropicAPIKey.isEmpty {
+        if AISummaryService.isConfigured {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Label("AI Summary", systemImage: "sparkles")

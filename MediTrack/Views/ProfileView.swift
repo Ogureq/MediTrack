@@ -33,7 +33,7 @@ private struct ProfileForm: View {
     @AppStorage(Units.weightKey) private var weightUnitRaw = WeightUnit.kilograms.rawValue
     @AppStorage(Units.temperatureKey) private var temperatureUnitRaw = TemperatureUnit.celsius.rawValue
     @AppStorage(Units.glucoseKey) private var glucoseUnitRaw = GlucoseUnit.mgdL.rawValue
-    @AppStorage(AISummaryService.apiKeyDefaultsKey) private var anthropicAPIKey = ""
+    @State private var anthropicAPIKey = ""
     @AppStorage(AppLock.rememberMeKey) private var rememberMe = false
     @AppStorage(AppLock.biometricsEnabledKey) private var biometricsEnabled = true
     @EnvironmentObject private var lock: AppLock
@@ -58,6 +58,8 @@ private struct ProfileForm: View {
     @State private var pendingRestoreData: Data?
     @State private var confirmRestore = false
     @State private var dataMessage: String?
+    @State private var showingExportPassphraseSheet = false
+    @State private var showingRestorePassphraseSheet = false
 
     private static let bloodTypes = ["", "A+", "A−", "B+", "B−", "AB+", "AB−", "O+", "O−"]
 
@@ -140,10 +142,13 @@ private struct ProfileForm: View {
                 SecureField("Anthropic API key", text: $anthropicAPIKey)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                    .onChange(of: anthropicAPIKey) { _, newValue in
+                        AISummaryService.apiKey = newValue
+                    }
             } header: {
                 Text("AI Summary (Optional)")
             } footer: {
-                Text("Add your own Anthropic API key to enable plain-language AI summaries of your Health Review. When you tap Generate, only the review text is sent to Anthropic — never your documents or database. The key stays on this device. Leave empty to keep MediTrack fully offline.")
+                Text("Add your own Anthropic API key to enable plain-language AI summaries of your Health Review. When you tap Generate, only the review text is sent to Anthropic — never your documents or database. The key is stored in the device Keychain. Leave empty to keep MediTrack fully offline.")
             }
             .listRowBackground(GlassRowBackground())
             .listRowSeparator(.hidden)
@@ -205,7 +210,7 @@ private struct ProfileForm: View {
                         }
                     }
                 Button {
-                    exportBackup()
+                    showingExportPassphraseSheet = true
                 } label: {
                     Label("Export Backup", systemImage: "square.and.arrow.up.on.square")
                 }
@@ -227,7 +232,7 @@ private struct ProfileForm: View {
             } header: {
                 Text("Data")
             } footer: {
-                Text("Health import copies your recent readings from Apple Health. When \"Save new vitals to Apple Health\" is on, vitals you log in MediTrack are also written to the Health app. Backups are a single JSON file containing everything — including attachments — that you can store anywhere and restore later (reminders need re-enabling after a restore). Erasing removes all data from this device.")
+                Text("Health import copies your recent readings from Apple Health. When \"Save new vitals to Apple Health\" is on, vitals you log in MediTrack are also written to the Health app. Backups are a single passphrase-encrypted JSON file containing everything — including attachments — that you can store anywhere and restore later (reminders need re-enabling after a restore). Erasing removes all data from this device.")
             }
             .listRowBackground(GlassRowBackground())
             .listRowSeparator(.hidden)
@@ -243,8 +248,17 @@ private struct ProfileForm: View {
             .listRowBackground(GlassRowBackground())
             .listRowSeparator(.hidden)
         }
+        .onAppear {
+            anthropicAPIKey = AISummaryService.apiKey ?? ""
+        }
         .sheet(isPresented: $showingPasscodeSetup) {
             PasscodeSetupSheet(lock: lock)
+        }
+        .sheet(isPresented: $showingExportPassphraseSheet) {
+            BackupExportPassphraseSheet(onExport: performExport)
+        }
+        .sheet(isPresented: $showingRestorePassphraseSheet) {
+            BackupRestorePassphraseSheet(attemptRestore: attemptRestore)
         }
         .confirmationDialog(
             "Erase all data from this device?",
@@ -291,7 +305,7 @@ private struct ProfileForm: View {
             titleVisibility: .visible
         ) {
             Button("Restore Backup", role: .destructive) {
-                restoreBackup()
+                showingRestorePassphraseSheet = true
             }
         } message: {
             Text("Everything currently in MediTrack will be replaced. This cannot be undone.")
@@ -320,24 +334,32 @@ private struct ProfileForm: View {
         }
     }
 
-    private func exportBackup() {
+    /// Called by `BackupExportPassphraseSheet` once a valid passphrase has
+    /// been entered and confirmed.
+    private func performExport(passphrase: String) {
         do {
-            exportDocument = BackupJSONDocument(data: try BackupService.export(from: modelContext))
+            exportDocument = BackupJSONDocument(data: try BackupService.export(from: modelContext, passphrase: passphrase))
             showingExporter = true
         } catch {
             dataMessage = "Export failed: \(error.localizedDescription)"
         }
     }
 
-    private func restoreBackup() {
-        guard let data = pendingRestoreData else { return }
-        pendingRestoreData = nil
+    /// Called by `BackupRestorePassphraseSheet` for each attempt. Returns an
+    /// error message to display inline (and keep the sheet open) on failure,
+    /// or `nil` on success (the sheet dismisses itself).
+    private func attemptRestore(passphrase: String) -> String? {
+        guard let data = pendingRestoreData else {
+            return "No backup file selected."
+        }
         do {
-            let count = try BackupService.restore(from: data, into: modelContext)
+            let count = try BackupService.restore(from: data, passphrase: passphrase, into: modelContext)
+            pendingRestoreData = nil
             Haptics.success()
             dataMessage = "Backup restored — \(count) record\(count == 1 ? "" : "s"). Medication and appointment reminders need to be re-enabled."
+            return nil
         } catch {
-            dataMessage = error.localizedDescription
+            return error.localizedDescription
         }
     }
 
@@ -371,5 +393,130 @@ private struct ProfileForm: View {
                 profile.heightCm = Double($0.replacingOccurrences(of: ",", with: "."))
             }
         )
+    }
+}
+
+// MARK: - Backup passphrase sheets
+
+/// Requests and confirms a new passphrase before exporting a backup.
+private struct BackupExportPassphraseSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let onExport: (String) -> Void
+
+    @State private var passphrase = ""
+    @State private var confirm = ""
+    @State private var error: String?
+    @FocusState private var firstFieldFocused: Bool
+
+    private static let minimumLength = 8
+
+    private var isValid: Bool {
+        passphrase.count >= Self.minimumLength
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    SecureField("Passphrase", text: $passphrase)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .focused($firstFieldFocused)
+                    SecureField("Confirm passphrase", text: $confirm)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } footer: {
+                    if let error {
+                        Text(error).foregroundStyle(.red)
+                    } else {
+                        Text("Choose a passphrase of at least \(Self.minimumLength) characters. You'll need it to restore this backup — MediTrack can't recover it if you forget it.")
+                    }
+                }
+                .listRowBackground(GlassRowBackground())
+                .listRowSeparator(.hidden)
+            }
+            .ambientScreen()
+            .navigationTitle("Encrypt Backup")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Export") { attemptExport() }
+                        .disabled(!isValid)
+                }
+            }
+            .onAppear { firstFieldFocused = true }
+        }
+    }
+
+    private func attemptExport() {
+        guard isValid else {
+            error = "Passphrase must be at least \(Self.minimumLength) characters."
+            return
+        }
+        guard passphrase == confirm else {
+            error = "Passphrases don't match."
+            confirm = ""
+            return
+        }
+        onExport(passphrase)
+        dismiss()
+    }
+}
+
+/// Requests the passphrase for a restore, showing an inline error (and
+/// staying open) on a wrong passphrase so the user can retry.
+private struct BackupRestorePassphraseSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    /// Returns an error message on failure, or `nil` on success.
+    let attemptRestore: (String) -> String?
+
+    @State private var passphrase = ""
+    @State private var error: String?
+    @FocusState private var fieldFocused: Bool
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    SecureField("Passphrase", text: $passphrase)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .focused($fieldFocused)
+                        .onSubmit(submit)
+                } footer: {
+                    if let error {
+                        Text(error).foregroundStyle(.red)
+                    } else {
+                        Text("Enter the passphrase you used when this backup was exported. Older, unencrypted backups don't need one — leave this blank and tap Restore.")
+                    }
+                }
+                .listRowBackground(GlassRowBackground())
+                .listRowSeparator(.hidden)
+            }
+            .ambientScreen()
+            .navigationTitle("Restore Backup")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Restore") { submit() }
+                }
+            }
+            .onAppear { fieldFocused = true }
+        }
+    }
+
+    private func submit() {
+        if let message = attemptRestore(passphrase) {
+            error = message
+            passphrase = ""
+        } else {
+            dismiss()
+        }
     }
 }

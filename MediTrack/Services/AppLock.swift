@@ -16,6 +16,16 @@ final class AppLock: ObservableObject {
     nonisolated static let rememberMeKey = "app.rememberMe"
     nonisolated static let biometricsEnabledKey = "app.biometricsEnabled"
 
+    // Login backoff keys, exposed (not private) so tests can seed/reset them.
+    nonisolated static let failedAttemptsKey = "app.lock.failedAttempts"
+    nonisolated static let lockoutUntilKey = "app.lock.lockoutUntil"
+
+    /// Consecutive failures before a lockout begins.
+    private static let attemptsThreshold = 5
+    /// Lockout duration at the threshold; doubles with every failure after that.
+    private static let baseLockoutSeconds: TimeInterval = 30
+    private static let maxLockoutSeconds: TimeInterval = 8 * 60
+
     private let hashAccount = "passcode.hash"
     private let saltAccount = "passcode.salt"
 
@@ -30,6 +40,55 @@ final class AppLock: ObservableObject {
     var biometricsEnabled: Bool {
         get { UserDefaults.standard.object(forKey: Self.biometricsEnabledKey) as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: Self.biometricsEnabledKey) }
+    }
+
+    // MARK: Login backoff
+
+    private var failedAttempts: Int {
+        get { UserDefaults.standard.integer(forKey: Self.failedAttemptsKey) }
+        set { UserDefaults.standard.set(newValue, forKey: Self.failedAttemptsKey) }
+    }
+
+    private var lockoutUntil: Date? {
+        get {
+            let stored = UserDefaults.standard.double(forKey: Self.lockoutUntilKey)
+            return stored > 0 ? Date(timeIntervalSince1970: stored) : nil
+        }
+        set {
+            if let newValue {
+                UserDefaults.standard.set(newValue.timeIntervalSince1970, forKey: Self.lockoutUntilKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.lockoutUntilKey)
+            }
+        }
+    }
+
+    /// Seconds left in an active lockout, or 0 if there isn't one (or it has
+    /// expired). Recomputed from wall-clock time on every access so a UI
+    /// timer can poll it.
+    var lockoutRemainingSeconds: Int {
+        guard let lockoutUntil else { return 0 }
+        let remaining = lockoutUntil.timeIntervalSinceNow
+        return remaining > 0 ? Int(remaining.rounded(.up)) : 0
+    }
+
+    var isLockedOut: Bool { lockoutRemainingSeconds > 0 }
+
+    private func registerFailedAttempt() {
+        failedAttempts += 1
+        guard failedAttempts >= Self.attemptsThreshold else {
+            lastError = "Incorrect passcode."
+            return
+        }
+        let extraFailures = failedAttempts - Self.attemptsThreshold
+        let seconds = min(Self.baseLockoutSeconds * pow(2, Double(extraFailures)), Self.maxLockoutSeconds)
+        lockoutUntil = Date().addingTimeInterval(seconds)
+        lastError = "Try again in \(Int(seconds))s."
+    }
+
+    private func resetFailedAttempts() {
+        failedAttempts = 0
+        lockoutUntil = nil
     }
 
     // MARK: Capabilities
@@ -61,6 +120,8 @@ final class AppLock: ObservableObject {
         let salt = Self.randomSalt()
         KeychainStore.set(salt, for: saltAccount)
         KeychainStore.set(Self.hash(passcode, salt: salt), for: hashAccount)
+        // A freshly (re)set passcode shouldn't inherit a prior lockout.
+        resetFailedAttempts()
     }
 
     func removePasscode() {
@@ -80,12 +141,20 @@ final class AppLock: ObservableObject {
 
     /// Unlock with the passcode. Only commits "Remember me" on success, so
     /// toggling it on the login screen can never bypass the lock.
+    ///
+    /// Deliberately fails open on repeated failures rather than wiping data
+    /// or permanently locking the app out — see `registerFailedAttempt`.
     @discardableResult
     func unlock(passcode: String, remember: Bool) -> Bool {
-        guard verify(passcode) else {
-            lastError = "Incorrect passcode."
+        if isLockedOut {
+            lastError = "Try again in \(lockoutRemainingSeconds)s."
             return false
         }
+        guard verify(passcode) else {
+            registerFailedAttempt()
+            return false
+        }
+        resetFailedAttempts()
         rememberMe = remember
         isLocked = false
         lastError = nil
@@ -106,6 +175,7 @@ final class AppLock: ObservableObject {
                 localizedReason: "Unlock your medical data"
             )
             if success {
+                resetFailedAttempts()
                 rememberMe = remember
                 isLocked = false
                 lastError = nil

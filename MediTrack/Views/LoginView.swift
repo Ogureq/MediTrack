@@ -37,27 +37,39 @@ struct LoginView: View {
                     passcodeField
                 }
 
-                if let error = lock.lastError {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .transition(.opacity)
-                }
+                // Ticks every second so the countdown text and the disabled
+                // Unlock button both clear on their own once the lockout
+                // expires, without requiring another user action.
+                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    let remaining = lock.lockoutRemainingSeconds
 
-                Toggle(isOn: $rememberMe) {
-                    Label("Remember me", systemImage: "checkmark.shield")
-                        .font(.subheadline)
-                }
-                .tint(.teal)
-
-                if lock.hasPasscode {
-                    Button {
-                        submitPasscode()
-                    } label: {
-                        Label("Unlock", systemImage: "lock.open.fill")
+                    if remaining > 0 {
+                        Text("Too many attempts. Try again in \(remaining)s.")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .transition(.opacity)
+                    } else if let error = lock.lastError {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .transition(.opacity)
                     }
-                    .buttonStyle(GlassProminentButtonStyle())
-                    .disabled(!canSubmit)
+
+                    Toggle(isOn: $rememberMe) {
+                        Label("Remember me", systemImage: "checkmark.shield")
+                            .font(.subheadline)
+                    }
+                    .tint(.teal)
+
+                    if lock.hasPasscode {
+                        Button {
+                            submitPasscode()
+                        } label: {
+                            Label("Unlock", systemImage: "lock.open.fill")
+                        }
+                        .buttonStyle(GlassProminentButtonStyle())
+                        .disabled(!canSubmit || remaining > 0)
+                    }
                 }
 
                 if lock.biometricsEnabled && AppLock.biometricsAvailable {

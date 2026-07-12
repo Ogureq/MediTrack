@@ -2,6 +2,9 @@ import Foundation
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+import CryptoKit
+import CommonCrypto
+import Security
 
 // MARK: - Backup payload (versioned, Codable)
 
@@ -134,24 +137,84 @@ struct BackupScoreSnapshot: Codable {
     var attentionCount: Int
 }
 
-enum BackupError: LocalizedError {
+enum BackupError: LocalizedError, Equatable {
     case unreadableFile
+    /// AES-GCM authentication failed while opening a v2 envelope — either the
+    /// passphrase was wrong or the sealed data was tampered with. The two
+    /// are cryptographically indistinguishable, so they share this case.
+    case wrongPassphrase
+    /// The envelope (or the payload inside it) was structurally invalid —
+    /// bad base64, truncated sealed box, undecodable JSON after opening, etc.
+    case corruptData
 
     var errorDescription: String? {
         switch self {
         case .unreadableFile:
             "The selected file couldn't be read as a MediTrack backup."
+        case .wrongPassphrase:
+            "That passphrase doesn't match this backup. Check it and try again."
+        case .corruptData:
+            "This backup file appears to be corrupted or incomplete."
         }
     }
+}
+
+// MARK: - Encryption envelope
+//
+// v2 backups wrap the plaintext `BackupPayload` JSON in an AES-GCM sealed
+// box, keyed by a PBKDF2-SHA256-derived key. Envelope shape:
+// { "version": 2, "kdf": "pbkdf2-sha256", "iterations": 310000,
+//   "salt": base64, "sealed": base64(AES.GCM.SealedBox.combined) }
+//
+// Restoring a pre-encryption (v1, plaintext) backup is still supported: the
+// passphrase is ignored in that case.
+
+struct BackupEnvelope: Codable {
+    var version: Int
+    var kdf: String
+    var iterations: Int
+    var salt: String
+    var sealed: String
 }
 
 // MARK: - Backup service
 
 enum BackupService {
 
-    /// Serializes the entire store (including attachments) to JSON.
+    static let envelopeVersion = 2
+    static let kdfIdentifier = "pbkdf2-sha256"
+    static let pbkdf2Iterations = 310_000
+    private static let saltLength = 16
+
+    /// Serializes the entire store (including attachments), then seals it
+    /// behind a passphrase-derived AES-GCM key.
     @MainActor
-    static func export(from context: ModelContext) throws -> Data {
+    static func export(from context: ModelContext, passphrase: String) throws -> Data {
+        let payload = try buildPayload(from: context)
+        let plaintext = try encodePayload(payload)
+
+        let salt = randomBytes(count: saltLength)
+        let key = try deriveKey(passphrase: passphrase, salt: salt, iterations: pbkdf2Iterations)
+        let sealedBox = try AES.GCM.seal(plaintext, using: key)
+        guard let combined = sealedBox.combined else {
+            throw BackupError.corruptData
+        }
+
+        let envelope = BackupEnvelope(
+            version: envelopeVersion,
+            kdf: kdfIdentifier,
+            iterations: pbkdf2Iterations,
+            salt: salt.base64EncodedString(),
+            sealed: combined.base64EncodedString()
+        )
+        return try JSONEncoder().encode(envelope)
+    }
+
+    /// Builds the plaintext payload from the current store. Kept separate
+    /// from encoding/encryption so payload-level tests can exercise it
+    /// without going through the crypto layer.
+    @MainActor
+    static func buildPayload(from context: ModelContext) throws -> BackupPayload {
         var payload = BackupPayload()
 
         if let profile = try context.fetch(FetchDescriptor<HealthProfile>()).first {
@@ -255,23 +318,36 @@ enum BackupService {
             )
         }
 
+        return payload
+    }
+
+    /// Plaintext `BackupPayload` -> JSON. Internal (not private) so it can
+    /// double as the legacy (pre-encryption) export format in tests.
+    static func encodePayload(_ payload: BackupPayload) throws -> Data {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         return try encoder.encode(payload)
+    }
+
+    /// JSON -> `BackupPayload`. Internal (not private) for the same reason.
+    static func decodePayload(_ data: Data) throws -> BackupPayload {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(BackupPayload.self, from: data)
     }
 
     /// Replaces all current data with the backup contents and returns the
     /// number of restored records. The existing profile object is updated
     /// in place (not deleted) so views bound to it stay valid. Notification
     /// reminders are NOT rescheduled automatically.
+    ///
+    /// `data` may be either a v2 encrypted envelope (in which case
+    /// `passphrase` must match) or a legacy plaintext payload (in which case
+    /// `passphrase` is ignored).
     @MainActor
     @discardableResult
-    static func restore(from data: Data, into context: ModelContext) throws -> Int {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        guard let payload = try? decoder.decode(BackupPayload.self, from: data) else {
-            throw BackupError.unreadableFile
-        }
+    static func restore(from data: Data, passphrase: String, into context: ModelContext) throws -> Int {
+        let payload = try resolvePayload(from: data, passphrase: passphrase)
 
         // Wipe everything except the profile object itself.
         try? context.delete(model: MedicalReport.self)
@@ -449,6 +525,93 @@ enum BackupService {
         }
 
         return restored
+    }
+
+    // MARK: Envelope decryption / legacy fallback
+
+    /// Detects whether `data` is a v2 envelope or a legacy plaintext
+    /// payload and returns the decoded `BackupPayload` either way.
+    private static func resolvePayload(from data: Data, passphrase: String) throws -> BackupPayload {
+        if let envelope = try? JSONDecoder().decode(BackupEnvelope.self, from: data) {
+            guard envelope.version == envelopeVersion else {
+                throw BackupError.corruptData
+            }
+            return try decryptPayload(envelope: envelope, passphrase: passphrase)
+        }
+        if let legacyPayload = try? decodePayload(data) {
+            return legacyPayload
+        }
+        throw BackupError.unreadableFile
+    }
+
+    private static func decryptPayload(envelope: BackupEnvelope, passphrase: String) throws -> BackupPayload {
+        guard let salt = Data(base64Encoded: envelope.salt),
+              let sealed = Data(base64Encoded: envelope.sealed) else {
+            throw BackupError.corruptData
+        }
+
+        let key = try deriveKey(passphrase: passphrase, salt: salt, iterations: envelope.iterations)
+
+        let sealedBox: AES.GCM.SealedBox
+        do {
+            sealedBox = try AES.GCM.SealedBox(combined: sealed)
+        } catch {
+            throw BackupError.corruptData
+        }
+
+        let plaintext: Data
+        do {
+            plaintext = try AES.GCM.open(sealedBox, using: key)
+        } catch {
+            // A GCM authentication failure means either the passphrase was
+            // wrong or the sealed data was tampered with — the two cases
+            // are cryptographically indistinguishable.
+            throw BackupError.wrongPassphrase
+        }
+
+        guard let payload = try? decodePayload(plaintext) else {
+            throw BackupError.corruptData
+        }
+        return payload
+    }
+
+    // MARK: PBKDF2 key derivation (CommonCrypto)
+
+    private static func deriveKey(passphrase: String, salt: Data, iterations: Int) throws -> SymmetricKey {
+        guard let rounds = UInt32(exactly: iterations), rounds > 0 else {
+            throw BackupError.corruptData
+        }
+        let passphraseData = Data(passphrase.utf8)
+        var derivedKeyData = Data(repeating: 0, count: 32)
+        let derivedKeyLength = derivedKeyData.count
+
+        let status = derivedKeyData.withUnsafeMutableBytes { derivedBytes -> Int32 in
+            salt.withUnsafeBytes { saltBytes -> Int32 in
+                passphraseData.withUnsafeBytes { passphraseBytes -> Int32 in
+                    CCKeyDerivationPBKDF(
+                        CCPBKDFAlgorithm(kCCPBKDF2),
+                        passphraseBytes.bindMemory(to: Int8.self).baseAddress,
+                        passphraseData.count,
+                        saltBytes.bindMemory(to: UInt8.self).baseAddress,
+                        salt.count,
+                        CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256),
+                        rounds,
+                        derivedBytes.bindMemory(to: UInt8.self).baseAddress,
+                        derivedKeyLength
+                    )
+                }
+            }
+        }
+        guard status == kCCSuccess else {
+            throw BackupError.corruptData
+        }
+        return SymmetricKey(data: derivedKeyData)
+    }
+
+    private static func randomBytes(count: Int) -> Data {
+        var bytes = [UInt8](repeating: 0, count: count)
+        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        return Data(bytes)
     }
 }
 

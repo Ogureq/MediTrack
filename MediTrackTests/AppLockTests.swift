@@ -37,6 +37,8 @@ final class AppLockTests: XCTestCase {
         KeychainStore.delete(saltAccount)
         UserDefaults.standard.removeObject(forKey: AppLock.rememberMeKey)
         UserDefaults.standard.removeObject(forKey: AppLock.biometricsEnabledKey)
+        UserDefaults.standard.removeObject(forKey: AppLock.failedAttemptsKey)
+        UserDefaults.standard.removeObject(forKey: AppLock.lockoutUntilKey)
     }
 
     // MARK: Passcode set + verify
@@ -174,5 +176,113 @@ final class AppLockTests: XCTestCase {
 
         XCTAssertFalse(appLock.hasPasscode)
         XCTAssertFalse(appLock.verify("1234"))
+    }
+
+    // MARK: Login backoff
+    //
+    // These run behind the same keychain-probe skip in setUpWithError as
+    // every other test in this class (AppLock's failure path still needs a
+    // working Keychain to call `verify`).
+
+    func testFailedAttemptsBelowThresholdDoNotLockOut() {
+        let appLock = AppLock()
+        appLock.setPasscode("1234")
+
+        for _ in 0..<4 {
+            XCTAssertFalse(appLock.unlock(passcode: "0000", remember: false))
+        }
+
+        XCTAssertFalse(appLock.isLockedOut)
+        XCTAssertEqual(appLock.lockoutRemainingSeconds, 0)
+        XCTAssertEqual(appLock.lastError, "Incorrect passcode.")
+    }
+
+    func testFifthConsecutiveFailureLocksOutForThirtySeconds() {
+        let appLock = AppLock()
+        appLock.setPasscode("1234")
+
+        for _ in 0..<5 {
+            XCTAssertFalse(appLock.unlock(passcode: "0000", remember: false))
+        }
+
+        XCTAssertTrue(appLock.isLockedOut)
+        XCTAssertEqual(appLock.lockoutRemainingSeconds, 30)
+        XCTAssertEqual(appLock.lastError, "Try again in 30s.")
+    }
+
+    func testUnlockDuringLockoutFailsFastEvenWithTheCorrectPasscode() {
+        let appLock = AppLock()
+        appLock.setPasscode("1234")
+        for _ in 0..<5 {
+            XCTAssertFalse(appLock.unlock(passcode: "0000", remember: false))
+        }
+        XCTAssertTrue(appLock.isLockedOut)
+
+        // The lockout fails fast — it doesn't even consult the correct
+        // passcode — so the app never wipes data or locks out permanently.
+        XCTAssertFalse(appLock.unlock(passcode: "1234", remember: false))
+        XCTAssertTrue(appLock.isLocked)
+        XCTAssertEqual(appLock.lastError, "Try again in 30s.")
+    }
+
+    func testSuccessfulUnlockResetsFailedAttemptCounter() {
+        let appLock = AppLock()
+        appLock.setPasscode("1234")
+        for _ in 0..<4 {
+            XCTAssertFalse(appLock.unlock(passcode: "0000", remember: false))
+        }
+
+        XCTAssertTrue(appLock.unlock(passcode: "1234", remember: false))
+
+        // A fresh run of 4 more failures should not lock out, proving the
+        // counter reset to 0 rather than continuing on toward 9.
+        for _ in 0..<4 {
+            XCTAssertFalse(appLock.unlock(passcode: "0000", remember: false))
+        }
+        XCTAssertFalse(appLock.isLockedOut)
+    }
+
+    func testConsecutiveLockoutsDoubleAfterTheInitialThirtySeconds() {
+        let appLock = AppLock()
+        appLock.setPasscode("1234")
+
+        // Simulate 5 prior failures whose lockout window has already
+        // expired, then let the next wrong attempt push the streak to 6.
+        UserDefaults.standard.set(5, forKey: AppLock.failedAttemptsKey)
+        UserDefaults.standard.set(Date().addingTimeInterval(-1).timeIntervalSince1970, forKey: AppLock.lockoutUntilKey)
+
+        XCTAssertFalse(appLock.unlock(passcode: "0000", remember: false))
+        XCTAssertEqual(appLock.lockoutRemainingSeconds, 60)
+
+        // Expire that window too, then push the streak to 7.
+        UserDefaults.standard.set(Date().addingTimeInterval(-1).timeIntervalSince1970, forKey: AppLock.lockoutUntilKey)
+        XCTAssertFalse(appLock.unlock(passcode: "0000", remember: false))
+        XCTAssertEqual(appLock.lockoutRemainingSeconds, 120)
+    }
+
+    func testLockoutDurationCapsAtEightMinutes() {
+        let appLock = AppLock()
+        appLock.setPasscode("1234")
+
+        // Simulate a long failure streak with an already-expired window.
+        UserDefaults.standard.set(20, forKey: AppLock.failedAttemptsKey)
+        UserDefaults.standard.set(Date().addingTimeInterval(-1).timeIntervalSince1970, forKey: AppLock.lockoutUntilKey)
+
+        XCTAssertFalse(appLock.unlock(passcode: "0000", remember: false))
+        XCTAssertEqual(appLock.lockoutRemainingSeconds, 8 * 60)
+    }
+
+    func testSettingANewPasscodeClearsAnyExistingLockout() {
+        let appLock = AppLock()
+        appLock.setPasscode("1234")
+        for _ in 0..<5 {
+            XCTAssertFalse(appLock.unlock(passcode: "0000", remember: false))
+        }
+        XCTAssertTrue(appLock.isLockedOut)
+
+        appLock.setPasscode("5678")
+
+        XCTAssertFalse(appLock.isLockedOut)
+        XCTAssertTrue(appLock.unlock(passcode: "5678", remember: false))
     }
 }

@@ -28,10 +28,44 @@ enum AISummaryError: LocalizedError {
 
 enum AISummaryService {
 
+    /// Legacy UserDefaults key. No longer written to (the key now lives in
+    /// the Keychain), but kept around as the one-time migration source and
+    /// because other views still key their `@AppStorage` off this name.
     static let apiKeyDefaultsKey = "anthropicAPIKey"
+    private static let keychainAccount = "anthropic.apiKey"
+
+    /// The stored Anthropic API key, backed by the Keychain rather than
+    /// UserDefaults (which persists to an unencrypted plist). Reading
+    /// performs a one-time migration: if a legacy UserDefaults value is
+    /// still present, it's moved into the Keychain and removed from
+    /// UserDefaults.
+    static var apiKey: String? {
+        get {
+            migrateLegacyKeyIfNeeded()
+            let stored = KeychainStore.getString(keychainAccount)
+            return (stored?.isEmpty ?? true) ? nil : stored
+        }
+        set {
+            if let newValue, !newValue.isEmpty {
+                KeychainStore.set(newValue, for: keychainAccount)
+            } else {
+                KeychainStore.delete(keychainAccount)
+            }
+        }
+    }
 
     static var isConfigured: Bool {
-        !(UserDefaults.standard.string(forKey: apiKeyDefaultsKey) ?? "").isEmpty
+        !(apiKey ?? "").isEmpty
+    }
+
+    /// Moves a legacy plaintext key out of UserDefaults and into the
+    /// Keychain, once. No-ops if there's nothing to migrate or the Keychain
+    /// already has a value.
+    private static func migrateLegacyKeyIfNeeded() {
+        guard let legacyKey = UserDefaults.standard.string(forKey: apiKeyDefaultsKey),
+              !legacyKey.isEmpty else { return }
+        KeychainStore.set(legacyKey, for: keychainAccount)
+        UserDefaults.standard.removeObject(forKey: apiKeyDefaultsKey)
     }
 
     private static let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
@@ -81,8 +115,7 @@ enum AISummaryService {
     // MARK: Call
 
     static func summarize(_ review: HealthReview) async throws -> String {
-        guard let key = UserDefaults.standard.string(forKey: apiKeyDefaultsKey),
-              !key.isEmpty else {
+        guard let key = apiKey, !key.isEmpty else {
             throw AISummaryError.missingKey
         }
 
