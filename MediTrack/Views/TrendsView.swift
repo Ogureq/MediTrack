@@ -143,7 +143,7 @@ struct TrendsView: View {
             .navigationTitle("Trends")
             .toolbar {
                 NavigationLink {
-                    TimelineView()
+                    HealthTimelineView()
                 } label: {
                     Image(systemName: "clock.arrow.circlepath")
                 }

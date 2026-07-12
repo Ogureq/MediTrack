@@ -1,0 +1,23 @@
+{
+  "name": "meditrack-relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Stateless AI relay for MediTrack (Cloudflare Workers). P1 scaffold — not deployed. See README.md for owner actions required before this goes live.",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "jose": "^5.9.6"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.5",
+    "wrangler": "^3.90.0"
+  }
+}

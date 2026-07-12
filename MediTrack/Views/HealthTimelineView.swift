@@ -5,7 +5,7 @@ import SwiftData
 /// health events (reports added, labs crossing their reference range,
 /// score swings, medication starts/ends). Every caption comes from
 /// `HealthTimeline` — no AI, no network.
-struct TimelineView: View {
+struct HealthTimelineView: View {
     @Query(sort: \MedicalReport.date, order: .reverse) private var reports: [MedicalReport]
     @Query private var vitals: [VitalSample]
     @Query(sort: \ScoreSnapshot.date) private var scores: [ScoreSnapshot]
