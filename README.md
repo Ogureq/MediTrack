@@ -36,6 +36,7 @@ A privacy-first native iOS app that keeps all your medical data on-device and ge
 - **Share/export** — Share a generated review as plain text via the iOS share sheet, or export it as a formatted PDF document (header, score, findings by severity, trends, lab table, and disclaimer).
 - **Health goals** — Set a target for any vital (goal weight, nightly sleep hours, ...) with progress tracked from your starting value as new readings arrive; active/completed lists, achieved badges, optional target dates, and a Goals progress card on the Dashboard.
 - **Today dashboard** — A dedicated daily view showing personalized supplement and habit reminders with completion tracking, multi-day streaks, and optional daily notifications to encourage consistent self-care routines.
+- **Re-test and score-change notifications** — Optional push notifications alert you when it's time to revisit a lab test (e.g., 90 days after your last result), and when your overall health score changes meaningfully, helping you stay aware of health trends and follow up on important tests.
 - **Unit preferences** — kg/lb, °C/°F, and mg/dL / mmol/L pickers in Profile; vitals are stored in metric and converted at display and entry across tiles, charts, trends, and review text.
 - **AI Health Analyst (optional)** — Bring your own Anthropic API key to have Claude generate a structured report that narrates the health review findings with plain-language insights and verified citations to your data. The analysis engine computes all numbers and findings; the AI provides educational context and narrative structure. Falls back to the rule-based review if AI is unavailable. Strictly opt-in: only the review text is sent (never documents or the database), the key stays on-device, and leaving it empty keeps the app fully offline.
 - **Full editing** — Reports, medications, and appointments can all be edited after creation; reminder notifications are rescheduled automatically when times change.
@@ -103,6 +104,8 @@ The analysis engine is rule-based and deterministic — no cloud AI is involved.
 The following are under consideration for future releases and are **not** implemented today:
 
 - iCloud sync via SwiftData CloudKit mirroring
+
+See `docs/ROADMAP.md` for the detailed upgrade plan and future milestones beyond the current phase.
 
 ## Medical Disclaimer
 

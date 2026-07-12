@@ -133,6 +133,18 @@ This document records the phased plan executed to build MediTrack, a privacy-fir
 - [x] Richer trend charts — enhanced Trends visualization with healthy-range band, period average line, min/max markers, gradient fill, and dual-series blood-pressure charting for deeper trend analysis
 - [x] Home-screen widget extension — created Health Score widget (small & medium sizes) displaying latest score ring, headline, and recent vitals via a shared app-group snapshot, enabling quick health status glance from home screen
 
+## Phase 16 — Roadmap P1: Activation, Trust, and the AI Analyst
+
+- [x] Personalized onboarding quiz — enhanced onboarding flow that gathers health profile basics and preferences before the welcome tour
+- [x] Today dashboard — dedicated daily view with personalized supplement and habit reminders, completion tracking, multi-day streaks, and optional daily notifications
+- [x] AI Health Analyst structured report — enhanced AI summary feature that narrates findings with verified citations to your data; engine computes numbers and findings, AI provides narrative structure; falls back to rule-based review
+- [x] Deterministic health timeline — chronological view of all health events (labs, vitals, symptoms, medications, appointments) with consistent, reproducible ordering
+- [x] Passphrase-encrypted backups (AES-GCM) — backup export now uses AES-GCM encryption with user-supplied passphrase, improving security of exported files
+- [x] Login attempt lockout — automatic lockout after repeated failed login attempts to prevent brute-force passcode guessing
+- [x] Shareable redacted score card — generate health-score summary with trends and vitals, omitting sensitive details, suitable for sharing with healthcare providers
+- [x] Privacy & Your Data explainer — dedicated educational screen documenting on-device storage, data protection, data ownership, and control
+- [x] Re-test and score-change notifications — optional push notifications alert on lab re-test recommendations (90-day intervals) and meaningful score changes
+
 ## Future Milestones
 
 Not part of the current plan; captured here for future scoping:
