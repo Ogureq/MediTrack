@@ -16,6 +16,7 @@ struct ReviewScreen: View {
     @State private var aiReport: AIHealthReport?
     @State private var isGeneratingSummary = false
     @State private var aiError: String?
+    @State private var showingAIChat = false
 
     private var review: HealthReview {
         AnalysisEngine.generateReview(
@@ -73,6 +74,9 @@ struct ReviewScreen: View {
             }
         }
         .task(id: review.score) { recordSnapshot() }
+        .sheet(isPresented: $showingAIChat) {
+            AIChatView(review: review, profileSummary: aiProfileSummary ?? "")
+        }
     }
 
     /// Keeps one score snapshot per day so the dashboard can chart history.
@@ -181,6 +185,12 @@ struct ReviewScreen: View {
                     }
                     .buttonStyle(GlassButtonStyle())
                 }
+                Button {
+                    showingAIChat = true
+                } label: {
+                    Label("Ask about this report", systemImage: "bubble.left.and.text.bubble.right")
+                }
+                .buttonStyle(GlassButtonStyle())
             }
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
