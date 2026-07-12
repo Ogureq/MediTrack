@@ -133,6 +133,7 @@ struct PaywallView: View {
                     PaywallProductCard(
                         product: product,
                         isYearly: product.id == PremiumStore.yearlyProductID,
+                        isLifetime: product.id == PremiumStore.lifetimeProductID,
                         isPurchasing: purchasingProductID == product.id,
                         isDisabled: purchasingProductID != nil && purchasingProductID != product.id
                     ) {
@@ -294,17 +295,21 @@ private struct PaywallFeatureRow: View {
 private struct PaywallProductCard: View {
     let product: Product
     let isYearly: Bool
+    var isLifetime: Bool = false
     let isPurchasing: Bool
     let isDisabled: Bool
     let action: () -> Void
 
     private var planName: String {
-        product.displayName.isEmpty
-            ? (isYearly ? "Yearly" : "Monthly")
-            : product.displayName
+        if product.displayName.isEmpty {
+            if isLifetime { return "Lifetime" }
+            return isYearly ? "Yearly" : "Monthly"
+        }
+        return product.displayName
     }
 
     private var periodSuffix: String {
+        if isLifetime { return " once" }
         guard let period = product.subscription?.subscriptionPeriod else { return "" }
         switch period.unit {
         case .day: return period.value == 1 ? "/day" : "/\(period.value) days"
@@ -324,6 +329,8 @@ private struct PaywallProductCard: View {
                             .font(.subheadline.weight(.semibold))
                         if isYearly {
                             StatusPill(text: "Best value", color: .green)
+                        } else if isLifetime {
+                            StatusPill(text: "One-time", color: .teal)
                         }
                     }
                     Text("\(product.displayPrice)\(periodSuffix)")
@@ -348,9 +355,13 @@ private struct PaywallProductCard: View {
         .disabled(isDisabled)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            "\(planName) plan, \(product.displayPrice)\(periodSuffix)\(isYearly ? ", best value" : "")"
+            "\(planName) plan, \(product.displayPrice)\(periodSuffix)\(isYearly ? ", best value" : "")\(isLifetime ? ", one-time purchase" : "")"
         )
-        .accessibilityHint(isPurchasing ? "Purchase in progress" : "Double tap to subscribe")
+        .accessibilityHint(
+            isPurchasing
+                ? "Purchase in progress"
+                : (isLifetime ? "Double tap to purchase" : "Double tap to subscribe")
+        )
     }
 }
 

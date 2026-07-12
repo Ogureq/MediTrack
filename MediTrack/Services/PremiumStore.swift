@@ -5,7 +5,8 @@ import StoreKit
 //
 // MediTrack has no backend and no accounts, so "premium" is nothing more
 // than a local StoreKit entitlement: two auto-renewable subscription
-// products (monthly / yearly) that unlock unlimited AI health reports.
+// products (monthly / yearly) plus a one-time non-consumable lifetime
+// unlock, any of which unlocks unlimited AI health reports.
 // Every free-tier tracking feature (OCR scanning, health score,
 // interactions, trends, backups) stays free forever — this store only
 // gates the optional AI report count via `AIReportQuota` below.
@@ -31,7 +32,10 @@ final class PremiumStore: ObservableObject {
 
     static let monthlyProductID = "com.ogureq.meditrack.premium.monthly"
     static let yearlyProductID = "com.ogureq.meditrack.premium.yearly"
-    static let productIDs: [String] = [monthlyProductID, yearlyProductID]
+    /// One-time non-consumable unlock — same entitlement as the
+    /// subscriptions, it just never renews.
+    static let lifetimeProductID = "com.ogureq.meditrack.premium.lifetime"
+    static let productIDs: [String] = [monthlyProductID, yearlyProductID, lifetimeProductID]
 
     enum LoadState: Equatable {
         case loading
