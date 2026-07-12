@@ -156,8 +156,10 @@ final class PremiumStore: ObservableObject {
 // injected `UserDefaults`.
 
 enum AIReportQuota {
-    /// Free-tier lifetime cap on AI-generated reports (never resets).
-    static let freeLifetimeLimit = 3
+    /// Free-tier lifetime cap on AI-generated reports (never resets): one
+    /// taste of the AI report, then Premium. Chat and AI-assisted entry are
+    /// premium-only from the start.
+    static let freeLifetimeLimit = 1
     static let usedCountKey = "premium.aiReportsUsed"
 
     static func usedCount(defaults: UserDefaults) -> Int {

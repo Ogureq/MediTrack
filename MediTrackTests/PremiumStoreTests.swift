@@ -42,12 +42,12 @@ final class PremiumStoreTests: XCTestCase {
 
     // MARK: Exhausting the free allowance
 
-    func testRecordUseThreeTimesExhaustsFreeAllowanceButNotPremium() {
+    func testExhaustingFreeAllowanceBlocksFreeButNotPremium() {
         for _ in 0..<AIReportQuota.freeLifetimeLimit {
             AIReportQuota.recordUse(defaults: defaults)
         }
 
-        XCTAssertEqual(AIReportQuota.usedCount(defaults: defaults), 3)
+        XCTAssertEqual(AIReportQuota.usedCount(defaults: defaults), AIReportQuota.freeLifetimeLimit)
         XCTAssertEqual(AIReportQuota.remaining(defaults: defaults), 0)
         XCTAssertFalse(AIReportQuota.canGenerate(isPremium: false, defaults: defaults))
         XCTAssertTrue(AIReportQuota.canGenerate(isPremium: true, defaults: defaults))
@@ -65,11 +65,17 @@ final class PremiumStoreTests: XCTestCase {
         XCTAssertFalse(AIReportQuota.canGenerate(isPremium: false, defaults: defaults))
     }
 
-    // MARK: Partial usage
+    // MARK: Per-use accounting
 
     func testRemainingDecreasesByOnePerRecordedUse() {
         AIReportQuota.recordUse(defaults: defaults)
         XCTAssertEqual(AIReportQuota.remaining(defaults: defaults), AIReportQuota.freeLifetimeLimit - 1)
-        XCTAssertTrue(AIReportQuota.canGenerate(isPremium: false, defaults: defaults))
+        // Whether more free generations remain depends only on the limit;
+        // premium is never blocked by the counter.
+        XCTAssertEqual(
+            AIReportQuota.canGenerate(isPremium: false, defaults: defaults),
+            AIReportQuota.freeLifetimeLimit > 1
+        )
+        XCTAssertTrue(AIReportQuota.canGenerate(isPremium: true, defaults: defaults))
     }
 }

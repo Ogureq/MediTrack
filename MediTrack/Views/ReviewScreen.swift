@@ -191,7 +191,7 @@ struct ReviewScreen: View {
                         }
                         .buttonStyle(GlassButtonStyle())
                         if !premiumStore.isPremium {
-                            Text("\(AIReportQuota.remaining(defaults: .standard)) of \(AIReportQuota.freeLifetimeLimit) free AI reports left")
+                            Text("Your first AI report is free — Premium unlocks unlimited.")
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
                         }
@@ -202,17 +202,27 @@ struct ReviewScreen: View {
                             Label("Unlock unlimited AI reports", systemImage: "crown")
                         }
                         .buttonStyle(GlassButtonStyle())
-                        Text("You've used your \(AIReportQuota.freeLifetimeLimit) free AI reports. Every tracking feature stays free forever.")
+                        Text("You've used your free AI report. Every tracking feature stays free forever.")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }
                 }
-                Button {
-                    showingAIChat = true
-                } label: {
-                    Label("Ask about this report", systemImage: "bubble.left.and.text.bubble.right")
+                if premiumStore.isPremium {
+                    Button {
+                        showingAIChat = true
+                    } label: {
+                        Label("Ask about this report", systemImage: "bubble.left.and.text.bubble.right")
+                    }
+                    .buttonStyle(GlassButtonStyle())
+                } else {
+                    Button {
+                        showingPaywall = true
+                    } label: {
+                        Label("Ask about this report", systemImage: "lock.fill")
+                    }
+                    .buttonStyle(GlassButtonStyle())
+                    .accessibilityHint("Chat about your report is a Premium feature. Opens the upgrade screen.")
                 }
-                .buttonStyle(GlassButtonStyle())
             }
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)

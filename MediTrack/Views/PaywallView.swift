@@ -164,7 +164,7 @@ struct PaywallView: View {
     }
 
     private var freeTierFootnote: some View {
-        Text("All core tracking — OCR scanning, health score, interactions, trends, and backups — is free forever. Your first 3 AI health reports are included free; premium is only for AI reports beyond that.")
+        Text("All core tracking — OCR scanning, health score, interactions, trends, and backups — is free forever. Your first AI health report is included free; Premium unlocks unlimited AI reports, chat about your results, and AI-assisted entry.")
             .font(.footnote)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
