@@ -151,6 +151,13 @@ This document records the phased plan executed to build MediTrack, a privacy-fir
 - [x] AI-assist fill (optional) — when the deterministic parser can't read a genuine attempt and an API key is configured, a "Fill with AI" button sends the sentence to a small model under a strict single-JSON-object contract; the response is re-validated against the same plausibility bounds as the parser (20 networking-free unit tests) and labeled "AI-filled — please double-check"
 - [x] Modernized add/edit sheets — all six add sheets (medications, vitals, symptoms, appointments, goals, reminders) redesigned from dense forms into scrollable glass-card layouts with one-tap suggestion chips, icon-chip pickers, and an auto-expanding "Add details" disclosure for secondary fields; save and validation logic unchanged
 
+## Phase 18 — Roadmap P2 Wave 2: AI Companion & Premium
+
+- [x] "Ask about this report" AI chat — a chat sheet on the Health Review (`Services/AIChatService.swift`, `Views/AIChatView.swift`) constrained to the current score and findings; conversation memory is client-held only, answers carry educational framing with doctor/pharmacist nudges, and only the review summary ever leaves the device
+- [x] Premium scaffolding — StoreKit 2 `PremiumStore` (monthly/yearly subscriptions, verified entitlements) with a glassmorphic `PaywallView` reached from Profile; degrades honestly to a "purchases aren't available in this build" state until a developer account is connected
+- [x] Free AI-report quota — 3 lifetime AI reports free (pure, unit-tested `AIReportQuota`), spent only on successful generation; premium unlocks unlimited reports while every local tracking feature stays free forever
+- [x] Widget lock-screen privacy — the home-screen widget's score and vitals are `privacySensitive` and render redacted while the device is locked
+
 ## Future Milestones
 
 Not part of the current plan; captured here for future scoping:
