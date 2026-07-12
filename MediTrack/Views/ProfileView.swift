@@ -238,6 +238,11 @@ private struct ProfileForm: View {
             .listRowSeparator(.hidden)
 
             Section {
+                NavigationLink {
+                    PrivacyExplainerView()
+                } label: {
+                    Label("Privacy & Your Data", systemImage: "lock.shield")
+                }
                 LabeledContent("Version", value: "1.0")
                 Text(HealthReview.disclaimer)
                     .font(.footnote)

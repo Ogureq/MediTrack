@@ -274,7 +274,12 @@ struct AddReportView: View {
         }
     }
 
+    /// Stable identifier for the 90-day re-test nudge, so scheduling it
+    /// again (from a later new report) replaces rather than stacks.
+    private static let retestNudgeID = "retest.nudge"
+
     private func save() {
+        let isNewReport = existingReport == nil
         let report: MedicalReport
         if let existingReport {
             report = existingReport
@@ -328,8 +333,32 @@ struct AddReportView: View {
             ))
         }
 
+        if isNewReport && !report.labResults.isEmpty {
+            scheduleRetestNudge()
+        }
+
         Haptics.success()
         dismiss()
+    }
+
+    /// Nudges the user to re-test in ~90 days after they log a *new*
+    /// report that includes at least one lab result. Neutral, non-urgent
+    /// copy — a wellness nudge, not medical advice. Replaces any
+    /// previously scheduled nudge so only the most recent lab report
+    /// restarts the countdown.
+    private func scheduleRetestNudge() {
+        NotificationService.cancelReminder(id: Self.retestNudgeID)
+        let fireDate = Calendar.current.date(byAdding: .day, value: 90, to: .now) ?? .now.addingTimeInterval(90 * 86_400)
+        Task {
+            if await NotificationService.requestAuthorization() {
+                NotificationService.scheduleOneTime(
+                    id: Self.retestNudgeID,
+                    title: "Time for a Follow-Up?",
+                    body: "It's been 3 months since your last lab report — re-test to see your trend.",
+                    at: fireDate
+                )
+            }
+        }
     }
 }
 

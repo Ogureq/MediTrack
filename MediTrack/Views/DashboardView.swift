@@ -32,6 +32,38 @@ struct DashboardView: View {
         appointments.first(where: \.isUpcoming)
     }
 
+    /// Anonymous rollup stats for the shareable score card — counts and a
+    /// trend direction only, never a name, date, or lab value. See
+    /// `ScoreShareCard`.
+    private var shareStats: [ShareStat] {
+        var stats: [ShareStat] = []
+        if !review.labSnapshots.isEmpty {
+            let count = review.labSnapshots.count
+            stats.append(ShareStat(systemImage: "testtube.2", text: "\(count) biomarker\(count == 1 ? "" : "s") tracked"))
+        }
+        stats.append(ShareStat(systemImage: shareTrendSystemImage, text: shareTrendText))
+        if !reports.isEmpty {
+            stats.append(ShareStat(systemImage: "doc.text", text: "\(reports.count) report\(reports.count == 1 ? "" : "s") logged"))
+        }
+        return stats
+    }
+
+    private var shareTrendText: String {
+        let worsening = review.trends.filter { $0.direction == .worsening }.count
+        let improving = review.trends.filter { $0.direction == .improving }.count
+        if worsening > improving { return "Trending down" }
+        if improving > worsening { return "Trending up" }
+        return "Trending steady"
+    }
+
+    private var shareTrendSystemImage: String {
+        let worsening = review.trends.filter { $0.direction == .worsening }.count
+        let improving = review.trends.filter { $0.direction == .improving }.count
+        if worsening > improving { return "arrow.down.right.circle.fill" }
+        if improving > worsening { return "arrow.up.right.circle.fill" }
+        return "equal.circle.fill"
+    }
+
     private var activeReminders: [Reminder] {
         reminders.filter(\.isActive)
     }
@@ -116,33 +148,57 @@ struct DashboardView: View {
     }
 
     private var scoreCard: some View {
-        NavigationLink {
-            ReviewScreen()
-        } label: {
-            HStack(spacing: 16) {
-                ScoreRing(score: review.score)
-                    .frame(width: 84, height: 84)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Health Score")
-                        .font(.headline)
-                    Text(review.scoreLabel)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Text("Tap for your detailed review")
-                        .font(.caption)
+        ZStack(alignment: .topTrailing) {
+            NavigationLink {
+                ReviewScreen()
+            } label: {
+                HStack(spacing: 16) {
+                    ScoreRing(score: review.score)
+                        .frame(width: 84, height: 84)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Health Score")
+                            .font(.headline)
+                        Text(review.scoreLabel)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Text("Tap for your detailed review")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
                         .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
                 }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-                    .accessibilityHidden(true)
+                .padding()
+                .glassCard()
+                .accessibilityElement(children: .combine)
             }
-            .padding()
-            .glassCard()
-            .accessibilityElement(children: .combine)
+            .buttonStyle(.plain)
+
+            // Redacted, shareable score card — see ScoreShareCard.swift.
+            // Rendered lazily (ScoreShareImage's Transferable) only when
+            // the user actually taps Share.
+            ShareLink(
+                item: ScoreShareImage(
+                    score: review.score,
+                    scoreLabel: review.scoreLabel,
+                    stats: shareStats,
+                    generatedAt: .now
+                ),
+                preview: SharePreview("MediTrack Score", image: Image(systemName: "heart.text.square.fill"))
+            ) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(8)
+                    .background(.ultraThinMaterial, in: Circle())
+                    .overlay(Circle().strokeBorder(Glass.bevelStroke, lineWidth: 1))
+            }
+            .accessibilityLabel("Share score card")
+            .padding(10)
         }
-        .buttonStyle(.plain)
     }
 
     private var remindersCard: some View {
