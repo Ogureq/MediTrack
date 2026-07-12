@@ -17,6 +17,8 @@ struct ReviewScreen: View {
     @State private var isGeneratingSummary = false
     @State private var aiError: String?
     @State private var showingAIChat = false
+    @State private var showingPaywall = false
+    @ObservedObject private var premiumStore = PremiumStore.shared
 
     private var review: HealthReview {
         AnalysisEngine.generateReview(
@@ -76,6 +78,9 @@ struct ReviewScreen: View {
         .task(id: review.score) { recordSnapshot() }
         .sheet(isPresented: $showingAIChat) {
             AIChatView(review: review, profileSummary: aiProfileSummary ?? "")
+        }
+        .sheet(isPresented: $showingPaywall) {
+            PaywallView()
         }
     }
 
@@ -178,12 +183,29 @@ struct ReviewScreen: View {
                         .foregroundStyle(.red)
                 }
                 if aiReport == nil && !isGeneratingSummary {
-                    Button {
-                        generateAISummary()
-                    } label: {
-                        Label("Generate AI Health Analyst Report", systemImage: "sparkles")
+                    if AIReportQuota.canGenerate(isPremium: premiumStore.isPremium, defaults: .standard) {
+                        Button {
+                            generateAISummary()
+                        } label: {
+                            Label("Generate AI Health Analyst Report", systemImage: "sparkles")
+                        }
+                        .buttonStyle(GlassButtonStyle())
+                        if !premiumStore.isPremium {
+                            Text("\(AIReportQuota.remaining(defaults: .standard)) of \(AIReportQuota.freeLifetimeLimit) free AI reports left")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                    } else {
+                        Button {
+                            showingPaywall = true
+                        } label: {
+                            Label("Unlock unlimited AI reports", systemImage: "crown")
+                        }
+                        .buttonStyle(GlassButtonStyle())
+                        Text("You've used your \(AIReportQuota.freeLifetimeLimit) free AI reports. Every tracking feature stays free forever.")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
                     }
-                    .buttonStyle(GlassButtonStyle())
                 }
                 Button {
                     showingAIChat = true
@@ -283,6 +305,11 @@ struct ReviewScreen: View {
                     deltas: deltas
                 )
                 Haptics.success()
+                // A free report is only spent when generation succeeds —
+                // failed or refused calls never count against the quota.
+                if !premiumStore.isPremium {
+                    AIReportQuota.recordUse(defaults: .standard)
+                }
             } catch {
                 aiError = error.localizedDescription
             }
