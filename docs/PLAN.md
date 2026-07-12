@@ -164,6 +164,12 @@ This document records the phased plan executed to build MediTrack, a privacy-fir
 - [x] Biomarker carousel — horizontally scrolling Dashboard cards, one per lab test with results (`Views/BiomarkerCarousel.swift`): latest value, sex-specific status pill via the existing catalog classification, mini sparkline, tap-through to the lab detail screen; grouping logic unit-tested
 - [x] AI usage readout — free users see "X of 3 free AI reports used" under the MediTrack Premium row in Profile
 
+## Phase 20 — Roadmap P3 Wave 1: Documents & Lifetime
+
+- [x] Documents library — More → Documents collects every report attachment into one searchable, category-filterable thumbnail grid (`Views/DocumentsView.swift`), reusing the report detail screen's AttachmentViewer for previews; pure flatten/filter logic with 19 unit tests
+- [x] Lifetime premium tier — a one-time non-consumable unlock joins the monthly/yearly subscriptions with a "One-time" paywall card; same verified-entitlement path
+- [x] Verified as already shipped: OCR plausibility guard (scan values >50× the reference upper bound are discarded) and proactive dashboard nudges (the "Needs Your Attention" section surfaces engine trend/severity findings)
+
 ## Future Milestones
 
 Not part of the current plan; captured here for future scoping:
