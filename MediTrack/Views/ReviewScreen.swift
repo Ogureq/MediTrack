@@ -20,6 +20,10 @@ struct ReviewScreen: View {
     @State private var showingAIChat = false
     @State private var showingPaywall = false
     @ObservedObject private var premiumStore = PremiumStore.shared
+    // Observed so the AI card re-evaluates `AISummaryService.isConfigured`
+    // the moment a key is added or removed in Profile — the Keychain itself
+    // is invisible to SwiftUI.
+    @ObservedObject private var aiConfig = AIConfigState.shared
 
     private var review: HealthReview {
         AnalysisEngine.generateReview(
@@ -332,6 +336,10 @@ struct ReviewScreen: View {
                 Haptics.success()
                 // A free report is only spent when generation succeeds —
                 // failed or refused calls never count against the quota.
+                // Entitlements load asynchronously on cold launch, so make
+                // sure they're resolved before deciding this user is free:
+                // a paying subscriber must never burn the trial report.
+                await premiumStore.ensureEntitlementsLoaded()
                 if !premiumStore.isPremium {
                     AIReportQuota.recordUse(defaults: .standard)
                 }

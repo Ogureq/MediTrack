@@ -110,6 +110,9 @@ enum AISummaryService {
             } else {
                 KeychainStore.delete(keychainAccount)
             }
+            // The Keychain isn't observable — nudge views gating on
+            // `isConfigured` (e.g. ReviewScreen's AI card) to re-evaluate.
+            Task { @MainActor in AIConfigState.shared.bump() }
         }
     }
 

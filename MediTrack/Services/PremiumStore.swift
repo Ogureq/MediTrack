@@ -136,6 +136,19 @@ final class PremiumStore: ObservableObject {
 
     // MARK: Entitlements
 
+    /// True once `refreshEntitlements()` has completed at least once —
+    /// before that, `isPremium == false` may just mean "not loaded yet".
+    private(set) var hasLoadedEntitlements = false
+
+    /// Awaits the first entitlement resolution if it hasn't happened yet.
+    /// Callers about to make an is-this-user-free decision (e.g. spending
+    /// the free-report quota) must call this first so a paying subscriber
+    /// on a cold launch isn't misclassified as free.
+    func ensureEntitlementsLoaded() async {
+        guard !hasLoadedEntitlements else { return }
+        await refreshEntitlements()
+    }
+
     /// Recomputes `isPremium` from `Transaction.currentEntitlements`,
     /// ignoring unverified transactions and anything that's been revoked.
     private func refreshEntitlements() async {
@@ -148,6 +161,7 @@ final class PremiumStore: ObservableObject {
             }
         }
         isPremium = active
+        hasLoadedEntitlements = true
     }
 
     /// Long-running listener for `Transaction.updates` (renewals, refunds,

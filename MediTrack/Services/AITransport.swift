@@ -23,6 +23,18 @@ import Foundation
 /// `POST /v1/ai/generate` body's `"kind"` field exactly — the raw value is
 /// sent on the wire on the relay path (the direct/BYOK path never sends a
 /// `kind`, only the caller-built `DirectSpec`).
+/// Bumped whenever an AI-availability input changes (the BYOK key is set or
+/// cleared, the relay URL changes) so SwiftUI views that gate on
+/// `AISummaryService.isConfigured` — a plain computed property over
+/// Keychain/UserDefaults that SwiftUI cannot observe — re-render and
+/// re-evaluate the gate. Views hold `@ObservedObject AIConfigState.shared`.
+@MainActor
+final class AIConfigState: ObservableObject {
+    static let shared = AIConfigState()
+    @Published private(set) var revision = 0
+    func bump() { revision += 1 }
+}
+
 enum AIRoute: String {
     case report
     case chat
