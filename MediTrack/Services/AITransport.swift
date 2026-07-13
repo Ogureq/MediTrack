@@ -141,12 +141,16 @@ enum AITransport {
         let system: String
         let maxTokens: Int
         let messages: [(role: String, text: String)]
+        /// Sampling temperature for the direct call, or nil for the API
+        /// default. Extraction pins 0 for determinism.
+        let temperature: Double?
 
-        init(model: String, system: String, maxTokens: Int, messages: [(role: String, text: String)]) {
+        init(model: String, system: String, maxTokens: Int, messages: [(role: String, text: String)], temperature: Double? = nil) {
             self.model = model
             self.system = system
             self.maxTokens = maxTokens
             self.messages = messages
+            self.temperature = temperature
         }
     }
 
@@ -432,6 +436,7 @@ enum AITransport {
     private struct DirectRequestBody: Encodable {
         let model: String
         let maxTokens: Int
+        let temperature: Double?
         let system: String
         let messages: [DirectRequestMessage]
     }
@@ -468,6 +473,7 @@ enum AITransport {
             request.httpBody = try bodyEncoder.encode(DirectRequestBody(
                 model: spec.model,
                 maxTokens: spec.maxTokens,
+                temperature: spec.temperature,
                 system: spec.system,
                 messages: messages
             ))

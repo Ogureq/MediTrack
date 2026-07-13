@@ -41,7 +41,6 @@ enum QuickAddAIError: LocalizedError {
 
 enum QuickAddAIService {
 
-    private static let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
     private static let model = "claude-haiku-4-5-20251001"
 
     private static let singleMaxTokens = 300
@@ -123,46 +122,18 @@ enum QuickAddAIService {
         from 1 to 10.
         """
 
-    // MARK: Request/response envelope (mirrors AISummaryService's call style)
-
-    private struct RequestMessage: Encodable {
-        let role: String
-        let content: String
+    /// The relay's `"extract"` input shape (see the wire contract in
+    /// AITransport.swift): the raw sentence plus today's date so relative
+    /// phrases resolve server-side.
+    private struct ExtractInput: Encodable {
+        let text: String
+        let today: String
     }
 
-    private struct RequestBody: Encodable {
-        let model: String
-        let maxTokens: Int
-        let temperature: Double
-        let system: String
-        let messages: [RequestMessage]
-    }
-
-    private struct ContentBlock: Decodable {
-        let type: String
-        let text: String?
-    }
-
-    private struct ResponseBody: Decodable {
-        let content: [ContentBlock]
-        let stopReason: String?
-    }
-
-    private struct APIErrorBody: Decodable {
-        struct Inner: Decodable { let message: String }
-        let error: Inner
-    }
-
-    /// Tolerates a fenced ```json ... ``` wrapper, same as `AISummaryService.stripCodeFence`.
+    /// Tolerates a fenced ```json ... ``` wrapper. Forwards to the single
+    /// shared implementation in `AITransport`.
     static func stripCodeFence(_ text: String) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.hasPrefix("```") else { return trimmed }
-        var lines = trimmed.components(separatedBy: .newlines)
-        if !lines.isEmpty { lines.removeFirst() }
-        if let last = lines.last, last.trimmingCharacters(in: .whitespaces).hasPrefix("```") {
-            lines.removeLast()
-        }
-        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        AITransport.stripCodeFence(text)
     }
 
     // MARK: JSON → QuickAddDraft (pure, unit-testable, no networking)
@@ -293,68 +264,31 @@ enum QuickAddAIService {
     /// `completeBatch` (multiple drafts) — identical request construction,
     /// HTTP/refusal handling, and response-text extraction; only the system
     /// prompt and token budget differ between the two callers.
+    /// Routes one extraction request through the shared transport: the
+    /// relay (server-owned prompt and model) when configured, otherwise the
+    /// direct BYOK Messages call built from this file's own prompt.
+    /// Transport failures propagate as `AITransportError` (a `LocalizedError`
+    /// with user-presentable messages); parsing/validation failures below
+    /// stay `QuickAddAIError`.
     private static func send(system: String, maxTokens: Int, userText: String) async throws -> Data {
-        guard let key = AISummaryService.apiKey, !key.isEmpty else {
-            throw QuickAddAIError.missingKey
-        }
-
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 30
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.setValue(key, forHTTPHeaderField: "x-api-key")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-
-        let bodyEncoder = JSONEncoder()
-        bodyEncoder.keyEncodingStrategy = .convertToSnakeCase
-        request.httpBody = try bodyEncoder.encode(RequestBody(
+        let input = ExtractInput(text: String(userText.prefix(1_000)), today: isoDay(from: .now))
+        let spec = AITransport.DirectSpec(
             model: model,
-            maxTokens: maxTokens,
-            temperature: 0,
             system: system,
-            messages: [RequestMessage(role: "user", content: userText)]
-        ))
+            maxTokens: maxTokens,
+            messages: [(role: "user", text: userText)],
+            temperature: 0
+        )
+        let text = try await AITransport.generate(route: .extract, input: input, direct: spec)
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw QuickAddAIError.badResponse }
+        return Data(trimmed.utf8)
+    }
 
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await URLSession.shared.data(for: request)
-        } catch {
-            throw QuickAddAIError.badResponse
-        }
-        guard let http = response as? HTTPURLResponse else {
-            throw QuickAddAIError.badResponse
-        }
-        guard (200..<300).contains(http.statusCode) else {
-            let message = (try? JSONDecoder().decode(APIErrorBody.self, from: data))?
-                .error.message ?? "no details"
-            throw QuickAddAIError.http(http.statusCode, message)
-        }
-
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        let decoded: ResponseBody
-        do {
-            decoded = try decoder.decode(ResponseBody.self, from: data)
-        } catch {
-            throw QuickAddAIError.badResponse
-        }
-
-        // Check the stop reason before reading content: a safety refusal
-        // returns HTTP 200 with an empty or partial content array.
-        if decoded.stopReason == "refusal" {
-            throw QuickAddAIError.refused
-        }
-
-        let responseText = decoded.content
-            .filter { $0.type == "text" }
-            .compactMap(\.text)
-            .joined(separator: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !responseText.isEmpty, let responseData = responseText.data(using: .utf8) else {
-            throw QuickAddAIError.badResponse
-        }
-        return responseData
+    /// "YYYY-MM-DD" for the relay's `today` field, in the user's calendar.
+    private static func isoDay(from date: Date) -> String {
+        let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 2000, parts.month ?? 1, parts.day ?? 1)
     }
 
     /// Sends `text` to the Anthropic Messages API and maps the response to a
@@ -363,7 +297,16 @@ enum QuickAddAIService {
     /// — so the caller can uniformly fall back to manual entry.
     static func complete(_ text: String) async throws -> QuickAddDraft {
         let responseData = try await send(system: systemPrompt(now: .now), maxTokens: singleMaxTokens, userText: text)
-        return try draft(fromJSON: responseData)
+        do {
+            return try draft(fromJSON: responseData)
+        } catch {
+            // The relay's server-side extract prompt may answer with an
+            // array even for a single item — accept its first valid draft.
+            if let list = try? drafts(fromJSON: responseData), let first = list.first {
+                return first
+            }
+            throw error
+        }
     }
 
     /// Sends `text` (a whole sentence or paragraph that may describe several
@@ -373,6 +316,15 @@ enum QuickAddAIService {
     /// itself has no notion of entitlement.
     static func completeBatch(_ text: String) async throws -> [QuickAddDraft] {
         let responseData = try await send(system: batchSystemPrompt(now: .now), maxTokens: batchMaxTokens, userText: text)
-        return try drafts(fromJSON: responseData)
+        do {
+            return try drafts(fromJSON: responseData)
+        } catch {
+            // Tolerate a single-object reply (the relay owns one extract
+            // prompt; either shape must work on both paths).
+            if let one = try? draft(fromJSON: responseData) {
+                return [one]
+            }
+            throw error
+        }
     }
 }
