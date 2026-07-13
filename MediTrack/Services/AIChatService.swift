@@ -35,27 +35,64 @@ enum AIChatError: LocalizedError {
     case badResponse
     case refused
     case http(Int, String)
+    case unauthorized
+    case premiumRequired
+    case quotaExceeded
+    case network(Error)
 
     var errorDescription: String? {
         switch self {
         case .missingKey:
-            "Add your Anthropic API key in Profile & Settings first."
+            "Add your Anthropic API key in Profile & Settings, or check back once the hosted AI service is available."
         case .badResponse:
             "The AI service returned an unexpected response."
         case .refused:
             "The AI declined to answer that question."
         case .http(let status, let message):
             "AI request failed (\(status)): \(message)"
+        case .unauthorized:
+            "Your AI session couldn't be verified. Please try again."
+        case .premiumRequired:
+            "This AI feature is part of MediTrack Premium."
+        case .quotaExceeded:
+            "The AI service has reached today's usage limit. Please try again tomorrow."
+        case .network(let error):
+            "Couldn't reach the AI service: \(error.localizedDescription)"
+        }
+    }
+
+    /// Maps a thrown `AITransportError` (from `AITransport.generate`) onto
+    /// this service's own error type, so callers keep catching `AIChatError`
+    /// exactly as before regardless of which transport (relay or
+    /// direct/BYOK) actually served the request.
+    static func from(_ error: Error) -> AIChatError {
+        guard let transportError = error as? AITransportError else {
+            return (error as? AIChatError) ?? .badResponse
+        }
+        switch transportError {
+        case .notConfigured: return .missingKey
+        case .unauthorized: return .unauthorized
+        case .premiumRequired: return .premiumRequired
+        case .quotaExceeded: return .quotaExceeded
+        case .refused: return .refused
+        case .badResponse: return .badResponse
+        case .http(let status, let message): return .http(status, message)
+        case .network(let underlying): return .network(underlying)
         }
     }
 }
 
 enum AIChatService {
 
-    private static let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
+    /// Model used only on the direct/BYOK fallback path — on the relay
+    /// path the server owns model choice. See `AITransport.DirectSpec`.
     private static let model = "claude-sonnet-5"
     private static let maxTokens = 700
     private static let historyLimit = 12
+
+    /// The relay wire contract's cap on the `"context"` field of a `"chat"`
+    /// request — see `cappedContext(_:limit:)`.
+    static let contextCharacterLimit = 8000
 
     /// System-prompt rules: the assistant is an educational health
     /// companion, may only discuss the data in the provided context, must
@@ -134,35 +171,31 @@ enum AIChatService {
         return trimmed
     }
 
-    // MARK: Request/response shapes (Messages API envelope)
+    /// Truncates `context` to at most `limit` characters (defaulting to the
+    /// relay wire contract's `"context"` cap of 8000), keeping the start of
+    /// the text — `buildContext` front-loads the score and findings before
+    /// less critical detail, so a prefix truncation keeps the most
+    /// important facts. Pure and unit-testable, no networking.
+    static func cappedContext(_ context: String, limit: Int = contextCharacterLimit) -> String {
+        guard context.count > limit else { return context }
+        return String(context.prefix(limit))
+    }
 
-    private struct RequestMessage: Encodable {
+    // MARK: Relay input shape ("chat" kind)
+
+    /// One turn as sent to the relay's `POST /v1/ai/generate` `"chat"`
+    /// input — `{"role": "user"|"assistant", "text": "..."}`.
+    struct ChatTurn: Encodable, Sendable, Equatable {
         let role: String
-        let content: String
+        let text: String
     }
 
-    private struct RequestBody: Encodable {
-        let model: String
-        let maxTokens: Int
-        let system: String
-        let messages: [RequestMessage]
-    }
-
-    private struct ContentBlock: Decodable {
-        let type: String
-        let text: String?
-    }
-
-    private struct ResponseBody: Decodable {
-        let content: [ContentBlock]
-        let stopReason: String?
-    }
-
-    private struct APIErrorBody: Decodable {
-        struct Inner: Decodable {
-            let message: String
-        }
-        let error: Inner
+    /// The relay's `"chat"` input shape — `{"context": String, "messages":
+    /// [ChatTurn]}`, capped client-side to the wire contract's ≤8000-char
+    /// context / ≤12-message limits before this is built.
+    struct ChatInput: Encodable, Sendable, Equatable {
+        let context: String
+        let messages: [ChatTurn]
     }
 
     // MARK: Call
@@ -175,63 +208,31 @@ enum AIChatService {
     /// or a malformed response — so callers can show an inline error while
     /// keeping the rest of the conversation intact.
     static func reply(history: [AIChatMessage], context: String) async throws -> String {
-        guard let key = AISummaryService.apiKey, !key.isEmpty else {
-            throw AIChatError.missingKey
-        }
-
         let trimmed = trimmedHistory(history, limit: historyLimit)
-        let messages = trimmed.map {
-            RequestMessage(role: $0.role == .user ? "user" : "assistant", content: $0.text)
-        }
-        guard !messages.isEmpty else {
+        guard !trimmed.isEmpty else {
             throw AIChatError.badResponse
         }
+        let boundedContext = cappedContext(context)
 
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 60
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.setValue(key, forHTTPHeaderField: "x-api-key")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-
-        let bodyEncoder = JSONEncoder()
-        bodyEncoder.keyEncodingStrategy = .convertToSnakeCase
-        request.httpBody = try bodyEncoder.encode(RequestBody(
+        // On the relay path `input` (context + trimmed turns) is what's
+        // sent — the relay owns model/system prompt. On the direct/BYOK
+        // fallback path, `direct` supplies both, exactly as this service
+        // built them before the transport was shared.
+        let direct = AITransport.DirectSpec(
             model: model,
+            system: systemPrompt(context: boundedContext),
             maxTokens: maxTokens,
-            system: systemPrompt(context: context),
-            messages: messages
-        ))
+            messages: trimmed.map { (role: $0.role == .user ? "user" : "assistant", text: $0.text) }
+        )
+        let input = ChatInput(
+            context: boundedContext,
+            messages: trimmed.map { ChatTurn(role: $0.role == .user ? "user" : "assistant", text: $0.text) }
+        )
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw AIChatError.badResponse
+        do {
+            return try await AITransport.generate(route: .chat, input: input, direct: direct)
+        } catch {
+            throw AIChatError.from(error)
         }
-        guard (200..<300).contains(http.statusCode) else {
-            let message = (try? JSONDecoder().decode(APIErrorBody.self, from: data))?
-                .error.message ?? "no details"
-            throw AIChatError.http(http.statusCode, message)
-        }
-
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        let decoded = try decoder.decode(ResponseBody.self, from: data)
-
-        // Check the stop reason before reading content: a safety refusal
-        // returns HTTP 200 with an empty or partial content array.
-        if decoded.stopReason == "refusal" {
-            throw AIChatError.refused
-        }
-
-        let text = decoded.content
-            .filter { $0.type == "text" }
-            .compactMap(\.text)
-            .joined(separator: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else {
-            throw AIChatError.badResponse
-        }
-
-        return text
     }
 }

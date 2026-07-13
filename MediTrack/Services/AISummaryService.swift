@@ -16,17 +16,49 @@ enum AISummaryError: LocalizedError {
     case badResponse
     case refused
     case http(Int, String)
+    case unauthorized
+    case premiumRequired
+    case quotaExceeded
+    case network(Error)
 
     var errorDescription: String? {
         switch self {
         case .missingKey:
-            "Add your Anthropic API key in Profile & Settings first."
+            "Add your Anthropic API key in Profile & Settings, or check back once the hosted AI service is available."
         case .badResponse:
             "The AI service returned an unexpected response."
         case .refused:
             "The AI declined to summarize this content."
         case .http(let status, let message):
             "AI request failed (\(status)): \(message)"
+        case .unauthorized:
+            "Your AI session couldn't be verified. Please try again."
+        case .premiumRequired:
+            "This AI feature is part of MediTrack Premium."
+        case .quotaExceeded:
+            "The AI service has reached today's usage limit. Please try again tomorrow."
+        case .network(let error):
+            "Couldn't reach the AI service: \(error.localizedDescription)"
+        }
+    }
+
+    /// Maps a thrown `AITransportError` (from `AITransport.generate`) onto
+    /// this service's own error type, so callers keep catching
+    /// `AISummaryError` exactly as before regardless of which transport
+    /// (relay or direct/BYOK) actually served the request.
+    static func from(_ error: Error) -> AISummaryError {
+        guard let transportError = error as? AITransportError else {
+            return (error as? AISummaryError) ?? .badResponse
+        }
+        switch transportError {
+        case .notConfigured: return .missingKey
+        case .unauthorized: return .unauthorized
+        case .premiumRequired: return .premiumRequired
+        case .quotaExceeded: return .quotaExceeded
+        case .refused: return .refused
+        case .badResponse: return .badResponse
+        case .http(let status, let message): return .http(status, message)
+        case .network(let underlying): return .network(underlying)
         }
     }
 }
@@ -81,8 +113,13 @@ enum AISummaryService {
         }
     }
 
+    /// Whether AI features are reachable right now — the relay is
+    /// configured, or the user has a BYOK key. UI (`ReviewScreen`,
+    /// `AIChatView`, `QuickAddView`) gates AI entry points off this rather
+    /// than the presence of a key alone, so a relay-only build (no key
+    /// ever entered) still shows the AI features.
     static var isConfigured: Bool {
-        !(apiKey ?? "").isEmpty
+        AITransport.isAvailable
     }
 
     /// Moves a legacy plaintext key out of UserDefaults and into the
@@ -95,7 +132,8 @@ enum AISummaryService {
         UserDefaults.standard.removeObject(forKey: apiKeyDefaultsKey)
     }
 
-    private static let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
+    /// Model used only on the direct/BYOK fallback path — on the relay
+    /// path the server owns model choice. See `AITransport.DirectSpec`.
     private static let model = "claude-opus-4-8"
 
     /// Persona, hard safety rails, and the exact input/output JSON shape.
@@ -132,40 +170,9 @@ enum AISummaryService {
         "doctorQuestions": [String] }
         """
 
-    // MARK: Request/response shapes (Messages API envelope)
-
-    private struct RequestMessage: Encodable {
-        let role: String
-        let content: String
-    }
-
-    private struct RequestBody: Encodable {
-        let model: String
-        let maxTokens: Int
-        let system: String
-        let messages: [RequestMessage]
-    }
-
-    private struct ContentBlock: Decodable {
-        let type: String
-        let text: String?
-    }
-
-    private struct ResponseBody: Decodable {
-        let content: [ContentBlock]
-        let stopReason: String?
-    }
-
-    private struct APIErrorBody: Decodable {
-        struct Inner: Decodable {
-            let message: String
-        }
-        let error: Inner
-    }
-
     // MARK: Structured input payload (our own schema, sent as the user message text)
 
-    struct FindingPayload: Encodable, Equatable {
+    struct FindingPayload: Encodable, Equatable, Sendable {
         let id: String
         let severity: String
         let category: String
@@ -173,7 +180,7 @@ enum AISummaryService {
         let detail: String
     }
 
-    struct LabValuePayload: Encodable, Equatable {
+    struct LabValuePayload: Encodable, Equatable, Sendable {
         let id: String
         let name: String
         let value: Double
@@ -181,7 +188,7 @@ enum AISummaryService {
         let status: String
     }
 
-    struct ReportInput: Encodable, Equatable {
+    struct ReportInput: Encodable, Equatable, Sendable {
         let score: Int
         let scoreLabel: String
         let profileSummary: String?
@@ -315,21 +322,12 @@ enum AISummaryService {
 
     // MARK: Parsing the model's JSON response
 
-    /// Tolerates a fenced ```json ... ``` wrapper, which models sometimes
-    /// emit even when asked to respond with raw JSON only.
-    static func stripCodeFence(_ text: String) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.hasPrefix("```") else { return trimmed }
-        var lines = trimmed.components(separatedBy: .newlines)
-        if !lines.isEmpty { lines.removeFirst() }
-        if let last = lines.last, last.trimmingCharacters(in: .whitespaces).hasPrefix("```") {
-            lines.removeLast()
-        }
-        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
     static func parseReportJSON(_ raw: String) throws -> AIHealthReport {
-        let cleaned = stripCodeFence(raw)
+        // Tolerates a fenced ```json ... ``` wrapper, which models
+        // sometimes emit even when asked to respond with raw JSON only.
+        // Shared with `AIChatService` and the direct/BYOK path in
+        // `AITransport` via `AITransport.stripCodeFence`.
+        let cleaned = AITransport.stripCodeFence(raw)
         guard let data = cleaned.data(using: .utf8) else {
             throw AISummaryError.badResponse
         }
@@ -366,58 +364,28 @@ enum AISummaryService {
         profileSummary: String? = nil,
         deltas: [String] = []
     ) async throws -> AIHealthReport {
-        guard let key = apiKey, !key.isEmpty else {
-            throw AISummaryError.missingKey
-        }
-
         let input = buildReportInput(review: review, profileSummary: profileSummary, deltas: deltas)
         let inputData = try JSONEncoder().encode(input)
         guard let inputJSON = String(data: inputData, encoding: .utf8) else {
             throw AISummaryError.badResponse
         }
 
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 90
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.setValue(key, forHTTPHeaderField: "x-api-key")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-
-        let bodyEncoder = JSONEncoder()
-        bodyEncoder.keyEncodingStrategy = .convertToSnakeCase
-        request.httpBody = try bodyEncoder.encode(RequestBody(
+        // On the relay path `input` (the structured, engine-derived JSON)
+        // is what's sent — the relay owns model/system prompt. On the
+        // direct/BYOK fallback path, `direct` supplies both, exactly as
+        // this service built them before the transport was shared.
+        let direct = AITransport.DirectSpec(
             model: model,
-            maxTokens: 1536,
             system: reportSystemPrompt,
-            messages: [RequestMessage(role: "user", content: inputJSON)]
-        ))
+            maxTokens: 1536,
+            messages: [(role: "user", text: inputJSON)]
+        )
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw AISummaryError.badResponse
-        }
-        guard (200..<300).contains(http.statusCode) else {
-            let message = (try? JSONDecoder().decode(APIErrorBody.self, from: data))?
-                .error.message ?? "no details"
-            throw AISummaryError.http(http.statusCode, message)
-        }
-
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        let decoded = try decoder.decode(ResponseBody.self, from: data)
-
-        // Check the stop reason before reading content: a safety refusal
-        // returns HTTP 200 with an empty or partial content array.
-        if decoded.stopReason == "refusal" {
-            throw AISummaryError.refused
-        }
-        let text = decoded.content
-            .filter { $0.type == "text" }
-            .compactMap(\.text)
-            .joined(separator: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else {
-            throw AISummaryError.badResponse
+        let text: String
+        do {
+            text = try await AITransport.generate(route: .report, input: input, direct: direct)
+        } catch {
+            throw AISummaryError.from(error)
         }
 
         let report = try parseReportJSON(text)
