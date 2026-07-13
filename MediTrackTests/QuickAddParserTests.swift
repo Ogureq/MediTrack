@@ -69,6 +69,35 @@ final class QuickAddParserTests: XCTestCase {
         XCTAssertNil(extracted?.secondary)
     }
 
+    // MARK: Vitals — weight (BUG 1 regression)
+    //
+    // `parseWeight` used to grab `numbers(in: lower).first` over the *whole*
+    // input rather than slicing after the matched keyword/unit like every
+    // sibling parser, so a leading unrelated number (e.g. a day count) was
+    // saved instead of the actual weight reading.
+
+    func testWeightBugFixIgnoresUnrelatedLeadingNumber() {
+        XCTAssertEqual(parse("day 92 weight 70 kg"), .vital(type: .weight, value: 70, secondary: nil))
+    }
+
+    func testWeightBareKeywordAndNumberStillWorks() {
+        XCTAssertEqual(parse("weight 70"), .vital(type: .weight, value: 70, secondary: nil))
+    }
+
+    func testWeightBareNumberAndUnitStillWorks() {
+        XCTAssertEqual(parse("70 kg"), .vital(type: .weight, value: 70, secondary: nil))
+    }
+
+    func testWeightBugFixDoesNotChangePriorityOverMedication() {
+        // The bp branch still wins over anything weight-shaped later in the
+        // string, confirming the weight fix didn't disturb vital > medication
+        // priority ordering.
+        XCTAssertEqual(
+            parse("bp 128/82 after taking aspirin 100mg"),
+            .vital(type: .bloodPressure, value: 128, secondary: 82)
+        )
+    }
+
     // MARK: Vitals — heart rate
 
     func testHeartRateShortForm() {
@@ -249,6 +278,32 @@ final class QuickAddParserTests: XCTestCase {
         // "now" is Wednesday Jan 1, 2025 — the next Monday is Jan 6.
         let expected = try date(year: 2025, month: 1, day: 6, hour: 10)
         XCTAssertEqual(parse("appointment on monday"), .appointment(title: "Appointment", date: expected))
+    }
+
+    // MARK: Appointments — clock time (BUG 2 regression)
+    //
+    // `resolveTime`/`parseClockTime` used to lock onto the *first* "at" in
+    // the text and match "am"/"pm" anywhere in the remaining tail, so an
+    // earlier unrelated "at" (e.g. a room number) hijacked the hour and a
+    // later "pm" was still applied to it. The fix prefers the *last* "at"
+    // whose following token actually parses as a clock time.
+
+    func testAppointmentBugFixPrefersLastAtOverEarlierUnrelatedAt() throws {
+        // "now" is Jan 1, 2025 09:00 UTC and there's no relative-date phrase
+        // here, so the date stays on "now" — only the *time* is under test.
+        // The old buggy `resolveTime` locked onto the first "at" (before
+        // "conference room 2"), read "2" as the hour, then found "pm" later
+        // in the tail and applied it, producing 14:00 instead of 17:00.
+        let expected = try date(year: 2025, month: 1, day: 1, hour: 17)
+        XCTAssertEqual(
+            parse("appointment at conference room 2 at 5pm"),
+            .appointment(title: "Appointment conference room", date: expected)
+        )
+    }
+
+    func testAppointmentTomorrowAtThreePMUnchanged() throws {
+        let expected = try date(year: 2025, month: 1, day: 2, hour: 15)
+        XCTAssertEqual(parse("dentist tomorrow at 3pm"), .appointment(title: "Dentist", date: expected))
     }
 
     // MARK: Reminders

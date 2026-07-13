@@ -2,22 +2,28 @@ import SwiftUI
 import SwiftData
 import UIKit
 
-/// Quick Add: a single text field where the user types a natural sentence
-/// ("aspirin 100mg twice daily"), sees a live preview of what
-/// `QuickAddParser` understood, and confirms. When the deterministic parser
-/// can't confidently interpret the text, an optional "Fill with AI" button
-/// (shown only when an Anthropic API key is configured) offers
-/// `QuickAddAIService` as a fallback. Either path produces the same
-/// `QuickAddDraft`, which `save()` maps onto the matching SwiftData model.
+/// Quick Add: a multi-line text field where the user types (or dictates) a
+/// whole sentence or paragraph, sees a live preview of what the free,
+/// on-device `QuickAddParser` understood, and confirms. AI is the premium,
+/// AI-first path on top of that: it can turn the *same* text into either one
+/// richer draft or several — "weighed 82kg, bp 130/85, slept 6h" becomes
+/// three ready-to-confirm records — via `QuickAddAIService`. Non-premium
+/// users see the same sparkles button with a lock badge; tapping it presents
+/// `PaywallView`. Every path (deterministic, single-AI, batch-AI) ultimately
+/// produces `QuickAddDraft`s, which `insert(_:)` maps onto the matching
+/// SwiftData model.
 struct QuickAddView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @ObservedObject private var premiumStore = PremiumStore.shared
 
     @State private var text = ""
     @State private var draft: QuickAddDraft?
     @State private var isAIFilled = false
+    @State private var batchDrafts: [BatchDraftItem] = []
     @State private var isLoadingAI = false
     @State private var aiErrorMessage: String?
+    @State private var showingPaywall = false
     @FocusState private var isFieldFocused: Bool
 
     private static let examples = ["bp 128/82", "headache severity 6", "dentist tomorrow 3pm"]
@@ -26,14 +32,27 @@ struct QuickAddView: View {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// The deterministic parser failed, but the text looks like a genuine
-    /// attempt rather than a stray keystroke — worth offering the AI fallback.
+    /// Worth offering the AI button rather than a stray keystroke or a
+    /// single already-recognized word.
     private var looksLikeAnAttempt: Bool {
         trimmedText.count >= 12 || trimmedText.split(separator: " ").count >= 3
     }
 
+    /// Shown whenever the text looks like a genuine attempt — even when the
+    /// deterministic parser already produced a single-item preview, since
+    /// AI may still find *more* items in the same text (e.g. a sentence
+    /// listing several vitals, of which the on-device parser only catches
+    /// the first). Hidden while a batch result is already on screen or a
+    /// request is in flight.
     private var showsAIButton: Bool {
-        draft == nil && !isLoadingAI && looksLikeAnAttempt && AISummaryService.isConfigured
+        !isLoadingAI && looksLikeAnAttempt && batchDrafts.isEmpty
+    }
+
+    /// Heuristic for whether the text plausibly contains multiple items:
+    /// a list-like separator, or the deterministic parser only managing to
+    /// interpret (or find) a single thing out of what might be more.
+    private var looksLikeMultipleItems: Bool {
+        trimmedText.contains(",") || trimmedText.contains(" and ") || trimmedText.contains("\n") || draft == nil
     }
 
     var body: some View {
@@ -43,13 +62,17 @@ struct QuickAddView: View {
                     QuickAddHeader()
 
                     VStack(alignment: .leading, spacing: 12) {
-                        TextField("Try: aspirin 100mg twice daily", text: $text, axis: .vertical)
-                            .font(.system(.title3, design: .rounded, weight: .semibold))
-                            .lineLimit(1...3)
-                            .focused($isFieldFocused)
-                            .submitLabel(.done)
-                            .accessibilityLabel("Quick add text")
-                            .accessibilityHint("Describe a medication, vital, symptom, appointment, or reminder in a sentence.")
+                        TextField(
+                            "Try: weighed 82kg, bp 130/85, slept 6h, took aspirin 100mg",
+                            text: $text,
+                            axis: .vertical
+                        )
+                        .font(.system(.title3, design: .rounded, weight: .semibold))
+                        .lineLimit(1...4)
+                        .focused($isFieldFocused)
+                        .submitLabel(.done)
+                        .accessibilityLabel("Quick add text")
+                        .accessibilityHint("Describe one or more medications, vitals, symptoms, appointments, or reminders in a sentence or paragraph.")
 
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
@@ -74,6 +97,10 @@ struct QuickAddView: View {
                                 removal: .opacity
                             ))
                     }
+
+                    if !batchDrafts.isEmpty {
+                        batchSection
+                    }
                 }
                 .padding()
             }
@@ -97,6 +124,39 @@ struct QuickAddView: View {
         .onChange(of: text) { _, newValue in
             handleTextChange(newValue)
         }
+        .sheet(isPresented: $showingPaywall) {
+            PaywallView()
+        }
+    }
+
+    // MARK: - Batch review section
+
+    @ViewBuilder
+    private var batchSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(batchDrafts) { item in
+                QuickAddBatchPreviewCard(draft: item.draft) {
+                    removeBatchItem(item.id)
+                }
+            }
+
+            Button(action: saveBatch) {
+                Label("Add \(batchDrafts.count) item\(batchDrafts.count == 1 ? "" : "s")", systemImage: "checkmark.circle.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(QuickAddAIButtonStyle())
+            .accessibilityLabel("Add \(batchDrafts.count) item\(batchDrafts.count == 1 ? "" : "s")")
+        }
+        .transition(.asymmetric(
+            insertion: .scale(scale: 0.94).combined(with: .opacity),
+            removal: .opacity
+        ))
+    }
+
+    private func removeBatchItem(_ id: UUID) {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            batchDrafts.removeAll { $0.id == id }
+        }
     }
 
     @ViewBuilder
@@ -113,11 +173,26 @@ struct QuickAddView: View {
             .accessibilityElement(children: .combine)
         } else if showsAIButton {
             Button(action: fillWithAI) {
-                Label("Fill with AI", systemImage: "sparkles")
+                ZStack(alignment: .topTrailing) {
+                    Label("Fill with AI", systemImage: "sparkles")
+                    if !premiumStore.isPremium {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(4)
+                            .background(Circle().fill(.orange))
+                            .offset(x: 10, y: -10)
+                            .accessibilityHidden(true)
+                    }
+                }
             }
             .buttonStyle(QuickAddAIButtonStyle())
-            .accessibilityLabel("Fill with AI")
-            .accessibilityHint("Asks the AI to interpret this text since it couldn't be recognized automatically.")
+            .accessibilityLabel(premiumStore.isPremium ? "Fill with AI" : "Fill with AI. Premium feature, locked")
+            .accessibilityHint(
+                premiumStore.isPremium
+                    ? "Asks the AI to turn this text into one or more ready-to-confirm entries."
+                    : "Opens the premium upgrade screen to unlock AI-assisted entry."
+            )
         }
 
         if let aiErrorMessage {
@@ -134,19 +209,42 @@ struct QuickAddView: View {
         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
             draft = parsed
             isAIFilled = false
+            batchDrafts = []
         }
     }
 
+    /// AI is premium-only. A non-premium tap opens the paywall instead of
+    /// calling the network; the deterministic parser above stays free
+    /// regardless. Once premium, the heuristic in `looksLikeMultipleItems`
+    /// decides whether to ask for one draft or a batch — either way, an
+    /// unconfigured API key surfaces the same `QuickAddAIError.missingKey`
+    /// message via `aiErrorMessage` that `complete`/`completeBatch` already throw.
     private func fillWithAI() {
+        guard premiumStore.isPremium else {
+            showingPaywall = true
+            return
+        }
+
         let query = trimmedText
+        let wantsBatch = looksLikeMultipleItems
         isLoadingAI = true
         aiErrorMessage = nil
         Task {
             do {
-                let result = try await QuickAddAIService.complete(query)
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    draft = result
-                    isAIFilled = true
+                if wantsBatch {
+                    let results = try await QuickAddAIService.completeBatch(query)
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        batchDrafts = results.map { BatchDraftItem(draft: $0) }
+                        draft = nil
+                        isAIFilled = false
+                    }
+                } else {
+                    let result = try await QuickAddAIService.complete(query)
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        draft = result
+                        isAIFilled = true
+                        batchDrafts = []
+                    }
                 }
                 isLoadingAI = false
             } catch {
@@ -157,14 +255,13 @@ struct QuickAddView: View {
         }
     }
 
-    /// Maps the confirmed draft onto the matching `@Model` initializer.
+    /// Maps one confirmed draft onto the matching `@Model` initializer.
     /// Vitals are already in canonical metric units, coming straight from
     /// `QuickAddParser`/`QuickAddAIService`. Every case creates a standalone
     /// top-level model — Quick Add never touches an optional-relationship
     /// child (e.g. `ReminderCompletion`), so there's nothing to insert
     /// before appending.
-    private func save() {
-        guard let draft else { return }
+    private func insert(_ draft: QuickAddDraft) {
         switch draft {
         case let .medication(name, dosage, frequency):
             modelContext.insert(Medication(name: name, dosage: dosage, frequency: frequency))
@@ -181,9 +278,32 @@ struct QuickAddView: View {
         case let .reminder(title, time):
             modelContext.insert(Reminder(title: title, timeOfDay: time))
         }
+    }
+
+    private func save() {
+        guard let draft else { return }
+        insert(draft)
         Haptics.success()
         dismiss()
     }
+
+    private func saveBatch() {
+        guard !batchDrafts.isEmpty else { return }
+        for item in batchDrafts {
+            insert(item.draft)
+        }
+        Haptics.success()
+        dismiss()
+    }
+}
+
+/// One AI-produced draft awaiting confirmation in the batch review list.
+/// Wrapped in a stable `UUID` (rather than using `QuickAddDraft` itself,
+/// which is only `Equatable`) so `ForEach`/removal work correctly even when
+/// two drafts happen to be identical (e.g. two "took aspirin 100mg" lines).
+private struct BatchDraftItem: Identifiable {
+    let id = UUID()
+    let draft: QuickAddDraft
 }
 
 // MARK: - Header
@@ -311,6 +431,66 @@ private struct QuickAddPreviewCard: View {
         .accessibilityLabel(
             display.accessibilitySummary + (isAIFilled ? ". AI filled, please double-check." : "")
         )
+    }
+}
+
+/// One row in the multi-draft AI review list (`QuickAddView.batchSection`).
+/// Reuses `QuickAddPreviewCard`'s visual language (icon, tint, pill, primary
+/// text, detail lines, AI-filled caption) but adds a per-item remove button,
+/// since a batch result may include an item the user doesn't want to keep.
+///
+/// Unlike `QuickAddPreviewCard`, only the descriptive content is combined
+/// into a single accessibility element — the remove button is left as its
+/// own reachable, separately labeled element rather than swallowed into the
+/// card's combined label.
+private struct QuickAddBatchPreviewCard: View {
+    let draft: QuickAddDraft
+    let onRemove: () -> Void
+
+    private var display: QuickAddPreviewDisplay { QuickAddPreviewDisplay(draft: draft) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: display.icon)
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(display.tint.gradient, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    StatusPill(text: display.typeLabel, color: display.tint)
+                    Text(display.primaryText)
+                        .font(.title3.bold())
+                    ForEach(display.detailLines, id: \.self) { line in
+                        Text(line)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(display.accessibilitySummary + ". AI filled, please double-check.")
+
+                Spacer(minLength: 0)
+
+                Button(action: onRemove) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove \(display.typeLabel) item")
+            }
+
+            Label("AI-filled — please double-check. Educational, not diagnostic.", systemImage: "sparkles")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard()
     }
 }
 

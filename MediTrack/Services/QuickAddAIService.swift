@@ -1,17 +1,20 @@
 import Foundation
 
-// MARK: - AI-assisted Quick Add fallback (opt-in)
+// MARK: - AI-assisted Quick Add (premium)
 //
-// When `QuickAddParser` (a deterministic, no-network keyword matcher) can't
-// confidently interpret a Quick Add line, the UI may offer this AI fallback
-// instead. It reuses the same opt-in, Keychain-backed Anthropic API key as
-// `AISummaryService` (`AISummaryService.apiKey` / `.isConfigured`) and the
-// same Messages API call style, including the `stop_reason == "refusal"`
-// check. Only the user's typed sentence is sent — never the on-device
-// database. The model's job is purely to structure the sentence into one of
-// five shapes; `draft(fromJSON:now:calendar:)` independently re-validates
-// every value against the same plausibility bounds `QuickAddParser` uses, so
-// a hallucinated number can never reach SwiftData.
+// `QuickAddParser` (a deterministic, no-network keyword matcher) stays free
+// and handles one line at a time. This service is the premium, AI-first
+// path: it can turn a whole sentence or paragraph into either one
+// (`complete`) or several (`completeBatch`) structured drafts. It reuses the
+// same opt-in, Keychain-backed Anthropic API key as `AISummaryService`
+// (`AISummaryService.apiKey` / `.isConfigured`) and the same Messages API
+// call style, including the `stop_reason == "refusal"` check. Only the
+// user's typed text is sent — never the on-device database. The model's job
+// is purely to structure the text into one of five shapes (or, for the
+// batch endpoint, an array of them); `draft(fromJSON:)` / `drafts(fromJSON:)`
+// independently re-validate every value against `VitalPlausibility` — the
+// same bounds `QuickAddParser` uses — so a hallucinated number can never
+// reach SwiftData.
 
 enum QuickAddAIError: LocalizedError {
     case missingKey
@@ -41,11 +44,20 @@ enum QuickAddAIService {
     private static let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
     private static let model = "claude-haiku-4-5-20251001"
 
+    private static let singleMaxTokens = 300
+    private static let batchMaxTokens = 800
+
+    /// Hard cap on how many drafts a single `completeBatch` call can
+    /// produce. The prompt already asks the model for at most this many;
+    /// `drafts(fromJSON:)` also enforces it defensively by dropping any
+    /// elements beyond the cap, in case the model over-produces.
+    private static let maxBatchSize = 10
+
     /// Persona and the exact five-shape output JSON. `now` is embedded as an
     /// ISO 8601 UTC timestamp so the model can resolve relative dates
     /// ("tomorrow", "next friday") the same way `QuickAddParser` does —
-    /// resolution happens model-side; the mapping function below never
-    /// recomputes dates itself, it only validates and parses what comes back.
+    /// resolution happens model-side; the mapping functions below never
+    /// recompute dates themselves, they only validate and parse what comes back.
     private static func systemPrompt(now: Date) -> String {
         let todayISO = ISO8601DateFormatter().string(from: now)
         return """
@@ -58,22 +70,58 @@ enum QuickAddAIService {
 
             Respond with a single JSON object and nothing else (no markdown, no commentary, \
             no code fence), matching exactly one of these five shapes:
-            {"kind":"medication","name":String,"dosage":String,"frequency":String}
-            {"kind":"vital","type":String,"value":Double,"secondary":Double or null}
-            {"kind":"symptom","name":String,"severity":Int}
-            {"kind":"appointment","title":String,"date":String (ISO 8601)}
-            {"kind":"reminder","title":String,"time":String (ISO 8601) or null}
+            \(shapesDescription)
 
-            "type" for vital must be exactly one of: weight, bloodPressure, heartRate, \
-            bloodGlucose, oxygenSaturation, temperature, respiratoryRate, sleepHours. \
-            Vitals are stored in canonical metric units — weight in kg, temperature in \
-            degrees Celsius, blood pressure/glucose in mmHg/mg per dL — so convert if the \
-            user wrote pounds or Fahrenheit. "secondary" is only used for bloodPressure \
-            (diastolic); it is null for every other vital type. "severity" is an integer \
-            from 1 to 10. If nothing in the text maps to any of the five shapes, respond \
-            with exactly {"kind":"unknown"}.
+            \(sharedFieldRules) If nothing in the text maps to any of the five shapes, \
+            respond with exactly {"kind":"unknown"}.
             """
     }
+
+    /// Persona and output contract for the batch endpoint: the same five
+    /// shapes as `systemPrompt`, but the model may report several distinct
+    /// items found in one sentence or paragraph (e.g. "weighed 82kg, bp
+    /// 130/85, slept 6h, took aspirin 100mg" → four elements).
+    private static func batchSystemPrompt(now: Date) -> String {
+        let todayISO = ISO8601DateFormatter().string(from: now)
+        return """
+            You convert free-text health-tracking notes — a sentence or a short paragraph — \
+            into a JSON array of structured records for MediTrack, a personal health-tracking \
+            app. The text may describe several distinct items (a vital, a medication, a \
+            symptom, an appointment, a reminder) in one message; extract every one you can \
+            confidently identify, up to \(maxBatchSize). This is educational data entry only, \
+            not medical advice — do not add commentary, diagnoses, or recommendations. \
+            Today's date/time (ISO 8601, UTC) is \(todayISO) — use it to resolve relative \
+            dates such as "tomorrow" or "next friday". Never invent a numeric value that is \
+            not present in the user's text.
+
+            Respond with a single JSON array and nothing else (no markdown, no commentary, no \
+            code fence), containing at most \(maxBatchSize) elements. Each element must match \
+            exactly one of these five shapes:
+            \(shapesDescription)
+
+            \(sharedFieldRules)
+            If nothing in the text maps to any of the five shapes, respond with an empty \
+            array: [].
+            """
+    }
+
+    private static let shapesDescription = """
+        {"kind":"medication","name":String,"dosage":String,"frequency":String}
+        {"kind":"vital","type":String,"value":Double,"secondary":Double or null}
+        {"kind":"symptom","name":String,"severity":Int}
+        {"kind":"appointment","title":String,"date":String (ISO 8601)}
+        {"kind":"reminder","title":String,"time":String (ISO 8601) or null}
+        """
+
+    private static let sharedFieldRules = """
+        "type" for vital must be exactly one of: weight, bloodPressure, heartRate, \
+        bloodGlucose, oxygenSaturation, temperature, respiratoryRate, sleepHours. \
+        Vitals are stored in canonical metric units — weight in kg, temperature in \
+        degrees Celsius, blood pressure/glucose in mmHg/mg per dL — so convert if the \
+        user wrote pounds or Fahrenheit. "secondary" is only used for bloodPressure \
+        (diastolic); it is null for every other vital type. "severity" is an integer \
+        from 1 to 10.
+        """
 
     // MARK: Request/response envelope (mirrors AISummaryService's call style)
 
@@ -134,24 +182,58 @@ enum QuickAddAIService {
     }
 
     /// Decodes the model's raw text into a `QuickAddDraft`, re-validating
-    /// every field against `QuickAddParser`'s plausibility bounds so a
-    /// hallucinated or out-of-range number is rejected exactly like a failed
-    /// deterministic parse would be. `now`/`calendar` are part of the
-    /// contract for future date-relative validation; today all dates are
-    /// expected pre-resolved to ISO 8601 by the model.
-    static func draft(fromJSON data: Data, now: Date, calendar: Calendar) throws -> QuickAddDraft {
+    /// every field against `VitalPlausibility` so a hallucinated or
+    /// out-of-range number is rejected exactly like a failed deterministic
+    /// parse would be. All dates are expected pre-resolved to ISO 8601 by
+    /// the model, so there's no `now`/`calendar` to thread through here.
+    static func draft(fromJSON data: Data) throws -> QuickAddDraft {
+        let raw = try decodeRawDraft(from: data)
+        return try mapDraft(raw)
+    }
+
+    /// Decodes a JSON array of up to `maxBatchSize` raw drafts (the same
+    /// five shapes as the single-draft contract) and validates each
+    /// independently via `mapDraft`. An element that fails validation is
+    /// dropped rather than failing the whole batch — a partially-hallucinated
+    /// response shouldn't discard the items the model got right. If the
+    /// array is empty, or every element fails validation, throws
+    /// `.unrecognized`, the same signal `draft(fromJSON:)` uses for
+    /// "nothing recognized".
+    static func drafts(fromJSON data: Data) throws -> [QuickAddDraft] {
         var cleanedData = data
         if let text = String(data: data, encoding: .utf8) {
             cleanedData = Data(stripCodeFence(text).utf8)
         }
 
-        let raw: RawDraft
+        let rawArray: [RawDraft]
         do {
-            raw = try JSONDecoder().decode(RawDraft.self, from: cleanedData)
+            rawArray = try JSONDecoder().decode([RawDraft].self, from: cleanedData)
         } catch {
             throw QuickAddAIError.badResponse
         }
 
+        let mapped = rawArray.prefix(maxBatchSize).compactMap { try? mapDraft($0) }
+        guard !mapped.isEmpty else { throw QuickAddAIError.unrecognized }
+        return Array(mapped)
+    }
+
+    private static func decodeRawDraft(from data: Data) throws -> RawDraft {
+        var cleanedData = data
+        if let text = String(data: data, encoding: .utf8) {
+            cleanedData = Data(stripCodeFence(text).utf8)
+        }
+        do {
+            return try JSONDecoder().decode(RawDraft.self, from: cleanedData)
+        } catch {
+            throw QuickAddAIError.badResponse
+        }
+    }
+
+    /// Maps one already-decoded `RawDraft` to a `QuickAddDraft`, validating
+    /// vitals against `VitalPlausibility`. Shared by both `draft(fromJSON:)`
+    /// (single) and `drafts(fromJSON:)` (batch, via `compactMap(try?)` so an
+    /// individual failure just drops that element).
+    private static func mapDraft(_ raw: RawDraft) throws -> QuickAddDraft {
         switch raw.kind {
         case "medication":
             guard let name = nonEmpty(raw.name) else { throw QuickAddAIError.badResponse }
@@ -162,7 +244,7 @@ enum QuickAddAIService {
                 throw QuickAddAIError.unrecognized
             }
             guard let value = raw.value else { throw QuickAddAIError.badResponse }
-            guard isPlausible(value, secondary: raw.secondary, for: type) else {
+            guard VitalPlausibility.isPlausible(value, secondary: raw.secondary, for: type) else {
                 throw QuickAddAIError.badResponse
             }
             return .vital(type: type, value: value, secondary: type.usesSecondaryValue ? raw.secondary : nil)
@@ -205,45 +287,17 @@ enum QuickAddAIService {
         return ISO8601DateFormatter().date(from: text)
     }
 
-    /// Mirrors `QuickAddParser`'s plausibility bounds exactly, so an
-    /// AI-hallucinated vital reading is rejected the same way a
-    /// deterministic mis-parse would be: BP 60...260 / 30...200, weight
-    /// 20...300 kg, HR 25...250, temp 25...45 °C, glucose 30...600, SpO2
-    /// 50...100, respiratory rate 4...60, sleep 0...24 hours.
-    private static func isPlausible(_ value: Double, secondary: Double?, for type: VitalType) -> Bool {
-        switch type {
-        case .bloodPressure:
-            guard let secondary else { return false }
-            return (60...260).contains(value) && (30...200).contains(secondary)
-        case .weight:
-            return (20...300).contains(value)
-        case .heartRate:
-            return (25...250).contains(value)
-        case .temperature:
-            return (25...45).contains(value)
-        case .bloodGlucose:
-            return (30...600).contains(value)
-        case .oxygenSaturation:
-            return (50...100).contains(value)
-        case .respiratoryRate:
-            return (4...60).contains(value)
-        case .sleepHours:
-            return (0...24).contains(value)
-        }
-    }
-
     // MARK: Network call
 
-    /// Sends `text` to the Anthropic Messages API and maps the response to a
-    /// `QuickAddDraft`. Throws `QuickAddAIError` on any failure — missing
-    /// key, network, refusal, malformed JSON, or a failed validation — so
-    /// the caller can uniformly fall back to manual entry.
-    static func complete(_ text: String) async throws -> QuickAddDraft {
+    /// Shared networking core for both `complete` (single draft) and
+    /// `completeBatch` (multiple drafts) — identical request construction,
+    /// HTTP/refusal handling, and response-text extraction; only the system
+    /// prompt and token budget differ between the two callers.
+    private static func send(system: String, maxTokens: Int, userText: String) async throws -> Data {
         guard let key = AISummaryService.apiKey, !key.isEmpty else {
             throw QuickAddAIError.missingKey
         }
 
-        let now = Date.now
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.timeoutInterval = 30
@@ -255,10 +309,10 @@ enum QuickAddAIService {
         bodyEncoder.keyEncodingStrategy = .convertToSnakeCase
         request.httpBody = try bodyEncoder.encode(RequestBody(
             model: model,
-            maxTokens: 300,
+            maxTokens: maxTokens,
             temperature: 0,
-            system: systemPrompt(now: now),
-            messages: [RequestMessage(role: "user", content: text)]
+            system: system,
+            messages: [RequestMessage(role: "user", content: userText)]
         ))
 
         let data: Data
@@ -300,7 +354,25 @@ enum QuickAddAIService {
         guard !responseText.isEmpty, let responseData = responseText.data(using: .utf8) else {
             throw QuickAddAIError.badResponse
         }
+        return responseData
+    }
 
-        return try draft(fromJSON: responseData, now: now, calendar: .current)
+    /// Sends `text` to the Anthropic Messages API and maps the response to a
+    /// single `QuickAddDraft`. Throws `QuickAddAIError` on any failure —
+    /// missing key, network, refusal, malformed JSON, or a failed validation
+    /// — so the caller can uniformly fall back to manual entry.
+    static func complete(_ text: String) async throws -> QuickAddDraft {
+        let responseData = try await send(system: systemPrompt(now: .now), maxTokens: singleMaxTokens, userText: text)
+        return try draft(fromJSON: responseData)
+    }
+
+    /// Sends `text` (a whole sentence or paragraph that may describe several
+    /// items) to the Anthropic Messages API and maps the response to zero or
+    /// more `QuickAddDraft`s. Premium-only at the call site (`QuickAddView`
+    /// gates this behind `PremiumStore.shared.isPremium`); this service
+    /// itself has no notion of entitlement.
+    static func completeBatch(_ text: String) async throws -> [QuickAddDraft] {
+        let responseData = try await send(system: batchSystemPrompt(now: .now), maxTokens: batchMaxTokens, userText: text)
+        return try drafts(fromJSON: responseData)
     }
 }

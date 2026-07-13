@@ -64,18 +64,42 @@ enum QuickAddParser {
         guard readings.count == 2 else { return nil }
         let systolic = readings[0]
         let diastolic = readings[1]
-        guard (60...260).contains(systolic), (30...200).contains(diastolic) else { return nil }
+        guard VitalPlausibility.isPlausible(systolic, secondary: diastolic, for: .bloodPressure) else { return nil }
         return .vital(type: .bloodPressure, value: systolic, secondary: diastolic)
     }
 
+    /// BUG FIX: this used to grab `numbers(in: lower).first` — the first
+    /// number anywhere in the *whole* input — instead of slicing after the
+    /// matched keyword/unit like every sibling parser does. That meant
+    /// "day 92 weight 70 kg" saved 92 kg (the day number) instead of 70.
+    ///
+    /// The fix mirrors the siblings' `lower[range.upperBound...]` pattern
+    /// when a "weight"/"weigh" keyword is present (take the number that
+    /// *follows* the keyword), but weight is unusual among the vitals in
+    /// that it's also commonly written unit-first with no keyword at all
+    /// ("70 kg", "155 lb"). For that shape there's no keyword to slice
+    /// after, so instead we take the number immediately *preceding* the
+    /// matched unit token. The unit-based fallback also covers the case
+    /// where a keyword is present but nothing numeric follows it (e.g.
+    /// "70 kg weight recorded").
     private static func parseWeight(_ lower: String) -> QuickAddDraft? {
-        let hasKeyword = rangeOfKeyword("weight", in: lower) != nil || rangeOfKeyword("weigh", in: lower) != nil
-        let hasPoundUnit = ["lbs", "lb", "pounds", "pound"].contains { rangeOfKeyword($0, in: lower) != nil }
-        let hasKgUnit = ["kg", "kilograms", "kilogram"].contains { rangeOfKeyword($0, in: lower) != nil }
-        guard hasKeyword || hasPoundUnit || hasKgUnit else { return nil }
-        guard let raw = numbers(in: lower).first else { return nil }
-        let kg = hasPoundUnit ? raw / poundsPerKilogram : raw
-        guard (20...300).contains(kg) else { return nil }
+        let keywordRange = rangeOfKeyword("weight", in: lower) ?? rangeOfKeyword("weigh", in: lower)
+        let poundUnitRange = firstRange(ofAny: ["lbs", "lb", "pounds", "pound"], in: lower)
+        let kgUnitRange = firstRange(ofAny: ["kg", "kilograms", "kilogram"], in: lower)
+        guard keywordRange != nil || poundUnitRange != nil || kgUnitRange != nil else { return nil }
+
+        var raw: Double?
+        if let keywordRange {
+            // "weight 70 kg" / "weigh 70" — the number follows the keyword.
+            raw = numbers(in: String(lower[keywordRange.upperBound...])).first
+        }
+        if raw == nil, let unitRange = poundUnitRange ?? kgUnitRange {
+            // "70 kg" / "155 lb" — no keyword, so take the number right before the unit.
+            raw = numbers(in: String(lower[lower.startIndex..<unitRange.lowerBound])).last
+        }
+        guard let raw else { return nil }
+        let kg = poundUnitRange != nil ? raw / poundsPerKilogram : raw
+        guard VitalPlausibility.isPlausible(kg, secondary: nil, for: .weight) else { return nil }
         return .vital(type: .weight, value: kg, secondary: nil)
     }
 
@@ -84,7 +108,7 @@ enum QuickAddParser {
             ?? rangeOfKeyword("pulse", in: lower)
             ?? rangeOfKeyword("hr", in: lower) else { return nil }
         guard let raw = numbers(in: String(lower[range.upperBound...])).first else { return nil }
-        guard (25...250).contains(raw) else { return nil }
+        guard VitalPlausibility.isPlausible(raw, secondary: nil, for: .heartRate) else { return nil }
         return .vital(type: .heartRate, value: raw, secondary: nil)
     }
 
@@ -95,7 +119,7 @@ enum QuickAddParser {
         guard let raw = numbers(in: String(lower[range.upperBound...])).first else { return nil }
         // Body temperature is never plausibly above 45 in Celsius, so treat larger readings as Fahrenheit.
         let celsius = raw > 45 ? (raw - 32) * 5 / 9 : raw
-        guard (25...45).contains(celsius) else { return nil }
+        guard VitalPlausibility.isPlausible(celsius, secondary: nil, for: .temperature) else { return nil }
         return .vital(type: .temperature, value: celsius, secondary: nil)
     }
 
@@ -104,7 +128,7 @@ enum QuickAddParser {
             return nil
         }
         guard let raw = numbers(in: String(lower[range.upperBound...])).first else { return nil }
-        guard (30...600).contains(raw) else { return nil }
+        guard VitalPlausibility.isPlausible(raw, secondary: nil, for: .bloodGlucose) else { return nil }
         return .vital(type: .bloodGlucose, value: raw, secondary: nil)
     }
 
@@ -113,7 +137,7 @@ enum QuickAddParser {
             return nil
         }
         guard let raw = numbers(in: String(lower[range.upperBound...])).first else { return nil }
-        guard (50...100).contains(raw) else { return nil }
+        guard VitalPlausibility.isPlausible(raw, secondary: nil, for: .oxygenSaturation) else { return nil }
         return .vital(type: .oxygenSaturation, value: raw, secondary: nil)
     }
 
@@ -122,7 +146,7 @@ enum QuickAddParser {
             ?? rangeOfKeyword("resp rate", in: lower)
             ?? rangeOfKeyword("resp", in: lower) else { return nil }
         guard let raw = numbers(in: String(lower[range.upperBound...])).first else { return nil }
-        guard (4...60).contains(raw) else { return nil }
+        guard VitalPlausibility.isPlausible(raw, secondary: nil, for: .respiratoryRate) else { return nil }
         return .vital(type: .respiratoryRate, value: raw, secondary: nil)
     }
 
@@ -131,7 +155,7 @@ enum QuickAddParser {
             return nil
         }
         guard let raw = numbers(in: String(lower[range.upperBound...])).first else { return nil }
-        guard (0...24).contains(raw) else { return nil }
+        guard VitalPlausibility.isPlausible(raw, secondary: nil, for: .sleepHours) else { return nil }
         return .vital(type: .sleepHours, value: raw, secondary: nil)
     }
 
@@ -386,28 +410,64 @@ enum QuickAddParser {
     }
 
     /// Parses "at 3pm" / "at 15:30" style phrases; nil when no clock time is present.
+    ///
+    /// BUG FIX: this used to lock onto the *first* "at" in the text and feed
+    /// everything after it to `parseClockTime`, which in turn matched "am"/
+    /// "pm" anywhere in that remaining tail. So "meeting at conference room
+    /// 2 at 5pm" sliced from the first "at" ("conference room 2 at 5pm"),
+    /// read the digit "2" as the hour, and then found "pm" later in the
+    /// string and applied it — producing 14:00 instead of 17:00.
+    ///
+    /// The fix tries every "at" in the text, preferring the *last* one, and
+    /// only accepts it when the token immediately following it parses as a
+    /// clock time (a digit run optionally followed by `:mm`, with am/pm, if
+    /// present, adjacent to that number — not merely present somewhere
+    /// later in the tail). Earlier "at"s that precede ordinary text (like a
+    /// room number) are skipped rather than greedily matched.
     private static func resolveTime(in lower: String) -> (hour: Int, minute: Int)? {
-        guard let range = rangeOfKeyword("at", in: lower) else { return nil }
-        return parseClockTime(String(lower[range.upperBound...]).trimmingCharacters(in: .whitespaces))
+        for range in allRangesOfKeyword("at", in: lower).reversed() {
+            let tail = String(lower[range.upperBound...]).trimmingCharacters(in: .whitespaces)
+            if let time = parseClockTime(tail) { return time }
+        }
+        return nil
     }
 
+    /// Parses a *leading* clock-time token from `text`, e.g. "5pm", "5 pm",
+    /// or "15:30" — am/pm must be adjacent to the parsed number (at most one
+    /// space between), not merely present anywhere later in `text`.
     private static func parseClockTime(_ text: String) -> (hour: Int, minute: Int)? {
+        var index = text.startIndex
         var hourPart = ""
-        var minutePart = ""
-        var seenColon = false
-        for character in text {
-            if character.isNumber {
-                if seenColon { minutePart.append(character) } else { hourPart.append(character) }
-            } else if character == ":", !seenColon {
-                seenColon = true
-            } else if !hourPart.isEmpty {
-                break
-            }
+        while index < text.endIndex, text[index].isNumber {
+            hourPart.append(text[index])
+            index = text.index(after: index)
         }
         guard var hour = Int(hourPart) else { return nil }
+
+        var minutePart = ""
+        if index < text.endIndex, text[index] == ":" {
+            var minuteIndex = text.index(after: index)
+            while minuteIndex < text.endIndex, text[minuteIndex].isNumber {
+                minutePart.append(text[minuteIndex])
+                minuteIndex = text.index(after: minuteIndex)
+            }
+            guard !minutePart.isEmpty else { return nil }
+            index = minuteIndex
+        }
         let minute = Int(minutePart) ?? 0
-        if text.contains("pm"), hour < 12 { hour += 12 }
-        if text.contains("am"), hour == 12 { hour = 0 }
+
+        // Allow a single optional space before am/pm, but the meridiem must
+        // be adjacent to the number just parsed.
+        var meridiemStart = index
+        if meridiemStart < text.endIndex, text[meridiemStart] == " " {
+            meridiemStart = text.index(after: meridiemStart)
+        }
+        let remainder = text[meridiemStart...]
+        if remainder.hasPrefix("pm") {
+            if hour < 12 { hour += 12 }
+        } else if remainder.hasPrefix("am") {
+            if hour == 12 { hour = 0 }
+        }
         guard (0...23).contains(hour), (0...59).contains(minute) else { return nil }
         return (hour, minute)
     }
@@ -482,12 +542,28 @@ enum QuickAddParser {
     /// Finds the first word-bounded occurrence of `keyword` in `text` (neighboring
     /// characters, if any, must not be letters). Mirrors `LabSynonyms.match(in:)`.
     private static func rangeOfKeyword(_ keyword: String, in text: String) -> Range<String.Index>? {
+        allRangesOfKeyword(keyword, in: text).first
+    }
+
+    /// Every word-bounded occurrence of `keyword` in `text`, in order of
+    /// appearance. Used where a caller needs to consider more than just the
+    /// first match (see `resolveTime`, which prefers the *last* "at").
+    private static func allRangesOfKeyword(_ keyword: String, in text: String) -> [Range<String.Index>] {
+        var results: [Range<String.Index>] = []
         var searchStart = text.startIndex
         while let range = text.range(of: keyword, range: searchStart..<text.endIndex) {
             let beforeOK = range.lowerBound == text.startIndex || !text[text.index(before: range.lowerBound)].isLetter
             let afterOK = range.upperBound == text.endIndex || !text[range.upperBound].isLetter
-            if beforeOK && afterOK { return range }
+            if beforeOK && afterOK { results.append(range) }
             searchStart = range.upperBound
+        }
+        return results
+    }
+
+    /// The first word-bounded range among `keywords`, trying each in order.
+    private static func firstRange(ofAny keywords: [String], in text: String) -> Range<String.Index>? {
+        for keyword in keywords {
+            if let range = rangeOfKeyword(keyword, in: text) { return range }
         }
         return nil
     }

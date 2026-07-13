@@ -1,11 +1,15 @@
 import XCTest
 @testable import MediTrack
 
-/// Pure, network-free tests for `QuickAddAIService.draft(fromJSON:now:calendar:)`
-/// — the JSON→`QuickAddDraft` mapping and plausibility validation behind the
-/// Quick Add AI-assist fallback. `QuickAddAIService.complete` itself (the
-/// networking call) is never exercised here. Fixed-date style mirrors
-/// `QuickAddParserTests`.
+/// Pure, network-free tests for `QuickAddAIService.draft(fromJSON:)` and
+/// `.drafts(fromJSON:)` — the JSON→`QuickAddDraft` mapping and plausibility
+/// validation behind the Quick Add AI-assist feature. `QuickAddAIService
+/// .complete`/`.completeBatch` themselves (the networking calls) are never
+/// exercised here. Fixed-date style mirrors `QuickAddParserTests`.
+///
+/// `draft(fromJSON:)` used to take unused `now`/`calendar` parameters (all
+/// dates arrive pre-resolved to ISO 8601 from the model); they were removed,
+/// so every call site below was updated to the two-argument-free form.
 final class QuickAddAIMappingTests: XCTestCase {
 
     private let calendar: Calendar = {
@@ -19,7 +23,12 @@ final class QuickAddAIMappingTests: XCTestCase {
 
     private func draft(_ json: String) throws -> QuickAddDraft {
         let data = try XCTUnwrap(json.data(using: .utf8))
-        return try QuickAddAIService.draft(fromJSON: data, now: now, calendar: calendar)
+        return try QuickAddAIService.draft(fromJSON: data)
+    }
+
+    private func drafts(_ json: String) throws -> [QuickAddDraft] {
+        let data = try XCTUnwrap(json.data(using: .utf8))
+        return try QuickAddAIService.drafts(fromJSON: data)
     }
 
     private func date(year: Int, month: Int, day: Int, hour: Int = 0, minute: Int = 0) throws -> Date {
@@ -187,7 +196,7 @@ final class QuickAddAIMappingTests: XCTestCase {
             ```
             """
         let data = try XCTUnwrap(fenced.data(using: .utf8))
-        let result = try QuickAddAIService.draft(fromJSON: data, now: now, calendar: calendar)
+        let result = try QuickAddAIService.draft(fromJSON: data)
         XCTAssertEqual(result, .medication(name: "Metformin", dosage: "500 mg", frequency: "once daily"))
     }
 
@@ -198,7 +207,153 @@ final class QuickAddAIMappingTests: XCTestCase {
             ```
             """
         let data = try XCTUnwrap(fenced.data(using: .utf8))
-        let result = try QuickAddAIService.draft(fromJSON: data, now: now, calendar: calendar)
+        let result = try QuickAddAIService.draft(fromJSON: data)
         XCTAssertEqual(result, .symptom(name: "Nausea", severity: 4))
+    }
+
+    // MARK: - Shared VitalPlausibility bounds agree between parser and AI service
+
+    /// `QuickAddParser`'s inline vital guards and `QuickAddAIService`'s JSON
+    /// validation both now route through `VitalPlausibility`. This asserts
+    /// they actually agree at the boundary, for both a single-value vital
+    /// (heart rate) and one that uses a secondary value (blood pressure).
+    func testVitalPlausibilityBoundariesAgreeBetweenParserAndAIService() throws {
+        func parserAccepts(_ text: String) -> Bool {
+            QuickAddParser.parse(text, now: now, calendar: calendar) != nil
+        }
+        func aiAccepts(_ json: String) -> Bool {
+            (try? draft(json)) != nil
+        }
+
+        // Heart rate: shared plausible range is 25...250.
+        XCTAssertEqual(
+            parserAccepts("hr 25"),
+            aiAccepts(#"{"kind":"vital","type":"heartRate","value":25}"#)
+        )
+        XCTAssertTrue(parserAccepts("hr 25"))
+        XCTAssertTrue(aiAccepts(#"{"kind":"vital","type":"heartRate","value":25}"#))
+
+        XCTAssertEqual(
+            parserAccepts("hr 24"),
+            aiAccepts(#"{"kind":"vital","type":"heartRate","value":24}"#)
+        )
+        XCTAssertFalse(parserAccepts("hr 24"))
+        XCTAssertFalse(aiAccepts(#"{"kind":"vital","type":"heartRate","value":24}"#))
+
+        XCTAssertEqual(
+            parserAccepts("hr 250"),
+            aiAccepts(#"{"kind":"vital","type":"heartRate","value":250}"#)
+        )
+        XCTAssertTrue(parserAccepts("hr 250"))
+
+        XCTAssertEqual(
+            parserAccepts("hr 251"),
+            aiAccepts(#"{"kind":"vital","type":"heartRate","value":251}"#)
+        )
+        XCTAssertFalse(parserAccepts("hr 251"))
+
+        // Blood pressure exercises the secondary-value bound too: systolic
+        // 60...260, diastolic 30...200.
+        XCTAssertEqual(
+            parserAccepts("bp 60/30"),
+            aiAccepts(#"{"kind":"vital","type":"bloodPressure","value":60,"secondary":30}"#)
+        )
+        XCTAssertTrue(parserAccepts("bp 60/30"))
+
+        XCTAssertEqual(
+            parserAccepts("bp 59/30"),
+            aiAccepts(#"{"kind":"vital","type":"bloodPressure","value":59,"secondary":30}"#)
+        )
+        XCTAssertFalse(parserAccepts("bp 59/30"))
+
+        XCTAssertEqual(
+            parserAccepts("bp 60/29"),
+            aiAccepts(#"{"kind":"vital","type":"bloodPressure","value":60,"secondary":29}"#)
+        )
+        XCTAssertFalse(parserAccepts("bp 60/29"))
+    }
+
+    // MARK: - Batch mapping
+
+    func testBatchHappyPathAcrossKinds() throws {
+        let json = """
+            [
+              {"kind":"medication","name":"Aspirin","dosage":"100 mg","frequency":"twice daily"},
+              {"kind":"vital","type":"bloodPressure","value":128,"secondary":82},
+              {"kind":"symptom","name":"Headache","severity":6},
+              {"kind":"appointment","title":"Dentist","date":"2025-01-02T15:00:00Z"},
+              {"kind":"reminder","title":"Take vitamins","time":"2025-01-01T08:00:00Z"}
+            ]
+            """
+        let result = try drafts(json)
+        let expectedAppointmentDate = try date(year: 2025, month: 1, day: 2, hour: 15)
+        let expectedReminderTime = try date(year: 2025, month: 1, day: 1, hour: 8)
+        XCTAssertEqual(result, [
+            .medication(name: "Aspirin", dosage: "100 mg", frequency: "twice daily"),
+            .vital(type: .bloodPressure, value: 128, secondary: 82),
+            .symptom(name: "Headache", severity: 6),
+            .appointment(title: "Dentist", date: expectedAppointmentDate),
+            .reminder(title: "Take vitamins", time: expectedReminderTime)
+        ])
+    }
+
+    func testBatchDropsInvalidElementKeepsValid() throws {
+        let json = """
+            [
+              {"kind":"vital","type":"heartRate","value":72},
+              {"kind":"vital","type":"heartRate","value":900},
+              {"kind":"symptom","name":"Fatigue","severity":3}
+            ]
+            """
+        let result = try drafts(json)
+        XCTAssertEqual(result, [
+            .vital(type: .heartRate, value: 72, secondary: nil),
+            .symptom(name: "Fatigue", severity: 3)
+        ])
+    }
+
+    func testBatchAllInvalidThrows() {
+        let json = """
+            [
+              {"kind":"vital","type":"heartRate","value":900},
+              {"kind":"vital","type":"bloodPressure","value":128}
+            ]
+            """
+        XCTAssertThrowsError(try drafts(json)) { error in
+            XCTAssertTrue(error is QuickAddAIError)
+        }
+    }
+
+    func testBatchEmptyArrayThrows() {
+        XCTAssertThrowsError(try drafts("[]")) { error in
+            XCTAssertTrue(error is QuickAddAIError)
+        }
+    }
+
+    /// The batch contract caps at 10 elements; a response that (incorrectly)
+    /// contains more is capped rather than rejected outright, keeping the
+    /// *first* 10 in order.
+    func testBatchCapsAtTenElements() throws {
+        let elements = (1...12).map { #"{"kind":"symptom","name":"Symptom\#($0)","severity":5}"# }
+        let json = "[" + elements.joined(separator: ",") + "]"
+        let result = try drafts(json)
+        XCTAssertEqual(result.count, 10)
+        XCTAssertEqual(result, (1...10).map { .symptom(name: "Symptom\($0)", severity: 5) })
+    }
+
+    func testBatchFencedJSONIsStripped() throws {
+        let fenced = """
+            ```json
+            [
+              {"kind":"medication","name":"Metformin","dosage":"500 mg","frequency":"once daily"},
+              {"kind":"symptom","name":"Nausea","severity":4}
+            ]
+            ```
+            """
+        let result = try drafts(fenced)
+        XCTAssertEqual(result, [
+            .medication(name: "Metformin", dosage: "500 mg", frequency: "once daily"),
+            .symptom(name: "Nausea", severity: 4)
+        ])
     }
 }
