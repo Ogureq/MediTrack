@@ -170,6 +170,14 @@ This document records the phased plan executed to build MediTrack, a privacy-fir
 - [x] Lifetime premium tier — a one-time non-consumable unlock joins the monthly/yearly subscriptions with a "One-time" paywall card; same verified-entitlement path
 - [x] Verified as already shipped: OCR plausibility guard (scan values >50× the reference upper bound are discarded) and proactive dashboard nudges (the "Needs Your Attention" section surfaces engine trend/severity findings)
 
+## Phase 21 — AI Premium Pivot: Owner-Funded Relay & AI-First Entry
+
+- [x] Business model — Premium is $19.99/month and owns all AI (reports, chat, AI-assisted entry) funded by the owner's API key through the relay; free tier keeps every local feature forever plus exactly one lifetime AI report as a trial; chat premium-gated in the Review screen; Lifetime tier left dormant (unbounded AI cost on a one-time payment)
+- [x] Unified AI transport (`Services/AITransport.swift`) — one client core replacing three duplicated Anthropic clients; relay path (anonymous device JWT, Keychain-cached token, typed error mapping) when a base URL is configured, byte-identical BYOK direct path otherwise; `isConfigured` now means "relay or key"
+- [x] AI-first Quick Add — batch extraction turns a whole sentence into up to ten reviewable drafts with per-item removal; premium-locked AI button with paywall tap-through; two review-confirmed parser bugs fixed with regression tests; all plausibility bounds consolidated in `Services/VitalPlausibility.swift` with a parser/AI parity test
+- [x] Backend generate routes (`backend/`) — `/v1/auth/anonymous` (24h JWT with premium claim) and `/v1/ai/generate` (report/chat/extract, server-owned prompts and models, refusal mapping, per-user + global daily token quotas); ENFORCE_PREMIUM flag with a one-free-report-per-device KV allowance consumed only on success; App Store verification fails closed pending implementation; 126 vitest tests, strict tsc
+- [x] Design project imported from claude.ai/design — prototype analyzed; theme tokens already match the app; per-screen detail pass queued
+
 ## Future Milestones
 
 Not part of the current plan; captured here for future scoping:
