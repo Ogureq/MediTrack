@@ -156,20 +156,20 @@ struct TrendsView: View {
         let points = visiblePoints(for: series)
         return List {
             Section {
-                Picker("Metric", selection: Binding(
-                    get: { series.id },
-                    set: { selectedSeriesID = $0 }
-                )) {
-                    ForEach(allSeries) { candidate in
-                        Text(candidate.name).tag(candidate.id)
-                    }
-                }
-                Picker("Range", selection: $timeRange) {
-                    ForEach(TrendTimeRange.allCases) { range in
-                        Text(range.rawValue).tag(range)
-                    }
-                }
-                .pickerStyle(.segmented)
+                metricChipsRow(selectedID: series.id)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+            }
+            .listRowSeparator(.hidden)
+
+            Section {
+                rangeChipsRow
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+            }
+            .listRowSeparator(.hidden)
+
+            Section {
                 if points.count >= 2 {
                     chart(for: series, points: points)
                         .frame(height: 240)
@@ -191,6 +191,78 @@ struct TrendsView: View {
             .listRowSeparator(.hidden)
         }
     }
+
+    /// Horizontally scrolling metric-selection chips. The active metric
+    /// gets the accent-gradient fill with dark ink text — legible against
+    /// the bright gradient in either light or dark mode; every other chip is
+    /// a plain glass pill, matching the chip rows used elsewhere in the app
+    /// (see `HealthTimelineView.chip`, `DocumentsView.categoryChip`).
+    private func metricChipsRow(selectedID: String) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(allSeries) { candidate in
+                    let isSelected = candidate.id == selectedID
+                    Button {
+                        selectedSeriesID = candidate.id
+                    } label: {
+                        Text(candidate.name)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(isSelected ? Self.selectedChipTextColor : Color.primary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background {
+                                if isSelected {
+                                    Capsule().fill(Glass.accentGradient)
+                                } else {
+                                    Capsule().fill(.ultraThinMaterial)
+                                }
+                            }
+                            .overlay(Capsule().strokeBorder(Glass.bevelStroke, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+                }
+            }
+            .padding(.vertical, 2)
+        }
+    }
+
+    /// Segmented range control (3M/6M/1Y/All): the active range gets a
+    /// subtle translucent white highlight over the glass track, matching the
+    /// prototype's range chips.
+    private var rangeChipsRow: some View {
+        HStack(spacing: 2) {
+            ForEach(TrendTimeRange.allCases) { range in
+                let isSelected = range == timeRange
+                Button {
+                    timeRange = range
+                } label: {
+                    Text(range.rawValue)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(isSelected ? Color.primary : Color.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 7)
+                        .background(
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .fill(isSelected ? Color.white.opacity(0.16) : Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+            }
+        }
+        .padding(2)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(Glass.bevelStroke, lineWidth: 1)
+        )
+    }
+
+    /// Dark ink (`#0B1220`-equivalent) used for text sitting directly on the
+    /// accent gradient — always legible regardless of light/dark mode,
+    /// matching the prototype's selected-chip treatment.
+    private static let selectedChipTextColor = Color(red: 0x0B / 255.0, green: 0x12 / 255.0, blue: 0x20 / 255.0)
 
     private func visiblePoints(for series: MetricSeries) -> [MetricPoint] {
         guard let months = timeRange.months,

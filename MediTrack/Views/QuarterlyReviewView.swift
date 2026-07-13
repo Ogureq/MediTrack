@@ -15,17 +15,22 @@ struct QuarterlyReviewView: View {
     @Query(sort: \Reminder.createdAt) private var reminders: [Reminder]
     @Query private var symptoms: [SymptomEntry]
 
-    private var summary: QuarterlyReviewSummary {
-        QuarterlyReview.build(
-            snapshots: snapshots,
-            vitals: vitals,
-            labResults: labResults,
-            goals: goals,
-            reminders: reminders,
-            symptoms: symptoms,
-            now: .now,
-            calendar: .current
-        )
+    /// Cached once instead of being recomputed on every one of the ~19
+    /// property accesses this screen makes into it per render. Starts as an
+    /// empty-input build (a pure, deterministic call — no environment or
+    /// `ModelContext` needed) so the first render already has something
+    /// sensible to show, then `.task` immediately replaces it with the real
+    /// recap built from the `@Query` results.
+    @State private var summary = QuarterlyReview.build(
+        snapshots: [], vitals: [], labResults: [], goals: [], reminders: [], symptoms: [],
+        now: .now, calendar: .current
+    )
+
+    /// Cheap signature used to decide when to rebuild `summary` — mirrors
+    /// the `.count`-based invalidation already used elsewhere in the app
+    /// (e.g. `AIChatView`'s `onChange(of: messages.count)`).
+    private var dataSignature: String {
+        "\(snapshots.count)-\(vitals.count)-\(labResults.count)-\(goals.count)-\(reminders.count)-\(symptoms.count)"
     }
 
     var body: some View {
@@ -55,6 +60,18 @@ struct QuarterlyReviewView: View {
                     .accessibilityLabel("Share quarterly review")
                 }
             }
+        }
+        .task(id: dataSignature) {
+            summary = QuarterlyReview.build(
+                snapshots: snapshots,
+                vitals: vitals,
+                labResults: labResults,
+                goals: goals,
+                reminders: reminders,
+                symptoms: symptoms,
+                now: .now,
+                calendar: .current
+            )
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)

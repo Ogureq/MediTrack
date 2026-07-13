@@ -15,6 +15,7 @@ struct ReviewScreen: View {
 
     @State private var aiReport: AIHealthReport?
     @State private var isGeneratingSummary = false
+    @State private var isPulsing = false
     @State private var aiError: String?
     @State private var showingAIChat = false
     @State private var showingPaywall = false
@@ -175,6 +176,18 @@ struct ReviewScreen: View {
                         ProgressView()
                     }
                 }
+                if isGeneratingSummary {
+                    Text("Generating your report…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .opacity(isPulsing ? 1 : 0.6)
+                        .onAppear {
+                            withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+                                isPulsing = true
+                            }
+                        }
+                        .onDisappear { isPulsing = false }
+                }
                 if let aiReport {
                     aiReportContent(aiReport)
                 } else if let aiError {
@@ -190,6 +203,7 @@ struct ReviewScreen: View {
                             Label("Generate AI Health Analyst Report", systemImage: "sparkles")
                         }
                         .buttonStyle(GlassButtonStyle())
+                        .disabled(isGeneratingSummary)
                         if !premiumStore.isPremium {
                             Text("Your first AI report is free — Premium unlocks unlimited.")
                                 .font(.caption2)
@@ -302,6 +316,7 @@ struct ReviewScreen: View {
     }
 
     private func generateAISummary() {
+        guard !isGeneratingSummary else { return }
         isGeneratingSummary = true
         aiError = nil
         let current = review

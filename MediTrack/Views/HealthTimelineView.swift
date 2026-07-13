@@ -14,14 +14,15 @@ struct HealthTimelineView: View {
 
     @State private var selectedCategory: TimelineCategory?
 
-    private var allEvents: [TimelineEvent] {
-        HealthTimeline.events(
-            reports: reports,
-            vitals: vitals,
-            scores: scores,
-            medications: medications,
-            profile: profiles.first
-        )
+    /// Cached instead of recomputed on each of the ~3 accesses this screen
+    /// makes per render (`body`'s empty check, plus `filteredEvents`, which
+    /// is itself read twice below).
+    @State private var allEvents: [TimelineEvent] = []
+
+    /// Cheap `.count`-based signature deciding when to rebuild `allEvents` —
+    /// same convention as `AIChatView`'s `onChange(of: messages.count)`.
+    private var dataSignature: String {
+        "\(reports.count)-\(vitals.count)-\(scores.count)-\(medications.count)-\(profiles.count)"
     }
 
     private var filteredEvents: [TimelineEvent] {
@@ -78,6 +79,15 @@ struct HealthTimelineView: View {
         }
         .ambientScreen()
         .navigationTitle("Health Timeline")
+        .task(id: dataSignature) {
+            allEvents = HealthTimeline.events(
+                reports: reports,
+                vitals: vitals,
+                scores: scores,
+                medications: medications,
+                profile: profiles.first
+            )
+        }
     }
 
     private func monthTitle(_ date: Date) -> String {

@@ -79,34 +79,40 @@ struct BiomarkerCarouselSection: View {
     @Query private var labResults: [LabResult]
     @Query private var profiles: [HealthProfile]
 
-    private var series: [BiomarkerSeries] {
-        BiomarkerGrouping.series(from: labResults)
-    }
+    /// Cached grouping — `BiomarkerGrouping.series(from:)` flattens and
+    /// sorts every lab result on every call, so this is computed once when
+    /// the result count changes rather than on every render.
+    @State private var series: [BiomarkerSeries] = []
 
     var body: some View {
-        if series.isEmpty {
-            EmptyView()
-        } else {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Biomarkers")
-                    .font(.headline)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: 12) {
-                        ForEach(series) { item in
-                            NavigationLink {
-                                LabDetailView(seriesKey: item.id)
-                            } label: {
-                                BiomarkerCard(series: item, sex: profiles.first?.sex)
+        Group {
+            if series.isEmpty {
+                EmptyView()
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Biomarkers")
+                        .font(.headline)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(alignment: .top, spacing: 12) {
+                            ForEach(series) { item in
+                                NavigationLink {
+                                    LabDetailView(seriesKey: item.id)
+                                } label: {
+                                    BiomarkerCard(series: item, sex: profiles.first?.sex)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
+                        // Small inset so each card's drop shadow doesn't clip
+                        // against the scroll view's edge.
+                        .padding(.horizontal, 2)
+                        .padding(.vertical, 2)
                     }
-                    // Small inset so each card's drop shadow doesn't clip
-                    // against the scroll view's edge.
-                    .padding(.horizontal, 2)
-                    .padding(.vertical, 2)
                 }
             }
+        }
+        .task(id: labResults.count) {
+            series = BiomarkerGrouping.series(from: labResults)
         }
     }
 }

@@ -14,7 +14,7 @@ struct ContentView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            DashboardView()
+            DashboardView(onOpenReview: { selectedTab = .review })
                 .tabItem { Label("Dashboard", systemImage: "house.fill") }
                 .tag(AppTab.dashboard)
             ReportsListView()
@@ -30,6 +30,7 @@ struct ContentView: View {
                 .tabItem { Label("More", systemImage: "ellipsis.circle.fill") }
                 .tag(AppTab.more)
         }
+        .tint(.teal)
         .environmentObject(lock)
         .onOpenURL { url in
             // Deep link from the home-screen widget (meditrack://review).

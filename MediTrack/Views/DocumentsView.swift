@@ -8,8 +8,11 @@ import ImageIO
 /// A single attachment surfaced in the document library, flattened out of
 /// its parent `MedicalReport`. Kept as plain values (not a `@Model`
 /// reference) so `DocumentLibrary`'s flattening/filtering logic is testable
-/// without a live `ModelContext`. `data` rides along so grid thumbnails
-/// don't need to re-look-up the source attachment on every render.
+/// without a live `ModelContext`. Deliberately does *not* carry the
+/// attachment's raw `data` — that's an `@Attribute(.externalStorage)` blob,
+/// and copying it into every item on every flatten would multiply memory
+/// use for no benefit; the grid thumbnail looks up the live
+/// `ReportAttachment` by `id` instead (see `DocumentThumbnail`).
 struct DocumentItem: Identifiable, Equatable {
     let id: PersistentIdentifier
     let filename: String
@@ -17,7 +20,6 @@ struct DocumentItem: Identifiable, Equatable {
     let reportTitle: String
     let reportCategory: ReportCategory
     let reportDate: Date
-    let data: Data
 }
 
 // MARK: - Flattening & filtering
@@ -36,8 +38,7 @@ enum DocumentLibrary {
                         kind: attachment.kind,
                         reportTitle: report.title,
                         reportCategory: report.category,
-                        reportDate: report.date,
-                        data: attachment.data
+                        reportDate: report.date
                     )
                 }
             }
@@ -74,13 +75,15 @@ struct DocumentsView: View {
     @State private var searchText = ""
     @State private var selectedCategory: ReportCategory?
 
-    private var allItems: [DocumentItem] {
-        DocumentLibrary.items(from: reports)
-    }
+    /// Cached instead of recomputed from scratch — via `DocumentLibrary
+    /// .items(from:)`, a full flatten over every report's attachments — on
+    /// every one of the 3 call sites below (`body`'s empty check,
+    /// `availableCategories`, `filteredItems`), which otherwise re-ran on
+    /// every search keystroke.
+    @State private var allItems: [DocumentItem] = []
 
     private var availableCategories: [ReportCategory] {
-        let items = allItems
-        return ReportCategory.allCases.filter { category in items.contains { $0.reportCategory == category } }
+        ReportCategory.allCases.filter { category in allItems.contains { $0.reportCategory == category } }
     }
 
     private var filteredItems: [DocumentItem] {
@@ -110,7 +113,7 @@ struct DocumentsView: View {
                                     NavigationLink {
                                         destination(for: item)
                                     } label: {
-                                        DocumentCard(item: item)
+                                        DocumentCard(item: item, resolveAttachment: attachment(matching:))
                                     }
                                     .buttonStyle(.plain)
                                 }
@@ -124,24 +127,28 @@ struct DocumentsView: View {
         }
         .ambientScreen()
         .navigationTitle("Documents")
+        .task(id: reports.count) {
+            allItems = DocumentLibrary.items(from: reports)
+        }
     }
 
     @ViewBuilder
     private func destination(for item: DocumentItem) -> some View {
-        if let attachment = attachment(matching: item) {
+        if let attachment = attachment(matching: item.id) {
             AttachmentViewer(attachment: attachment)
         } else {
             ContentUnavailableView("Can't Preview File", systemImage: "eye.slash")
         }
     }
 
-    /// Recovers the live `ReportAttachment` behind a `DocumentItem` so the
-    /// tap-through preview can reuse `AttachmentViewer` — the same
+    /// Recovers the live `ReportAttachment` behind a `DocumentItem`'s id so
+    /// the tap-through preview can reuse `AttachmentViewer` — the same
     /// full-screen image/PDF viewer `ReportDetailView` uses — instead of a
-    /// second preview pipeline.
-    private func attachment(matching item: DocumentItem) -> ReportAttachment? {
+    /// second preview pipeline, and so the grid thumbnail can decode the
+    /// real `data` without `DocumentItem` having to carry a copy of it.
+    private func attachment(matching id: PersistentIdentifier) -> ReportAttachment? {
         for report in reports {
-            if let match = report.attachments.first(where: { $0.persistentModelID == item.id }) {
+            if let match = report.attachments.first(where: { $0.persistentModelID == id }) {
                 return match
             }
         }
@@ -187,10 +194,11 @@ struct DocumentsView: View {
 
 private struct DocumentCard: View {
     let item: DocumentItem
+    let resolveAttachment: (PersistentIdentifier) -> ReportAttachment?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            DocumentThumbnail(item: item)
+            DocumentThumbnail(item: item, resolveAttachment: resolveAttachment)
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.filename)
                     .font(.subheadline.weight(.semibold))
@@ -219,9 +227,12 @@ private struct DocumentCard: View {
 /// once, off the main thread, via ImageIO (never a full-resolution
 /// `UIImage(data:)`) and memoized by attachment id so re-scrolling the grid
 /// never redecodes; PDFs render a static doc icon since a full PDF render
-/// isn't needed for a small grid tile.
+/// isn't needed for a small grid tile. Looks up the live `ReportAttachment`
+/// by id (via `resolveAttachment`) rather than `DocumentItem` carrying its
+/// own copy of the raw `data`.
 private struct DocumentThumbnail: View {
     let item: DocumentItem
+    let resolveAttachment: (PersistentIdentifier) -> ReportAttachment?
 
     @State private var image: UIImage?
 
@@ -255,8 +266,8 @@ private struct DocumentThumbnail: View {
         )
         .accessibilityHidden(true)
         .task(id: item.id) {
-            guard item.kind == .image, image == nil else { return }
-            image = await ThumbnailCache.shared.thumbnail(for: item.id, data: item.data)
+            guard item.kind == .image, image == nil, let attachment = resolveAttachment(item.id) else { return }
+            image = await ThumbnailCache.shared.thumbnail(for: item.id, data: attachment.data)
         }
     }
 }

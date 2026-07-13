@@ -14,6 +14,13 @@ struct DashboardView: View {
     @Query private var goals: [HealthGoal]
     @Query(sort: \Reminder.createdAt) private var reminders: [Reminder]
 
+    /// Switches the enclosing `TabView` to the Review tab when the score
+    /// card is tapped — passed in from `ContentView`, which owns `AppTab`
+    /// and already does the same thing for the widget's deep link. Defaults
+    /// to a no-op so this view stays constructible without wiring a tab
+    /// selection (e.g. in a preview).
+    var onOpenReview: () -> Void = {}
+
     @State private var showingAddReport = false
     @State private var showingAddVital = false
     @State private var showingQuickAdd = false
@@ -35,9 +42,17 @@ struct DashboardView: View {
     }
 
     /// Earliest data point already fetched by this view — reused so the
-    /// Quarterly Review "is it due" check needs no extra `@Query`.
+    /// Quarterly Review "is it due" check needs no extra `@Query`. Also
+    /// considers report and lab-result dates (not just snapshots/vitals) so
+    /// a user who has only ever logged lab reports still gets credit for
+    /// their history and sees the Quarterly Review card once it's due.
     private var earliestDataDate: Date? {
-        let dates = [snapshots.first?.date, vitals.map(\.date).min()].compactMap { $0 }
+        let dates = [
+            snapshots.first?.date,
+            vitals.map(\.date).min(),
+            reports.map(\.date).min(),
+            reports.flatMap(\.labResults).map(\.date).min(),
+        ].compactMap { $0 }
         return dates.min()
     }
 
@@ -52,21 +67,22 @@ struct DashboardView: View {
 
     /// Anonymous rollup stats for the shareable score card — counts and a
     /// trend direction only, never a name, date, or lab value. See
-    /// `ScoreShareCard`.
-    private var shareStats: [ShareStat] {
+    /// `ScoreShareCard`. Takes the already-computed `review` so callers
+    /// never trigger a second `AnalysisEngine.generateReview` pass.
+    private func shareStats(review: HealthReview) -> [ShareStat] {
         var stats: [ShareStat] = []
         if !review.labSnapshots.isEmpty {
             let count = review.labSnapshots.count
             stats.append(ShareStat(systemImage: "testtube.2", text: "\(count) biomarker\(count == 1 ? "" : "s") tracked"))
         }
-        stats.append(ShareStat(systemImage: shareTrendSystemImage, text: shareTrendText))
+        stats.append(ShareStat(systemImage: shareTrendSystemImage(review: review), text: shareTrendText(review: review)))
         if !reports.isEmpty {
             stats.append(ShareStat(systemImage: "doc.text", text: "\(reports.count) report\(reports.count == 1 ? "" : "s") logged"))
         }
         return stats
     }
 
-    private var shareTrendText: String {
+    private func shareTrendText(review: HealthReview) -> String {
         let worsening = review.trends.filter { $0.direction == .worsening }.count
         let improving = review.trends.filter { $0.direction == .improving }.count
         if worsening > improving { return "Trending down" }
@@ -74,7 +90,7 @@ struct DashboardView: View {
         return "Trending steady"
     }
 
-    private var shareTrendSystemImage: String {
+    private func shareTrendSystemImage(review: HealthReview) -> String {
         let worsening = review.trends.filter { $0.direction == .worsening }.count
         let improving = review.trends.filter { $0.direction == .improving }.count
         if worsening > improving { return "arrow.down.right.circle.fill" }
@@ -110,16 +126,21 @@ struct DashboardView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
+                // Computed once per render and threaded through explicitly —
+                // `review` re-runs the full `AnalysisEngine` pass on every
+                // access, so every section below takes it as a parameter
+                // instead of reading the computed property directly.
+                let review = self.review
                 VStack(alignment: .leading, spacing: 16) {
                     greetingHeader
                     quickAddButton
                     if review.hasData {
-                        scoreCard
+                        scoreCard(review: review)
                         remindersCard
                         quarterlyReviewCard
                         scoreHistoryCard
                         BiomarkerCarouselSection()
-                        alertsSection
+                        alertsSection(review: review)
                         appointmentCard
                         vitalsGrid
                         goalsCard
@@ -185,10 +206,10 @@ struct DashboardView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var scoreCard: some View {
+    private func scoreCard(review: HealthReview) -> some View {
         ZStack(alignment: .topTrailing) {
-            NavigationLink {
-                ReviewScreen()
+            Button {
+                onOpenReview()
             } label: {
                 HStack(spacing: 16) {
                     ScoreRing(score: review.score)
@@ -222,7 +243,7 @@ struct DashboardView: View {
                 item: ScoreShareImage(
                     score: review.score,
                     scoreLabel: review.scoreLabel,
-                    stats: shareStats,
+                    stats: shareStats(review: review),
                     generatedAt: .now
                 ),
                 preview: SharePreview("MediTrack Score", image: Image(systemName: "heart.text.square.fill"))
@@ -245,10 +266,15 @@ struct DashboardView: View {
         let hasAISuggestions = activeReminders.contains(where: \.isAISuggested)
 
         return VStack(alignment: .leading, spacing: 10) {
-            HStack {
+            HStack(spacing: 10) {
                 Text("Today")
                     .font(.headline)
                 Spacer()
+                if !activeReminders.isEmpty {
+                    Text("\(doneCount) of \(activeReminders.count) done")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
                 NavigationLink {
                     RemindersView()
                 } label: {
@@ -280,9 +306,6 @@ struct DashboardView: View {
                     .buttonStyle(.plain)
                 }
             } else {
-                Text("\(doneCount) of \(activeReminders.count) done")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
                 VStack(spacing: 10) {
                     ForEach(Array(activeReminders.enumerated()), id: \.offset) { index, reminder in
                         if index > 0 {
@@ -393,7 +416,7 @@ struct DashboardView: View {
     }
 
     @ViewBuilder
-    private var alertsSection: some View {
+    private func alertsSection(review: HealthReview) -> some View {
         let alerts = review.findings.filter { $0.severity > .info }.prefix(3)
         if !alerts.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
