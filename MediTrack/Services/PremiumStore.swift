@@ -49,7 +49,6 @@ final class PremiumStore: ObservableObject {
     @Published private(set) var loadState: LoadState = .loading
     @Published private(set) var isPremium = false
     @Published private(set) var isPurchasing = false
-    @Published var lastErrorMessage: String?
 
     private var transactionListenerTask: Task<Void, Never>?
 
@@ -92,10 +91,21 @@ final class PremiumStore: ObservableObject {
 
     // MARK: Purchase
 
+    /// Thrown when StoreKit returns a purchase whose local JWS verification
+    /// fails — premium is not granted and the transaction is deliberately
+    /// left unfinished so the App Store retries delivery.
+    struct UnverifiedPurchaseError: LocalizedError {
+        var errorDescription: String? {
+            "The App Store couldn't verify this purchase. You haven't been charged premium access — please try again, and use Restore Purchases if you were billed."
+        }
+    }
+
     /// Starts a purchase for `product`. On a verified success the
     /// entitlement is refreshed and the transaction is finished; a user
     /// cancellation or a pending purchase (e.g. Ask to Buy) is not an
-    /// error and simply leaves `isPremium` unchanged.
+    /// error and simply leaves `isPremium` unchanged. An unverified result
+    /// throws so the paywall can tell the user instead of silently
+    /// resetting.
     func purchase(_ product: Product) async throws {
         isPurchasing = true
         defer { isPurchasing = false }
@@ -103,9 +113,12 @@ final class PremiumStore: ObservableObject {
         let result = try await product.purchase()
         switch result {
         case .success(let verification):
-            if case .verified(let transaction) = verification {
+            switch verification {
+            case .verified(let transaction):
                 await refreshEntitlements()
                 await transaction.finish()
+            case .unverified:
+                throw UnverifiedPurchaseError()
             }
         case .userCancelled, .pending:
             break
