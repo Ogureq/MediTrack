@@ -135,3 +135,33 @@ export async function recordUsage(
   ]);
   return { userTokensUsed: newUserTokensUsed, globalTokensUsed: newGlobalTokensUsed };
 }
+
+// ---------------------------------------------------------------------------
+// One-lifetime-free-report allowance (product decision, see README.md): a
+// non-premium device may generate exactly one "report" kind via
+// `/v1/ai/generate` before `ENFORCE_PREMIUM` starts returning
+// `402 premium_required` for it. This flag lives in the same KV namespace as
+// the daily ledgers above but is a lifetime flag, not a per-day one — it
+// deliberately carries no `expirationTtl`, so it persists until the device
+// (i.e. the KV key) is manually cleared.
+// ---------------------------------------------------------------------------
+
+function freeReportKey(deviceId: string): string {
+  return `free_report:${deviceId}`;
+}
+
+/** Whether this device has already consumed its one lifetime free "report" kind generation. */
+export async function hasUsedFreeReport(storage: KVLike, deviceId: string): Promise<boolean> {
+  return (await storage.get(freeReportKey(deviceId))) !== null;
+}
+
+/**
+ * Marks this device's one lifetime free report as consumed. Callers must
+ * only call this after a genuinely successful, non-refused generation — see
+ * src/index.ts's `/v1/ai/generate` handler, which calls this only when the
+ * upstream call succeeded and the model did not refuse. A failed upstream
+ * call or a safety refusal must not cost the device its one free try.
+ */
+export async function markFreeReportUsed(storage: KVLike, deviceId: string): Promise<void> {
+  await storage.put(freeReportKey(deviceId), "1");
+}

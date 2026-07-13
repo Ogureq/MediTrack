@@ -213,3 +213,108 @@ export function verifyAppleIdentityToken(_identityToken: string): never {
     "Sign in with Apple is not implemented in this P1 scaffold."
   );
 }
+
+// ---------------------------------------------------------------------------
+// Anonymous access token — fixed wire contract (see backend/README.md).
+//
+// `POST /v1/auth/anonymous` exchanges a client-generated `deviceID` for a
+// single 24h JWT. Per the fixed contract, `sub` is the `deviceID` itself
+// (not a derived hash — there is no separate "internal user id" concept in
+// this contract), and the token carries a `premium` boolean claim decided at
+// issuance time (see `verifyAppTransactionPlaceholder` below). This is a
+// deliberately separate, simpler token shape from `issueTokenPair`'s
+// access/refresh pair above: there is no refresh flow — a client whose token
+// has expired just calls `/v1/auth/anonymous` again with the same
+// `deviceID`, which is cheap and idempotent since there's no App-Attest gate
+// on this endpoint yet (see the GA checklist in README.md). `issueTokenPair`/
+// `verifyRefreshToken`/`rotateFromRefreshToken` above are kept for their own
+// tested behavior but are no longer wired to any route.
+// ---------------------------------------------------------------------------
+
+export const ANONYMOUS_TOKEN_TTL_SECONDS = 24 * 60 * 60; // 86400s — matches the wire contract's expiresInSeconds
+
+export interface AnonymousTokenClaims {
+  sub: string;
+  premium: boolean;
+}
+
+export interface IssuedAnonymousToken {
+  token: string;
+  expiresInSeconds: number;
+}
+
+export async function issueAnonymousToken(opts: {
+  secret: string;
+  deviceId: string;
+  premium: boolean;
+  now?: Date;
+}): Promise<IssuedAnonymousToken> {
+  const now = opts.now ?? new Date();
+  const iat = Math.floor(now.getTime() / 1000);
+  const exp = iat + ANONYMOUS_TOKEN_TTL_SECONDS;
+
+  const token = await new SignJWT({ premium: opts.premium, type: "anon" })
+    .setProtectedHeader({ alg: JWT_ALGORITHM })
+    .setSubject(opts.deviceId)
+    .setIssuedAt(iat)
+    .setExpirationTime(exp)
+    .sign(secretKey(opts.secret));
+
+  return { token, expiresInSeconds: ANONYMOUS_TOKEN_TTL_SECONDS };
+}
+
+export async function verifyAnonymousToken(secret: string, token: string, now?: Date): Promise<AnonymousTokenClaims> {
+  let payload: JWTPayload;
+  try {
+    const result = await jwtVerify(token, secretKey(secret), {
+      algorithms: [JWT_ALGORITHM],
+      ...(now ? { currentDate: now } : {})
+    });
+    payload = result.payload;
+  } catch (err) {
+    if (err instanceof joseErrors.JWTExpired) {
+      throw new AuthError("expired", "Token has expired.");
+    }
+    if (err instanceof joseErrors.JWSSignatureVerificationFailed) {
+      throw new AuthError("invalid_signature", "Token signature is invalid.");
+    }
+    throw new AuthError("malformed", "Token could not be verified.");
+  }
+
+  if (payload.type !== "anon") {
+    throw new AuthError("wrong_token_type", "Expected an anonymous access token.");
+  }
+  if (typeof payload.sub !== "string" || typeof payload.premium !== "boolean") {
+    throw new AuthError("malformed", "Token is missing required claims.");
+  }
+
+  return { sub: payload.sub, premium: payload.premium };
+}
+
+// ---------------------------------------------------------------------------
+// TODO(GA requirement — see README.md's GA checklist item (a)): App Store
+// transaction verification.
+//
+// This is a placeholder ONLY, in the same spirit as
+// `verifyAppAttestPlaceholder` above. `POST /v1/auth/anonymous` accepts an
+// optional `appTransaction` (a base64-encoded, Apple-signed JWS) and is
+// *supposed* to verify it against Apple's App Store Server API
+// (https://developer.apple.com/documentation/appstoreserverapi) to decide
+// whether the device has an active MediTrack Premium subscription. Until
+// that verification is implemented, this function does NOT parse or trust
+// the value at all — it always returns `false`, regardless of
+// `ENFORCE_PREMIUM`.
+//
+// This is deliberate, not an oversight: faking a "verified" result here
+// would let anyone mint a premium-flagged token by sending any non-empty
+// string, defeating `ENFORCE_PREMIUM` entirely. Failing closed means that
+// with `ENFORCE_PREMIUM=true`, every device gets `premium: false` until real
+// verification lands — see README.md for the one-lifetime-free-report
+// allowance that keeps "report" partially usable in the meantime, and note
+// that App Attest (GA checklist item (b)) matters even more here: without
+// it, nothing stops a bad actor from generating a fresh `deviceID` per call
+// to keep re-claiming that free report.
+// ---------------------------------------------------------------------------
+export function verifyAppTransactionPlaceholder(_appTransaction: string | null): boolean {
+  return false;
+}

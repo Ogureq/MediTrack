@@ -32,13 +32,23 @@ PER_USER_DAILY_TOKENS = 60000
 # alerting this depends on).
 GLOBAL_DAILY_TOKENS = 5000000
 
-# Model used for the report-summary relay. Matches the model already in
-# production client-side (`AISummaryService.model` in
-# MediTrack/Services/AISummaryService.swift) — see docs/ROADMAP.md Part 4
-# §1.5 for the model-routing rationale (Opus for the single highest-stakes
-# output per session; cheaper models are a P3 chat-routing concern, not
-# this endpoint's).
+# Models used per `/v1/ai/generate` `kind` (src/generate.ts). Each matches
+# the model the corresponding BYO-key client service already uses today:
+# MODEL_REPORT <- AISummaryService.swift, MODEL_CHAT <- AIChatService.swift,
+# MODEL_EXTRACT <- QuickAddAIService.swift. See docs/ROADMAP.md Part 4 §1.5
+# for the model-routing rationale (Opus for the single highest-stakes output
+# per session; Sonnet for conversational chat; Haiku for cheap structured
+# extraction).
 MODEL_REPORT = "claude-opus-4-8"
+MODEL_CHAT = "claude-sonnet-5"
+MODEL_EXTRACT = "claude-haiku-4-5-20251001"
+
+# Premium enforcement gate for /v1/ai/generate (src/index.ts). "false" until
+# App Store subscription verification (auth.ts#verifyAppTransactionPlaceholder)
+# and App Attest are both implemented — see README.md's GA checklist before
+# flipping this to "true" in production. A Wrangler `[vars]` string, not a
+# TOML boolean — compared as `env.ENFORCE_PREMIUM === "true"` at the call site.
+ENFORCE_PREMIUM = "false"
 
 # --- KV namespace: the quota ledger (per-user + global daily token counts) ---
 # Not provisioned by this scaffold — there is no Cloudflare account to

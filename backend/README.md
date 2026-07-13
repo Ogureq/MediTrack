@@ -1,45 +1,167 @@
 # meditrack-relay
 
-A stateless AI relay for MediTrack (Cloudflare Workers), scaffolded per
-[`docs/ROADMAP.md` Part 4](../docs/ROADMAP.md). It forwards the app's
-already-computed, structured report data (score, findings, flagged lab
-values, deltas — never attachments, never free-text notes, never the
-Medical ID fields) to the Anthropic Messages API under the owner's key, and
-streams the answer back over SSE. It persists nothing but a metadata-only
-daily token ledger.
+The AI relay for MediTrack (Cloudflare Workers). It fronts the **owner's**
+Anthropic API key so premium subscribers can use MediTrack's AI features
+without bringing their own key: the iOS app sends already-computed,
+structured data (the rule-based review, a compact chat context, or a single
+user-typed Quick Add line — never attachments, never raw documents, never
+the Medical ID fields) to `POST /v1/ai/generate`, and the relay calls the
+Anthropic Messages API server-side and returns the answer as a single JSON
+response. It persists nothing but a metadata-only daily token ledger and a
+per-device "free report used" flag.
 
-**Status: NOT deployed. This is a P1 scaffold only.** No Cloudflare account
-resources (KV namespace, secrets) have been provisioned, and nothing in this
-directory assumes any exist — every account-specific value is either an
-environment secret set at deploy time or a placeholder in `wrangler.toml`
-with instructions to fill it in. The owner actions required to actually
-stand this up are listed below.
+**Business model:** every local MediTrack feature is free; AI is premium
+(**$19.99/month**, which is what funds the owner-paid Anthropic usage this
+relay performs) — with exactly **one free lifetime AI report** per device as
+a trial. Enforcement ships behind the `ENFORCE_PREMIUM` flag (default
+`"false"`) so the deployed relay can be tested end-to-end before App Store
+subscriptions and App Attest are live — see the GA checklist below.
 
-**The iOS client is unaffected.** MediTrack's AI summary feature keeps
-working via the existing BYO-key path
-(`MediTrack/Services/AISummaryService.swift`, user-supplied Anthropic API
-key in Profile & Settings) until this relay is deployed *and* the client is
-migrated to call it (a separate, not-yet-done change described in
-`docs/ROADMAP.md` Part 4 §3). Nothing in this scaffold touches iOS code.
+## Wire contract
+
+All error responses (any non-200) share one shape:
+
+```json
+{ "error": { "code": "unauthorized", "message": "human-readable detail" } }
+```
+
+with codes: `401 unauthorized`, `402 premium_required`, `429 quota_exceeded`,
+`400 bad_request`, `502 upstream_error` (plus `404 not_found` for unknown
+routes).
+
+### `POST /v1/auth/anonymous`
+
+Exchange a client-generated device UUID for a 24-hour JWT.
+
+```json
+// request
+{ "deviceID": "6f1e1c1a-2b3c-4d5e-8f90-112233445566" }
+
+// request (optionally claiming premium — see "Premium enforcement" below)
+{ "deviceID": "6f1e1c1a-…", "appTransaction": "<base64 App Store transaction JWS>" }
+
+// 200 response
+{ "token": "<jwt>", "expiresInSeconds": 86400 }
+```
+
+- The JWT's `sub` is the `deviceID`; it also carries a boolean `premium`
+  claim, fixed at issuance time.
+- `400 bad_request` on a missing/malformed (non-UUID) `deviceID`, a
+  non-JSON body, or unknown fields.
+- There is no refresh flow: when the token expires, call this endpoint
+  again with the same `deviceID`.
+- **`appTransaction` is currently never verified and never grants
+  `premium: true`** — see the GA checklist. The relay fails closed rather
+  than fake-verifying.
+
+### `POST /v1/ai/generate`
+
+`Authorization: Bearer <jwt>`. One endpoint, three kinds — the server owns
+every system prompt and model choice (ported from the app's original
+BYO-key services: `AISummaryService.swift`, `AIChatService.swift`,
+`QuickAddAIService.swift`, keeping their educational-not-diagnostic rails,
+only-discuss-provided-data rules, and strict-JSON output instructions).
+
+```json
+// request — "report": the structured review JSON the app already builds
+{ "kind": "report", "input": { "score": 78, "scoreLabel": "Good",
+  "profileSummary": null,
+  "findings": [{ "id": "f0", "severity": "attention", "category": "labs",
+                 "title": "LDL Cholesterol Elevated", "detail": "LDL 142 mg/dL…" }],
+  "labValues": [{ "id": "lv0", "name": "LDL Cholesterol", "value": 142,
+                  "unit": "mg/dL", "status": "high" }],
+  "deltas": [] } }
+
+// request — "chat": context ≤8000 chars; ≤12 messages, each ≤2000 chars,
+// roles "user"/"assistant" only, first message must be "user"
+{ "kind": "chat", "input": { "context": "Health score: 78/100 (Good)…",
+  "messages": [{ "role": "user", "text": "What does my LDL finding mean?" }] } }
+
+// request — "extract": text ≤1000 chars, today = YYYY-MM-DD
+{ "kind": "extract", "input": { "text": "bp 120 over 80 this morning",
+  "today": "2026-07-13" } }
+
+// 200 response (all kinds)
+{ "text": "<model output text>", "refused": false }
+
+// 200 response when Anthropic ends with stop_reason == "refusal"
+{ "text": "", "refused": true }
+```
+
+Per-kind handling (non-streaming for all three; see "Known simplifications"):
+
+| kind | model (env var, default) | max_tokens | temperature |
+|---|---|---|---|
+| `report` | `MODEL_REPORT` (`claude-opus-4-8`) | 1500 | default |
+| `chat` | `MODEL_CHAT` (`claude-sonnet-5`) | 700 | default |
+| `extract` | `MODEL_EXTRACT` (`claude-haiku-4-5-20251001`) | 800 | 0 |
+
+Validation rejects (400): unknown `kind`s, unknown fields anywhere (top
+level, nested — an `attachment`/`imageData` field fails the request rather
+than being dropped), oversized fields or payloads (`report` input is capped
+at ~32KB total), and base64-blob-shaped strings in any text field.
+
+## Premium enforcement
+
+`ENFORCE_PREMIUM` (wrangler `[vars]`, string `"true"`/`"false"`, default
+`"false"`) gates `/v1/ai/generate` on the JWT's `premium` claim:
+
+| `ENFORCE_PREMIUM` | `premium` claim | `report` | `chat` | `extract` |
+|---|---|---|---|---|
+| `"false"` | any | allowed | allowed | allowed |
+| `"true"` | `true` | allowed | allowed | allowed |
+| `"true"` | `false` | **one lifetime free**, then `402` | `402` | `402` |
+
+The one-lifetime-free-report allowance implements the product's trial ("one
+free lifetime AI report"): a non-premium device's first successful `report`
+generation is allowed; after that, `402 premium_required`. The flag is
+stored in `QUOTA_KV` (`free_report:<deviceID>`, no TTL) and is **only
+consumed by a genuinely successful, non-refused generation** — an upstream
+error (502) or a safety refusal does not cost the device its free try.
+
+Because the `premium` claim is fixed at token-issuance time and
+`appTransaction` verification is unimplemented, turning `ENFORCE_PREMIUM`
+on today means **every** device is non-premium (fail closed) — useful for
+end-to-end testing the 402 paths, not for GA.
+
+### GA checklist (owner actions before real production traffic)
+
+1. **Implement App Store transaction verification**
+   (`src/auth.ts#verifyAppTransactionPlaceholder`): verify the
+   `appTransaction` JWS against Apple's App Store Server API, check the
+   bundle ID and subscription product/expiry, and only then issue
+   `premium: true` tokens. Do **not** shortcut this — the placeholder
+   deliberately always returns `false`.
+2. **Implement App Attest** (`src/auth.ts#verifyAppAttestPlaceholder` has
+   the full requirements list): without it, `/v1/auth/anonymous` is a free
+   JWT mint, and nothing stops a caller from generating a fresh `deviceID`
+   per request to re-claim the free report or reset their per-user quota.
+3. **Set `ENFORCE_PREMIUM = "true"`** in `wrangler.toml` and redeploy.
 
 ## What's here
 
 ```
 backend/
   src/
-    index.ts    — route wiring: auth, quota gate, relay, CORS
-    router.ts   — tiny hand-rolled router (no framework)
-    auth.ts     — anonymous JWT issue/verify/refresh (jose, HS256);
-                  App Attest + Sign in with Apple P1 stubs
-    quota.ts    — pure per-user + global daily token ledger arithmetic
-    relay.ts    — request-schema validation, Anthropic request building,
-                  SSE re-framing, the report-summary relay itself
-    logging.ts  — metadata-only (never content) usage log entries
-    env.ts      — the `Env` bindings/vars/secrets interface
-  test/         — vitest: quota, auth, schema validation, SSE mapping,
-                  router, logging — all pure, no network, no real KV
-  wrangler.toml — Worker config; secrets and the KV namespace ID are
-                  deliberately NOT filled in (see "Deploying" below)
+    index.ts      — route wiring: auth, premium gate, quota gate, relay, CORS
+    router.ts     — tiny hand-rolled router (no framework)
+    auth.ts       — anonymous JWT issue/verify (jose, HS256); App Attest,
+                    Sign in with Apple, and App Store transaction
+                    verification are clearly-marked fail-closed stubs
+    quota.ts      — pure per-user + global daily token ledger arithmetic,
+                    plus the lifetime free-report flag
+    generate.ts   — /v1/ai/generate: kind dispatch, chat/extract schemas +
+                    prompts, non-streaming Anthropic call + refusal mapping
+    relay.ts      — the "report" kind's request schema + system prompt
+    validation.ts — shared field validators (unknown-key + base64-blob rejection)
+    logging.ts    — metadata-only (never content) usage log entries
+    env.ts        — the `Env` bindings/vars/secrets interface
+  test/           — vitest: quota, auth, schema validation, generate
+                    dispatch/prompts/response mapping, full route-level
+                    tests with an in-memory KV and stubbed upstream fetch,
+                    router, logging — no network, no real KV
+  wrangler.toml   — Worker config; secrets and the KV namespace ID are
+                    deliberately NOT filled in (see "Deploying" below)
   package.json / tsconfig.json / vitest.config.ts
 ```
 
@@ -63,8 +185,7 @@ JWT_SECRET=<any long random string>
 
 ## Deploying (owner action required)
 
-This scaffold intentionally stops short of being deployable out of the box
-— there is no Cloudflare account tied to this repo. To actually ship it:
+There is no Cloudflare account tied to this repo. To actually ship it:
 
 1. **Install the CLI and authenticate**, if not already done:
    ```bash
@@ -85,47 +206,49 @@ This scaffold intentionally stops short of being deployable out of the box
    Generate `JWT_SECRET` with something like `openssl rand -base64 32` — it
    only needs to be long and random, there's no format requirement.
 4. **Review `wrangler.toml`'s `[vars]`** (`PER_USER_DAILY_TOKENS`,
-   `GLOBAL_DAILY_TOKENS`, `MODEL_REPORT`) and bump `compatibility_date` to a
-   current date.
+   `GLOBAL_DAILY_TOKENS`, `MODEL_REPORT`, `MODEL_CHAT`, `MODEL_EXTRACT`,
+   `ENFORCE_PREMIUM`) and bump `compatibility_date` to a current date.
 5. **Deploy:**
    ```bash
    npm run deploy
    ```
 6. **Smoke test** `GET /health` returns `{"status":"ok"}`, then a full
-   `POST /v1/auth/anonymous` → `POST /v1/ai/report-summary` round trip with a
-   known-shape payload before considering the deploy good (see
-   `docs/ROADMAP.md` Part 4 §5.2 for why this should eventually be an
-   automated post-deploy CI step, not a manual check).
-7. **Point the iOS client at the deployed Worker.** Not yet implemented —
-   `AISummaryService.swift`'s migration to call this relay instead of
-   Anthropic directly is tracked separately in `docs/ROADMAP.md` Part 4 §3.
+   `POST /v1/auth/anonymous` → `POST /v1/ai/generate` round trip for each
+   of the three kinds with known-shape payloads before considering the
+   deploy good (see `docs/ROADMAP.md` Part 4 §5.2 for why this should
+   eventually be an automated post-deploy CI step, not a manual check).
 
-## Known P1 simplifications (read before extending)
+Then point the iOS client at the deployed Worker (the app's relay base URL
+setting — see `MediTrack/Services/AITransport.swift`).
 
-- **App Attest is a placeholder.** `auth.ts#verifyAppAttestPlaceholder` only
-  checks that *some* non-empty assertion string was sent — it does not
-  verify a real Apple App Attest assertion against Apple's root CA, a
-  server-issued nonce, or a sign-counter. Until the real verification
-  described in that function's doc comment is implemented, `POST
-  /v1/auth/anonymous` is a free JWT mint for anyone who can call it. **Do
-  not point production traffic at this deploy until that's fixed.**
+## Known simplifications (read before extending)
+
+- **Non-streaming responses.** All three kinds return one JSON body after
+  the model finishes. This is the simplest reliable v1; streaming chat
+  (SSE) is a natural later upgrade and the old SSE re-framing design it
+  would build on is in this repo's git history.
+- **`appTransaction` is never verified** — see the GA checklist. Until item
+  (1) lands, no token ever carries `premium: true`, so `ENFORCE_PREMIUM =
+  "true"` locks out chat/extract entirely and limits every device to the
+  one free report. This is deliberate fail-closed behavior, not a bug.
+- **App Attest is not wired to `/v1/auth/anonymous`.**
+  `auth.ts#verifyAppAttestPlaceholder` documents what real verification
+  requires; until then the endpoint is a free JWT mint for anyone who can
+  call it, and per-device accounting (quota, the free report) can be reset
+  by minting a new `deviceID`. **Do not point production traffic at this
+  deploy until the GA checklist is done.**
 - **Sign in with Apple is not implemented** (`auth.ts#verifyAppleIdentityToken`
-  throws `apple_signin_not_implemented`). Cross-device quota recovery and
-  the App Store subscription linkage described in the roadmap depend on it;
-  it's P2 scope.
-- **No persistent user table.** The relay is deliberately stateless: a
-  "user" is just the opaque id inside a valid JWT, deterministically
-  derived from the client's device id (`auth.ts#deriveUserId`). This is
-  enough for anonymous quota tracking but not for the P2 entitlements/
-  StoreKit2 linkage work, which will need real persistence (`docs/ROADMAP.md`
-  Part 4 §2.3's `entitlements` table).
-- **Quota is reserved pre-flight at the request's `max_tokens` budget**, not
-  true-up'd against Anthropic's actual reported input/output token counts
-  after the stream completes (see the comment at the `checkQuota`/
-  `recordUsage` call sites in `src/index.ts`). This over-reserves on every
-  request (worst case, not actual, usage) — safe but conservative. A true-up
-  pass reading the terminal `message_delta.usage` from the SSE stream is
-  natural follow-up work once this is live and real usage data exists.
+  throws `apple_signin_not_implemented`). Cross-device quota/entitlement
+  recovery depends on it; it's P2 scope.
+- **No persistent user table.** The relay is stateless: a "user" is the
+  `deviceID` inside a valid JWT. This is enough for anonymous quota
+  tracking but not for the P2 entitlements/StoreKit2 linkage work
+  (`docs/ROADMAP.md` Part 4 §2.3's `entitlements` table).
+- **Quota is reserved pre-flight at each kind's `max_tokens` budget**
+  (1500/700/800), not true-up'd against Anthropic's actual reported token
+  counts. This over-reserves on every request — safe but conservative. A
+  true-up pass reading the response's `usage` field is natural follow-up
+  work once real usage data exists.
 - **CORS is wide open (`*`)** because the primary caller is a native iOS
   client, which doesn't send an `Origin` header at all; the wildcard exists
   for browser-based dev tooling. Tighten this if a web client is ever added.
@@ -156,18 +279,16 @@ This scaffold intentionally stops short of being deployable out of the box
      or generate a new random value (for `JWT_SECRET`).
   2. `wrangler secret put <NAME>` to set the new value.
   3. `wrangler deploy` to pick it up.
-  4. Verify a synthetic `POST /v1/ai/report-summary` request succeeds
-     against the new key.
+  4. Verify a synthetic `POST /v1/ai/generate` request succeeds against the
+     new key.
   5. For `ANTHROPIC_API_KEY`: revoke the old key in the Anthropic Console,
      then confirm a request using the old key now fails (401) within the
      propagation window.
   6. For `JWT_SECRET`: rotating it invalidates every previously-issued
-     access/refresh token immediately (there's no dual-key grace period in
-     this scaffold) — every signed-in client will need to re-authenticate
-     via `/v1/auth/anonymous` (or `/v1/auth/apple` once implemented). Only
-     rotate `JWT_SECRET` outside of a real incident with that in mind, or
-     add dual-secret verification support first if forced re-auth for all
-     users becomes unacceptable.
+     token immediately (there's no dual-key grace period). Clients recover
+     automatically by re-calling `/v1/auth/anonymous`, which needs no user
+     interaction — so unlike a login-based system this is cheap, but it
+     still momentarily 401s in-flight sessions.
 
 Keep this as a short, rehearsed runbook — not a from-scratch process each
 time.
@@ -182,12 +303,11 @@ time.
 2. **Contain:** the global daily cap (`GLOBAL_DAILY_TOKENS` in
    `wrangler.toml`, enforced in `quota.ts`) is the immediate backstop — it
    throttles the *entire* relay to the on-device-fallback behavior the
-   client should implement for a `503` response, with no deploy needed. For
-   a single bad actor rather than a global spike, the offending user's
-   per-user cap (`checkQuota`'s `user_exceeded` path) already limits them
-   independently of the global cap.
+   client implements for a `429 quota_exceeded` response, with no deploy
+   needed. For a single bad actor rather than a global spike, the offending
+   user's per-user cap already limits them independently of the global cap.
 3. **Rotate:** if the incident involves a suspected key leak (as opposed to
-   just abusive-but-legitimate-key usage), follow the key-rotation runbook
+   just abusive-but-legitimate usage), follow the key-rotation runbook
    above immediately rather than waiting for the next scheduled rotation.
 4. **Postmortem:** update quota limits (`PER_USER_DAILY_TOKENS`/
    `GLOBAL_DAILY_TOKENS`), the App Attest verification once implemented, or
@@ -206,11 +326,24 @@ logged basis — not a change to the global backstop.
 | Endpoint | Method | Auth | Purpose |
 |---|---|---|---|
 | `/health` | GET | none | Liveness check |
-| `/v1/auth/anonymous` | POST | App Attest assertion (placeholder, see above) | Issue an anonymous access+refresh JWT pair |
-| `/v1/auth/refresh` | POST | refresh token in body | Rotate an expiring JWT pair |
-| `/v1/ai/report-summary` | POST | `Authorization: Bearer <JWT>` | Quota-gated streaming relay to Anthropic for the report-summary feature |
-| `/v1/usage/me` | GET | `Authorization: Bearer <JWT>` | Current UTC-day usage + remaining quota for the caller |
+| `/v1/auth/anonymous` | POST | none (App Attest is a GA-checklist item) | Exchange a `deviceID` for a 24h JWT with a `premium` claim |
+| `/v1/ai/generate` | POST | `Authorization: Bearer <JWT>` | Premium- and quota-gated non-streaming relay to Anthropic (`report`/`chat`/`extract`) |
 
-`POST /v1/auth/apple` (Sign in with Apple) is specified in the roadmap but
-not yet wired into `src/index.ts` — `auth.ts#verifyAppleIdentityToken`
-exists as a stub for it.
+The earlier scaffold's `/v1/auth/refresh`, `/v1/usage/me`, and streaming
+`/v1/ai/report-summary` routes were replaced by this contract (clients
+re-auth instead of refreshing; usage introspection can return as a
+follow-up). Their underlying token-pair helpers remain in `src/auth.ts`
+(tested, unwired).
+
+## Environment variables
+
+| Name | Where | Meaning |
+|---|---|---|
+| `PER_USER_DAILY_TOKENS` | `[vars]` | Per-device daily token cap (pre-flight reservations) |
+| `GLOBAL_DAILY_TOKENS` | `[vars]` | Global daily cap — the emergency brake |
+| `MODEL_REPORT` | `[vars]` | Model for `kind: "report"` (default `claude-opus-4-8`) |
+| `MODEL_CHAT` | `[vars]` | Model for `kind: "chat"` (default `claude-sonnet-5`) |
+| `MODEL_EXTRACT` | `[vars]` | Model for `kind: "extract"` (default `claude-haiku-4-5-20251001`) |
+| `ENFORCE_PREMIUM` | `[vars]` | `"true"`/`"false"` — gate `/v1/ai/generate` on the `premium` claim |
+| `ANTHROPIC_API_KEY` | secret | Owner's Anthropic key — `wrangler secret put` only |
+| `JWT_SECRET` | secret | HS256 signing key — `wrangler secret put` only |

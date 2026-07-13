@@ -15,13 +15,27 @@ import type { KVLike } from "./quota";
  * JS numbers (not strings) at runtime.
  */
 export interface Env {
-  /** Quota ledger storage — see wrangler.toml for provisioning instructions. */
+  /** Quota ledger storage (also holds the one-lifetime-free-report flag, see quota.ts) — see wrangler.toml for provisioning instructions. */
   QUOTA_KV: KVLike;
 
   /** Runtime configuration, set in wrangler.toml's [vars]. */
   PER_USER_DAILY_TOKENS: number;
   GLOBAL_DAILY_TOKENS: number;
+
+  /** Model used for each `/v1/ai/generate` kind — see src/generate.ts. */
   MODEL_REPORT: string;
+  MODEL_CHAT: string;
+  MODEL_EXTRACT: string;
+
+  /**
+   * "true" or "false" (a Wrangler `[vars]` string, not a TOML boolean — kept
+   * as a string so the comparison at the call site, `env.ENFORCE_PREMIUM ===
+   * "true"`, is explicit and grep-able rather than relying on truthy
+   * coercion). Gates `/v1/ai/generate` on the JWT's `premium` claim — see
+   * README.md for the full enforcement behavior, including the
+   * one-lifetime-free-report allowance for the "report" kind.
+   */
+  ENFORCE_PREMIUM: string;
 
   /**
    * Secrets. Never set in wrangler.toml or anywhere in code — provisioned

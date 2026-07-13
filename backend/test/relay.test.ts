@@ -2,15 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_DELTAS,
   MAX_FINDINGS,
+  MAX_REPORT_INPUT_SIZE,
   MAX_TEXT_FIELD_LENGTH,
-  REPORT_SUMMARY_MAX_TOKENS,
   REPORT_SUMMARY_SYSTEM_PROMPT,
-  buildAnthropicRequest,
-  formatClientSSEEvent,
-  mapAnthropicHttpError,
-  mapAnthropicSSEEvent,
-  validateReportSummaryRequest,
-  type ReportSummaryRequest
+  validateReportSummaryRequest
 } from "../src/relay";
 
 function validPayload(): unknown {
@@ -116,6 +111,14 @@ describe("validateReportSummaryRequest — rejects oversized text and unknown/at
     expect(result.errors.some((e) => e.includes("binary/base64"))).toBe(true);
   });
 
+  it("rejects a base64-blob-shaped delta string", () => {
+    const payload = validPayload() as Record<string, unknown>;
+    payload.deltas = ["QmFzZTY0".repeat(60)]; // 480 chars of unbroken base64 alphabet
+    const result = validateReportSummaryRequest(payload);
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((e) => e.includes("binary/base64"))).toBe(true);
+  });
+
   it("rejects a findings array over the max count", () => {
     const many = Array.from({ length: MAX_FINDINGS + 1 }, (_, i) => ({
       id: `f${i}`,
@@ -134,6 +137,23 @@ describe("validateReportSummaryRequest — rejects oversized text and unknown/at
     expect(result.ok).toBe(false);
   });
 
+  it("rejects an overall payload above the total size cap even when every individual field is legal", () => {
+    // 50 findings * ~1950-char details ≈ 100KB serialized — every field is
+    // individually under its cap, so only the whole-payload gate catches it.
+    const findings = Array.from({ length: MAX_FINDINGS }, (_, i) => ({
+      id: `f${i}`,
+      severity: "info",
+      category: "labs",
+      title: "Finding",
+      detail: "word ".repeat(390) // ordinary prose, not base64-shaped
+    }));
+    const payload = { score: 50, findings, labValues: [], deltas: [] };
+    expect(JSON.stringify(payload).length).toBeGreaterThan(MAX_REPORT_INPUT_SIZE);
+    const result = validateReportSummaryRequest(payload);
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((e) => e.includes("exceeds max size"))).toBe(true);
+  });
+
   it("rejects a non-object body", () => {
     expect(validateReportSummaryRequest("not an object").ok).toBe(false);
     expect(validateReportSummaryRequest(null).ok).toBe(false);
@@ -147,96 +167,12 @@ describe("validateReportSummaryRequest — rejects oversized text and unknown/at
   });
 });
 
-describe("buildAnthropicRequest", () => {
-  it("builds a streaming request using the given model and the versioned system prompt", () => {
-    const input: ReportSummaryRequest = {
-      score: 80,
-      scoreLabel: "Good",
-      profileSummary: null,
-      findings: [],
-      labValues: [],
-      deltas: []
-    };
-    const request = buildAnthropicRequest(input, "claude-opus-4-8");
-
-    expect(request.model).toBe("claude-opus-4-8");
-    expect(request.stream).toBe(true);
-    expect(request.max_tokens).toBe(REPORT_SUMMARY_MAX_TOKENS);
-    expect(request.system).toBe(REPORT_SUMMARY_SYSTEM_PROMPT);
-    expect(request.messages).toHaveLength(1);
-    expect(request.messages[0]).toEqual({ role: "user", content: JSON.stringify(input) });
-  });
-
-  it("never embeds request content in the system prompt (it stays a fixed constant)", () => {
-    const inputA = buildAnthropicRequest({ score: 1, findings: [], labValues: [], deltas: [] }, "m");
-    const inputB = buildAnthropicRequest({ score: 99, findings: [], labValues: [], deltas: [] }, "m");
-    expect(inputA.system).toBe(inputB.system);
-  });
-});
-
-describe("mapAnthropicSSEEvent — refusal and delta mapping", () => {
-  it("maps a text delta to a client delta event", () => {
-    const event = mapAnthropicSSEEvent({ type: "content_block_delta", delta: { type: "text_delta", text: "Hello" } });
-    expect(event).toEqual({ type: "delta", text: "Hello" });
-  });
-
-  it("ignores non-text content block deltas", () => {
-    const event = mapAnthropicSSEEvent({ type: "content_block_delta", delta: { type: "input_json_delta" } });
-    expect(event).toBeNull();
-  });
-
-  it("maps a refusal stop_reason to a refused event", () => {
-    const event = mapAnthropicSSEEvent({ type: "message_delta", delta: { stop_reason: "refusal" } });
-    expect(event).toEqual({ type: "refused" });
-  });
-
-  it("ignores a normal end_turn stop_reason", () => {
-    const event = mapAnthropicSSEEvent({ type: "message_delta", delta: { stop_reason: "end_turn" } });
-    expect(event).toBeNull();
-  });
-
-  it("maps message_stop to a done event", () => {
-    expect(mapAnthropicSSEEvent({ type: "message_stop" })).toEqual({ type: "done" });
-  });
-
-  it("maps an error event to a typed error event", () => {
-    const event = mapAnthropicSSEEvent({ type: "error", error: { type: "overloaded_error", message: "Overloaded" } });
-    expect(event).toEqual({ type: "error", code: "overloaded_error", message: "Overloaded" });
-  });
-
-  it("ignores unrecognized event types (e.g. content_block_start)", () => {
-    expect(mapAnthropicSSEEvent({ type: "content_block_start" })).toBeNull();
-    expect(mapAnthropicSSEEvent({ type: "ping" })).toBeNull();
-  });
-});
-
-describe("mapAnthropicHttpError", () => {
-  it("maps 429 to rate_limited", () => {
-    expect(mapAnthropicHttpError(429, null).code).toBe("rate_limited");
-  });
-
-  it("maps a 5xx status to upstream_unavailable", () => {
-    expect(mapAnthropicHttpError(529, null).code).toBe("upstream_unavailable");
-  });
-
-  it("maps other 4xx statuses to upstream_error", () => {
-    expect(mapAnthropicHttpError(400, null).code).toBe("upstream_error");
-  });
-
-  it("surfaces the upstream error message when present", () => {
-    const result = mapAnthropicHttpError(400, { error: { message: "invalid model" } });
-    expect(result.message).toBe("invalid model");
-  });
-
-  it("falls back to a generic message when the body is unparsable", () => {
-    const result = mapAnthropicHttpError(500, null);
-    expect(result.message).toBeTruthy();
-  });
-});
-
-describe("formatClientSSEEvent", () => {
-  it("frames an event as a single SSE data line terminated by a blank line", () => {
-    const formatted = formatClientSSEEvent({ type: "delta", text: "hi" });
-    expect(formatted).toBe('data: {"type":"delta","text":"hi"}\n\n');
+describe("REPORT_SUMMARY_SYSTEM_PROMPT", () => {
+  it("keeps the educational-not-diagnostic and never-invent-a-number rails from the client prompt", () => {
+    expect(REPORT_SUMMARY_SYSTEM_PROMPT).toContain("Never diagnose");
+    expect(REPORT_SUMMARY_SYSTEM_PROMPT).toContain("Never prescribe");
+    expect(REPORT_SUMMARY_SYSTEM_PROMPT).toContain("Never invent a number");
+    expect(REPORT_SUMMARY_SYSTEM_PROMPT).toContain("educational only");
+    expect(REPORT_SUMMARY_SYSTEM_PROMPT).toContain("follow-up questions");
   });
 });

@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  ANONYMOUS_TOKEN_TTL_SECONDS,
   AuthError,
   deriveUserId,
+  issueAnonymousToken,
   issueTokenPair,
   rotateFromRefreshToken,
   verifyAccessToken,
+  verifyAnonymousToken,
   verifyAppAttestPlaceholder,
+  verifyAppTransactionPlaceholder,
   verifyAppleIdentityToken,
   verifyRefreshToken
 } from "../src/auth";
@@ -154,5 +158,59 @@ describe("Sign in with Apple stub", () => {
     }
     expect(caught).toBeInstanceOf(AuthError);
     expect((caught as AuthError).code).toBe("apple_signin_not_implemented");
+  });
+});
+
+describe("anonymous access token (wire contract)", () => {
+  const DEVICE_ID = "6f1e1c1a-2b3c-4d5e-8f90-112233445566";
+
+  it("issues a token that verifies back to the same deviceID sub and premium claim", async () => {
+    const now = new Date("2026-07-12T12:00:00.000Z");
+    const issued = await issueAnonymousToken({ secret: SECRET, deviceId: DEVICE_ID, premium: false, now });
+    expect(issued.expiresInSeconds).toBe(86400);
+    expect(issued.expiresInSeconds).toBe(ANONYMOUS_TOKEN_TTL_SECONDS);
+
+    const claims = await verifyAnonymousToken(SECRET, issued.token, now);
+    expect(claims).toEqual({ sub: DEVICE_ID, premium: false });
+  });
+
+  it("preserves premium=true through verification", async () => {
+    const now = new Date("2026-07-12T12:00:00.000Z");
+    const issued = await issueAnonymousToken({ secret: SECRET, deviceId: DEVICE_ID, premium: true, now });
+    const claims = await verifyAnonymousToken(SECRET, issued.token, now);
+    expect(claims.premium).toBe(true);
+  });
+
+  it("rejects the token after 24h", async () => {
+    const issuedAt = new Date("2026-07-12T12:00:00.000Z");
+    const issued = await issueAnonymousToken({ secret: SECRET, deviceId: DEVICE_ID, premium: false, now: issuedAt });
+
+    const justAfterExpiry = new Date("2026-07-13T12:00:01.000Z");
+    await expect(verifyAnonymousToken(SECRET, issued.token, justAfterExpiry)).rejects.toMatchObject({ code: "expired" });
+  });
+
+  it("rejects a token signed with the wrong secret", async () => {
+    const now = new Date("2026-07-12T12:00:00.000Z");
+    const issued = await issueAnonymousToken({ secret: SECRET, deviceId: DEVICE_ID, premium: false, now });
+    await expect(verifyAnonymousToken(OTHER_SECRET, issued.token, now)).rejects.toMatchObject({ code: "invalid_signature" });
+  });
+
+  it("rejects an old-style access token presented as an anonymous token (type check)", async () => {
+    const now = new Date("2026-07-12T12:00:00.000Z");
+    const pair = await issueTokenPair({ secret: SECRET, userId: "user-abc", deviceId: DEVICE_ID, now });
+    await expect(verifyAnonymousToken(SECRET, pair.accessToken, now)).rejects.toMatchObject({ code: "wrong_token_type" });
+  });
+
+  it("rejects a structurally malformed token", async () => {
+    await expect(verifyAnonymousToken(SECRET, "not-a-jwt", new Date())).rejects.toBeInstanceOf(AuthError);
+  });
+});
+
+describe("App Store transaction placeholder (fails closed)", () => {
+  it("never grants premium, regardless of what is sent — verification is an unimplemented TODO", () => {
+    expect(verifyAppTransactionPlaceholder(null)).toBe(false);
+    expect(verifyAppTransactionPlaceholder("")).toBe(false);
+    expect(verifyAppTransactionPlaceholder("ZmFrZS1qd3M")).toBe(false);
+    expect(verifyAppTransactionPlaceholder("a".repeat(5000))).toBe(false);
   });
 });
