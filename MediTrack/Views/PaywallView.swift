@@ -87,6 +87,11 @@ struct PaywallView: View {
     private var featureList: some View {
         VStack(alignment: .leading, spacing: 12) {
             PaywallFeatureRow(
+                icon: "doc.viewfinder",
+                title: "Scan & decode lab reports",
+                detail: "Photograph any lab report — values extracted and organized automatically."
+            )
+            PaywallFeatureRow(
                 icon: "doc.text.magnifyingglass",
                 title: "Unlimited AI health reports",
                 detail: "Plain-language narration of your health score and findings, any time."
@@ -168,7 +173,7 @@ struct PaywallView: View {
     }
 
     private var freeTierFootnote: some View {
-        Text("All core tracking — OCR scanning, health score, interactions, trends, and backups — is free forever. Your first AI health report is included free; Premium unlocks unlimited AI reports, chat about your results, and AI-assisted entry.")
+        Text("Tracking vitals, medications, symptoms, and goals — with your health score, trends, and backups — stays free. Your first AI health report is included free; Premium unlocks lab report scanning, unlimited AI reports, chat, and AI-assisted entry.")
             .font(.footnote)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)

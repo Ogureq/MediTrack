@@ -1,3 +1,5 @@
+> **PRICING CHANGE NOTICE (Jul 2026):** Lab report scanning is now a Premium feature (owner decision). Any line below describing scanning/OCR as free must be revised before publishing. Free tier = vitals/meds/symptoms/goals tracking + score/trends + one AI report.
+
 # App Store listing kit
 
 Paste-ready copy for App Store Connect. Character limits verified against
