@@ -53,10 +53,11 @@ final class AITransportTests: XCTestCase {
 
     // MARK: RelayConfig.baseURL (UserDefaults + compiled-in fallback)
 
-    func testRelayConfigBaseURLIsNilWhenNothingConfigured() {
-        // No UserDefaults override, and `defaultBaseURLString` is empty
-        // until the owner deploys and fills it in.
-        XCTAssertNil(RelayConfig.baseURL)
+    func testRelayConfigBaseURLFallsBackToCompiledInRelayWhenNothingConfigured() {
+        // No UserDefaults override → the owner's deployed relay is the
+        // compiled-in default, so every build routes through it out of the
+        // box. This test locks that production wiring.
+        XCTAssertEqual(RelayConfig.baseURL?.host, "gemocode-relay.ogureq.workers.dev")
     }
 
     func testRelayConfigBaseURLUserDefaultsOverrideWins() throws {
@@ -67,7 +68,7 @@ final class AITransportTests: XCTestCase {
 
     func testRelayConfigBaseURLIgnoresBlankOverrideAndFallsBackToDefault() {
         UserDefaults.standard.set("   ", forKey: RelayConfig.defaultsKey)
-        XCTAssertNil(RelayConfig.baseURL)
+        XCTAssertEqual(RelayConfig.baseURL?.host, "gemocode-relay.ogureq.workers.dev")
     }
 
     func testRelayConfigBaseURLIgnoresInvalidOverride() {

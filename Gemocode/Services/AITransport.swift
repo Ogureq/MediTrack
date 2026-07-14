@@ -92,10 +92,10 @@ enum AITransportError: LocalizedError {
 /// Where the owner's Cloudflare Workers relay lives. Empty/invalid resolves
 /// to `nil`, which routes every call onto the direct/BYOK fallback.
 enum RelayConfig {
-    /// Compiled-in fallback, filled in by the owner once the relay is
-    /// deployed. Left empty for now, which (combined with no UserDefaults
-    /// override) means every build defaults to the BYOK fallback path.
-    static let defaultBaseURLString = ""
+    /// Compiled-in fallback: the owner's deployed relay. Every build routes
+    /// AI calls through this Worker unless a `relay.baseURL` UserDefaults
+    /// override points elsewhere (or it's cleared, which falls back to BYOK).
+    static let defaultBaseURLString = "https://gemocode-relay.ogureq.workers.dev"
 
     /// UserDefaults key an owner/tester can set (e.g. via a debug menu or
     /// `-relay.baseURL <url>` launch argument) to point at a relay instance
