@@ -147,22 +147,29 @@ enum HealthKitService {
         try await store.save(correlation)
     }
 
-    /// Imports samples recorded after `since` and returns how many were added.
+    /// Simple quantity types → (HealthKit identifier, vital type, unit, scale).
+    /// Shared by `importVitals` (manual + automatic sync both funnel through
+    /// it) and `observedSampleTypes` (automatic sync's observer list), so the
+    /// two can never drift apart.
+    private static let quantityImportMappings: [(HKQuantityTypeIdentifier, VitalType, HKUnit, Double)] = [
+        (.bodyMass, .weight, .gramUnit(with: .kilo), 1),
+        (.heartRate, .heartRate, HKUnit.count().unitDivided(by: .minute()), 1),
+        (.bloodGlucose, .bloodGlucose, HKUnit(from: "mg/dL"), 1),
+        (.oxygenSaturation, .oxygenSaturation, .percent(), 100),
+        (.bodyTemperature, .temperature, .degreeCelsius(), 1),
+    ]
+
+    /// Imports samples recorded after `since` and returns how many were
+    /// added. This is the shared incremental-import core: the manual
+    /// "Import from Apple Health" button in ProfileView and the automatic
+    /// background sync observer (`runIncrementalSync`) both call this same
+    /// function rather than duplicating the fetch/mapping/dedupe logic.
     @MainActor
     static func importVitals(since: Date, into context: ModelContext) async throws -> Int {
         var imported = 0
         let note = "Imported from Apple Health"
 
-        // Simple quantity types → (HealthKit identifier, vital type, unit, scale).
-        let mappings: [(HKQuantityTypeIdentifier, VitalType, HKUnit, Double)] = [
-            (.bodyMass, .weight, .gramUnit(with: .kilo), 1),
-            (.heartRate, .heartRate, HKUnit.count().unitDivided(by: .minute()), 1),
-            (.bloodGlucose, .bloodGlucose, HKUnit(from: "mg/dL"), 1),
-            (.oxygenSaturation, .oxygenSaturation, .percent(), 100),
-            (.bodyTemperature, .temperature, .degreeCelsius(), 1),
-        ]
-
-        for (identifier, vitalType, unit, scale) in mappings {
+        for (identifier, vitalType, unit, scale) in quantityImportMappings {
             guard let quantityType = HKObjectType.quantityType(forIdentifier: identifier) else { continue }
             let samples = try await quantitySamples(of: quantityType, since: since)
             for sample in samples {
@@ -235,5 +242,137 @@ enum HealthKitService {
             }
             store.execute(query)
         }
+    }
+
+    // MARK: Automatic Sync
+
+    /// UserDefaults key persisting whether automatic background sync is on.
+    /// Opt-in and off by default, matching the app's privacy stance: nothing
+    /// talks to Apple Health on its own until the user asks it to.
+    static let automaticSyncKey = "healthkit.automaticSync"
+
+    /// UserDefaults key for the incremental-import high-water mark, shared
+    /// between the manual "Import from Apple Health" button (ProfileView's
+    /// `lastHealthImportAt` @AppStorage) and automatic sync, so neither path
+    /// re-imports what the other already pulled in.
+    private static let lastImportDefaultsKey = "lastHealthImportAt"
+
+    /// Sample types automatic sync observes — derived from the same mapping
+    /// table `importVitals` uses, plus the blood-pressure correlation, so
+    /// there is exactly one list of "types this app knows how to import" to
+    /// keep in sync.
+    private static var observedSampleTypes: [HKSampleType] {
+        var types: [HKSampleType] = []
+        for (identifier, _, _, _) in quantityImportMappings {
+            if let type = HKObjectType.quantityType(forIdentifier: identifier) {
+                types.append(type)
+            }
+        }
+        if let correlationType = HKObjectType.correlationType(forIdentifier: .bloodPressure) {
+            types.append(correlationType)
+        }
+        return types
+    }
+
+    @MainActor
+    private static var observerQueries: [HKObserverQuery] = []
+
+    /// Registers HealthKit observer queries + hourly background delivery for
+    /// every sample type `importVitals` knows how to map, if automatic sync
+    /// is turned on and HealthKit is available. Call this once at app
+    /// launch (see `MediTrackApp`) — it is a cheap no-op when the toggle is
+    /// off.
+    ///
+    /// Honest limits: background delivery needs a real device with the
+    /// HealthKit entitlement + a provisioning profile applied; it is
+    /// silently inert in the Simulator and in CI (`isAvailable` guards
+    /// that — this never crashes there, it just does nothing). Even on
+    /// device, HealthKit only wakes a *suspended* MediTrack process for new
+    /// data — a fully terminated app still needs the user to relaunch it,
+    /// or a foreground/background refresh, before the next observer fire.
+    static func startAutomaticSyncIfEnabled(container: ModelContainer) {
+        guard isAvailable, UserDefaults.standard.bool(forKey: automaticSyncKey) else { return }
+        Task { await startObservers(container: container) }
+    }
+
+    /// Starts automatic sync unconditionally (HealthKit availability
+    /// permitting). Call after authorization has been granted, e.g. from
+    /// the Profile toggle's `onChange` handler when it turns on.
+    static func startAutomaticSync(container: ModelContainer) async {
+        guard isAvailable else { return }
+        await startObservers(container: container)
+    }
+
+    /// Stops automatic sync: tears down observer queries and disables
+    /// background delivery so HealthKit stops waking MediTrack for this
+    /// data. Safe to call even if sync was never started.
+    static func stopAutomaticSync() {
+        guard isAvailable else { return }
+        Task { @MainActor in
+            for query in observerQueries {
+                store.stop(query)
+            }
+            observerQueries.removeAll()
+            store.disableAllBackgroundDelivery { _, _ in }
+        }
+    }
+
+    @MainActor
+    private static func startObservers(container: ModelContainer) async {
+        for query in observerQueries {
+            store.stop(query)
+        }
+        observerQueries.removeAll()
+
+        for type in observedSampleTypes {
+            let query = HKObserverQuery(sampleType: type, predicate: nil) { _, completionHandler, error in
+                Task {
+                    defer { completionHandler() }
+                    guard error == nil else { return }
+                    await runIncrementalSync(container: container)
+                }
+            }
+            store.execute(query)
+            observerQueries.append(query)
+            store.enableBackgroundDelivery(for: type, frequency: .hourly) { _, _ in
+                // Best-effort: background delivery can fail to register
+                // without a provisioning profile (Simulator, unsigned CI
+                // builds). Observers still fire while the app is running
+                // either way, so we don't surface this to the user.
+            }
+        }
+    }
+
+    /// Runs the shared `importVitals` core against a context created from
+    /// `container` (background-safe: no dependency on any view's live
+    /// `ModelContext`), then advances the shared high-water mark. Always
+    /// completes without throwing — the observer that calls this must
+    /// invoke HealthKit's completion handler no matter what happens here,
+    /// or HealthKit backs off future delivery.
+    @MainActor
+    private static func runIncrementalSync(container: ModelContainer) async {
+        let context = ModelContext(container)
+        let since = lastImportDate()
+        do {
+            _ = try await importVitals(since: since, into: context)
+            try context.save()
+            setLastImportDate(.now)
+        } catch {
+            // Best-effort background sync: leave the high-water mark alone
+            // so the next observer fire (or a manual import) retries the
+            // same window instead of silently losing readings.
+        }
+    }
+
+    private static func lastImportDate() -> Date {
+        let stored = UserDefaults.standard.double(forKey: lastImportDefaultsKey)
+        if stored > 0 {
+            return Date(timeIntervalSince1970: stored)
+        }
+        return Calendar.current.date(byAdding: .year, value: -1, to: .now) ?? .now
+    }
+
+    private static func setLastImportDate(_ date: Date) {
+        UserDefaults.standard.set(date.timeIntervalSince1970, forKey: lastImportDefaultsKey)
     }
 }

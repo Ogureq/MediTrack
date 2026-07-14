@@ -30,6 +30,12 @@ struct MediTrackApp: App {
         WindowGroup {
             ContentView()
                 .fontDesign(.rounded)
+                .task {
+                    // No-op unless the user has opted in to Automatic Sync
+                    // in Profile, and unavailable on the Simulator/CI —
+                    // `HealthKitService.isAvailable` guards both.
+                    HealthKitService.startAutomaticSyncIfEnabled(container: sharedModelContainer)
+                }
         }
         .modelContainer(sharedModelContainer)
     }

@@ -30,6 +30,7 @@ private struct ProfileForm: View {
     @AppStorage("appLockEnabled") private var appLockEnabled = false
     @AppStorage("lastHealthImportAt") private var lastHealthImportAt: Double = 0
     @AppStorage("health.writeBackEnabled") private var healthWriteBackEnabled = false
+    @AppStorage(HealthKitService.automaticSyncKey) private var automaticSyncEnabled = false
     @AppStorage(Units.weightKey) private var weightUnitRaw = WeightUnit.kilograms.rawValue
     @AppStorage(Units.temperatureKey) private var temperatureUnitRaw = TemperatureUnit.celsius.rawValue
     @AppStorage(Units.glucoseKey) private var glucoseUnitRaw = GlucoseUnit.mgdL.rawValue
@@ -244,6 +245,25 @@ private struct ProfileForm: View {
                             try? await HealthKitService.requestWriteAuthorization()
                         }
                     }
+                Toggle("Automatic Sync from Apple Health", isOn: $automaticSyncEnabled)
+                    .disabled(!HealthKitService.isAvailable)
+                    .onChange(of: automaticSyncEnabled) { _, isEnabled in
+                        Task {
+                            if isEnabled {
+                                do {
+                                    try await HealthKitService.requestAuthorization()
+                                    await HealthKitService.startAutomaticSync(container: modelContext.container)
+                                } catch {
+                                    automaticSyncEnabled = false
+                                }
+                            } else {
+                                HealthKitService.stopAutomaticSync()
+                            }
+                        }
+                    }
+                Text("Checks for new readings from your Apple Watch and other devices about once an hour, on-device.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                 Button {
                     showingExportPassphraseSheet = true
                 } label: {
