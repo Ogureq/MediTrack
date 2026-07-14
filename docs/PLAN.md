@@ -178,6 +178,21 @@ This document records the phased plan executed to build Gemocode, a privacy-firs
 - [x] Backend generate routes (`backend/`) — `/v1/auth/anonymous` (24h JWT with premium claim) and `/v1/ai/generate` (report/chat/extract, server-owned prompts and models, refusal mapping, per-user + global daily token quotas); ENFORCE_PREMIUM flag with a one-free-report-per-device KV allowance consumed only on success; App Store verification fails closed pending implementation; 126 vitest tests, strict tsc
 - [x] Design project imported from claude.ai/design — prototype analyzed; theme tokens already match the app; per-screen detail pass queued
 
+## Phase 22 — Prototype Implementation Waves, Scan-First Reports & the Gemocode Rename
+
+- [x] Design prototype v1–v3 implemented — Dashboard/Review/Trends/Quick Add/Medications per the imported claude.ai/design prototype; More screen redesigned (profile header card, 2-column health-records grid with live counts, red Medical ID emergency card); six detail screens rebuilt (Vitals metric-card grid with conservative delta colors, Symptoms severity pills + dots, Appointments date chips, Goals gradient progress cards, Documents filter chips + time-grouped sections, Medical ID hero with emergency contact) — all with truthful copy where the prototype over-claimed (no lock-screen claims)
+- [x] Scan-first premium reports — report creation is a scan flow (`Views/Reports/ScanReportView.swift`): photograph/import → on-device OCR → confirm decoded values; manual entry retired for new reports (editing stays); single `PremiumGates.reportCreation` flag reverts the whole gate
+- [x] Emergency contact on HealthProfile — name/relation/phone + organ donor status, backup-safe optional fields with tests
+- [x] HealthKit auto-sync — observer queries + hourly background delivery keep imported vitals current without opening the app
+- [x] Legal in-app — native Privacy Policy & Terms sheets (`Views/LegalView.swift`) plus hosted copies on the landing site
+- [x] Renamed MediTrack → Gemocode everywhere — targets, scheme, module, folders, bundle ids (`com.ogureq.gemocode`), app group, deep links (`gemocode://`), relay worker name; CI green on the renamed project
+
+## Phase 23 — Scan → AI Report → PDF Pipeline
+
+- [x] Auto-AI after scan — saving a scan with confirmed lab values flows straight into the AI Health Analyst: the sheet becomes an AI Analysis stage (generate → verified report inline, reusing the Review screen's visual language); failures never block or lose the already-saved scan
+- [x] AI report PDF export (`Services/AIReportPDFExporter.swift`) — paginated US-Letter PDF (scanned-values table with status dots, AI overview and sections, score context, "Questions & topics for your doctor" with a discuss-with-your-doctor lead-in, dual disclaimers); attached to the report as a `ReportAttachment` so it lands in Documents, then shared via the system sheet; pure `layoutBlocks`/`layoutText` core with 8 content unit tests, including a regression that the fixed copy never issues an imperative "take" instruction
+- [x] One free AI scan — the lifetime AI-report meter (`AIReportQuota`) now also admits free users into the scan flow while their trial remains, consumed only on a successful generation after entitlements resolve; paywall and locked-state copy updated to "one free AI scan and report"
+
 ## Future Milestones
 
 Not part of the current plan; captured here for future scoping:

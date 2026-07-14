@@ -27,6 +27,16 @@ struct ScanReportView: View {
     @Environment(\.modelContext) private var modelContext
     @ObservedObject private var premiumStore = PremiumStore.shared
 
+    // Queried so the post-save AI stage can build a `HealthReview` over the
+    // freshly saved data exactly as `ReviewScreen` does — this view has no
+    // other way to see the rest of the user's records.
+    @Query(sort: \MedicalReport.date, order: .reverse) private var reports: [MedicalReport]
+    @Query private var vitals: [VitalSample]
+    @Query private var medications: [Medication]
+    @Query private var profiles: [HealthProfile]
+    @Query private var symptoms: [SymptomEntry]
+    @Query(sort: \Appointment.date) private var appointments: [Appointment]
+
     @State private var attachments: [AttachmentDraft] = []
     @State private var confirmedLabs: [ScannedLabValue] = []
     @State private var scannedValues: [ScannedLabValue] = []
@@ -45,8 +55,45 @@ struct ScanReportView: View {
     @State private var showingCameraAlert = false
     @State private var cameraAlertMessage = ""
 
+    // MARK: - Post-save AI stage
+
+    /// Drives what the sheet shows after a successful save: the original
+    /// scan UI, or — when `AISummaryService.isConfigured` and at least one
+    /// lab value was confirmed — the auto-generated AI report in place of
+    /// dismissing.
+    private enum Stage {
+        case scanning
+        case aiGenerating
+        case aiReport(AIHealthReport)
+        case aiFailed(String)
+
+        var isScanning: Bool {
+            if case .scanning = self { true } else { false }
+        }
+    }
+
+    private struct ShareItem: Identifiable {
+        let id = UUID()
+        let url: URL
+    }
+
+    @State private var stage: Stage = .scanning
+    /// The report `save()` just inserted — kept so the AI stage can attach
+    /// the exported PDF to it and read back its saved lab results.
+    @State private var savedReport: MedicalReport?
+    @State private var isPulsingAIGenerating = false
+    @State private var isExportingPDF = false
+    @State private var pdfExportError: String?
+    @State private var shareItem: ShareItem?
+
+    /// Free users get exactly one AI scan: the same lifetime meter as the
+    /// AI Health Analyst report (`AIReportQuota`), since a scan auto-runs
+    /// one report. The meter is only consumed on a successful generation
+    /// (see `onAIReportGenerated`), so a failed scan never costs the trial.
     private var isLocked: Bool {
-        PremiumGates.reportCreation && !premiumStore.isPremium
+        PremiumGates.reportCreation
+            && !premiumStore.isPremium
+            && AIReportQuota.remaining(defaults: .standard) == 0
     }
 
     private var canSave: Bool {
@@ -64,32 +111,22 @@ struct ScanReportView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
-                    ScanReportHeader()
-
-                    if isLocked {
-                        ZStack {
-                            unlockedBody
-                                .disabled(true)
-                                .opacity(0.28)
-                                .accessibilityHidden(true)
-                            lockedCard
-                        }
-                    } else {
-                        unlockedBody
-                    }
+                    stageContent
                 }
                 .padding()
             }
             .ambientScreen()
-            .navigationTitle("New Report")
+            .navigationTitle(stage.isScanning ? "New Report" : "AI Analysis")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
-                        .disabled(!canSave)
+                if stage.isScanning {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") { save() }
+                            .disabled(!canSave)
+                    }
                 }
             }
             .sheet(isPresented: $showingPaywall) {
@@ -127,10 +164,41 @@ struct ScanReportView: View {
             } message: {
                 Text(cameraAlertMessage)
             }
+            .sheet(item: $shareItem) { item in
+                ActivityShareSheet(activityItems: [item.url]) {
+                    shareItem = nil
+                }
+            }
         }
     }
 
     // MARK: - Content
+
+    /// Top-level switch between the original scan UI and the post-save AI
+    /// stage — exactly one is shown at a time, driven by `stage`.
+    @ViewBuilder
+    private var stageContent: some View {
+        switch stage {
+        case .scanning:
+            Group {
+                ScanReportHeader()
+
+                if isLocked {
+                    ZStack {
+                        unlockedBody
+                            .disabled(true)
+                            .opacity(0.28)
+                            .accessibilityHidden(true)
+                        lockedCard
+                    }
+                } else {
+                    unlockedBody
+                }
+            }
+        case .aiGenerating, .aiReport, .aiFailed:
+            aiStageBody
+        }
+    }
 
     @ViewBuilder
     private var unlockedBody: some View {
@@ -316,6 +384,10 @@ struct ScanReportView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+            Text("You've used your free AI scan. Premium unlocks unlimited scans and AI reports.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
             Button {
                 showingPaywall = true
             } label: {
@@ -328,8 +400,159 @@ struct ScanReportView: View {
         .frame(maxWidth: .infinity)
         .glassCard()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Scan lab reports with Premium. Photograph or import a lab report and Gemocode extracts your results automatically.")
+        .accessibilityLabel("Scan lab reports with Premium. Photograph or import a lab report and Gemocode extracts your results automatically. You've used your free AI scan; Premium unlocks unlimited scans and AI reports.")
         .accessibilityHint("Double tap Unlock Premium to see plans.")
+    }
+
+    // MARK: - AI Analysis stage
+
+    @ViewBuilder
+    private var aiStageBody: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "sparkles")
+                .font(.title.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 60, height: 60)
+                .background(Glass.accentGradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .accessibilityHidden(true)
+            Text("AI Health Analyst")
+                .font(.title2.bold())
+            Text("Your scan was saved — here's an AI-assisted read of what it means.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+
+        switch stage {
+        case .scanning:
+            EmptyView()
+        case .aiGenerating:
+            aiGeneratingCard
+        case .aiReport(let report):
+            Group {
+                aiReportCard(report)
+                aiActionButtons
+            }
+        case .aiFailed(let message):
+            Group {
+                aiErrorCard(message)
+                doneButton
+            }
+        }
+    }
+
+    private var aiGeneratingCard: some View {
+        HStack(spacing: 10) {
+            ProgressView()
+            Text("Generating your AI report…")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .opacity(isPulsingAIGenerating ? 1 : 0.6)
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+                        isPulsingAIGenerating = true
+                    }
+                }
+                .onDisappear { isPulsingAIGenerating = false }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .glassCard()
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Mirrors `ReviewScreen.aiReportContent`'s visual language — overview,
+    /// each section, doctor questions, and the same footer — for a verified
+    /// `AIHealthReport` rendered inline right after a scan.
+    private func aiReportCard(_ report: AIHealthReport) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("AI Health Analyst", systemImage: "sparkles")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Glass.accentGradient)
+
+            Text(report.overview)
+                .font(.subheadline)
+
+            ForEach(Array(report.sections.enumerated()), id: \.offset) { _, section in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(section.title)
+                        .font(.subheadline.weight(.semibold))
+                    Text(section.body)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+            }
+
+            if !report.doctorQuestions.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Questions for Your Doctor")
+                        .font(.subheadline.weight(.semibold))
+                    ForEach(Array(report.doctorQuestions.enumerated()), id: \.offset) { _, question in
+                        Label(question, systemImage: "checkmark.circle")
+                            .font(.subheadline)
+                    }
+                }
+            }
+
+            Text("Generated by Claude — informational only, not medical advice.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard()
+    }
+
+    private func aiErrorCard(_ message: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("AI Report Unavailable", systemImage: "exclamationmark.triangle.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.orange)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text("Your scan and lab values are safely saved either way.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard()
+        .accessibilityElement(children: .combine)
+    }
+
+    private var aiActionButtons: some View {
+        VStack(spacing: 10) {
+            Button {
+                exportAIReportPDF()
+            } label: {
+                Label(isExportingPDF ? "Preparing PDF…" : "Save as PDF", systemImage: "doc.richtext")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(GlassProminentButtonStyle())
+            .disabled(isExportingPDF)
+            .accessibilityHint("Creates a PDF of this AI report, attaches it to the saved report, and opens the share sheet.")
+
+            if let pdfExportError {
+                Text(pdfExportError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            doneButton
+        }
+    }
+
+    private var doneButton: some View {
+        Button {
+            dismiss()
+        } label: {
+            Text("Done")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(GlassButtonStyle())
     }
 
     // MARK: - Attachment ingestion (mirrors EditReportView's working patterns)
@@ -486,7 +709,17 @@ struct ScanReportView: View {
         }
 
         Haptics.success()
-        dismiss()
+
+        // Auto-run the AI Health Analyst on the just-saved scan whenever a
+        // lab value was confirmed and AI is reachable, instead of
+        // dismissing — see `generateAIReport(for:)` below. Otherwise this
+        // is the original, unchanged save-and-dismiss behavior.
+        if !report.labResults.isEmpty, AISummaryService.isConfigured {
+            savedReport = report
+            generateAIReport(for: report)
+        } else {
+            dismiss()
+        }
     }
 
     /// Nudges the user to re-test in ~90 days after they log a new report
@@ -507,6 +740,129 @@ struct ScanReportView: View {
                 )
             }
         }
+    }
+
+    // MARK: - AI report generation
+
+    /// A short, caller-built profile description ("42-year-old male;
+    /// conditions: hypertension"). Identical to `ReviewScreen.aiProfileSummary`
+    /// — duplicated rather than shared, per this file's edit-ownership: this
+    /// view has no shared AI-helper module of its own to put it in.
+    private var aiProfileSummary: String? {
+        guard let profile = profiles.first else { return nil }
+        var parts: [String] = []
+        if let age = profile.age {
+            parts.append("\(age)-year-old")
+        }
+        if profile.sex != .unspecified {
+            parts.append(profile.sex.displayName.lowercased())
+        }
+        if !profile.conditions.isEmpty {
+            parts.append("conditions: \(profile.conditions)")
+        }
+        if !profile.allergies.isEmpty {
+            parts.append("allergies: \(profile.allergies)")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: "; ")
+    }
+
+    /// `AnalysisEngine.generateReview` over every queried record, patched to
+    /// guarantee `savedReport` is included even on the very first call right
+    /// after `save()` inserts it — this view's `@Query` results may not have
+    /// refreshed yet at that point.
+    private func currentReview(including savedReport: MedicalReport) -> HealthReview {
+        var allReports = reports
+        if !allReports.contains(where: { $0.persistentModelID == savedReport.persistentModelID }) {
+            allReports.append(savedReport)
+        }
+        return AnalysisEngine.generateReview(
+            profile: profiles.first,
+            reports: allReports,
+            vitals: vitals,
+            medications: medications,
+            symptoms: symptoms,
+            appointments: appointments
+        )
+    }
+
+    /// Runs the same `AnalysisEngine.generateReview` → `AISummaryService.generateReport`
+    /// pipeline `ReviewScreen` uses, over the just-saved report plus every
+    /// other queried record. Never blocks or loses the scan: the report was
+    /// already saved before this is called, and any failure or refusal here
+    /// just shows a friendly inline error next to the `Done` button.
+    private func generateAIReport(for report: MedicalReport) {
+        stage = .aiGenerating
+        let review = currentReview(including: report)
+        let profileSummary = aiProfileSummary
+
+        Task {
+            do {
+                let generated = try await AISummaryService.generateReport(
+                    review: review,
+                    profileSummary: profileSummary,
+                    deltas: []
+                )
+                Haptics.success()
+                stage = .aiReport(generated)
+                await onAIReportGenerated()
+            } catch {
+                stage = .aiFailed(error.localizedDescription)
+            }
+        }
+    }
+
+    /// Metering hook: called once, right after an auto-generated AI report
+    /// is produced and has passed `AISummaryService`'s verification guards.
+    /// Mirrors `ReviewScreen`: the free trial is only spent on success, and
+    /// entitlements are resolved first so a paying subscriber whose
+    /// StoreKit state hasn't loaded yet never burns the trial.
+    private func onAIReportGenerated() async {
+        await premiumStore.ensureEntitlementsLoaded()
+        if !premiumStore.isPremium {
+            AIReportQuota.recordUse(defaults: .standard)
+        }
+    }
+
+    // MARK: - PDF export
+
+    /// "Save as PDF": renders the verified AI report, attaches it to the
+    /// already-saved `MedicalReport` as a `ReportAttachment` (so it shows up
+    /// in the Documents library), then opens the system share sheet with
+    /// the file. The attachment is kept even if the user cancels or the
+    /// share sheet itself can't be prepared — only rendering can fail this
+    /// early, and that's surfaced inline via `pdfExportError`.
+    private func exportAIReportPDF() {
+        guard case .aiReport(let report) = stage, let savedReport, !isExportingPDF else { return }
+        isExportingPDF = true
+        pdfExportError = nil
+
+        let review = currentReview(including: savedReport)
+        let now = Date.now
+        let data = AIReportPDFExporter.render(
+            report: report,
+            review: review,
+            scannedLabs: savedReport.labResults,
+            profileName: profiles.first?.name ?? "",
+            generatedAt: now
+        )
+
+        guard !data.isEmpty else {
+            pdfExportError = "Couldn't create the PDF. Please try again."
+            isExportingPDF = false
+            return
+        }
+
+        let filename = "AI Analysis — \(now.formatted(date: .abbreviated, time: .omitted)).pdf"
+        savedReport.attachments.append(ReportAttachment(filename: filename, kind: .pdf, data: data))
+
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        do {
+            try data.write(to: tempURL, options: .atomic)
+            shareItem = ShareItem(url: tempURL)
+        } catch {
+            pdfExportError = "The PDF was saved to the report, but couldn't be prepared for sharing."
+        }
+        isExportingPDF = false
     }
 }
 
@@ -636,4 +992,25 @@ private struct CameraCaptureView: UIViewControllerRepresentable {
             dismiss()
         }
     }
+}
+
+// MARK: - Share sheet
+
+/// Thin `UIActivityViewController` wrapper for sharing the exported AI
+/// report PDF. Presented via `.sheet(item:)` rather than `ShareLink` so the
+/// PDF can be attached to the saved report *before* the share UI appears,
+/// regardless of whether the user completes or cancels the share.
+private struct ActivityShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    let onComplete: () -> Void
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+        controller.completionWithItemsHandler = { _, _, _, _ in
+            onComplete()
+        }
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
