@@ -424,6 +424,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = MediTrack;
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "MediTrack uses Face ID to keep your medical data private.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "MediTrack uses the camera to photograph lab reports so their values can be read on your device.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "MediTrack imports your vitals from Apple Health so they can be included in your health reviews.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "MediTrack can save the vitals you log back to Apple Health.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -458,6 +459,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = MediTrack;
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "MediTrack uses Face ID to keep your medical data private.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "MediTrack uses the camera to photograph lab reports so their values can be read on your device.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "MediTrack imports your vitals from Apple Health so they can be included in your health reviews.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "MediTrack can save the vitals you log back to Apple Health.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
