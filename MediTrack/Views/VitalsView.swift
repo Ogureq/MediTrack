@@ -4,43 +4,298 @@ import Charts
 import UIKit
 
 struct VitalsView: View {
-    @Environment(\.modelContext) private var modelContext
     @Query(sort: \VitalSample.date, order: .reverse) private var vitals: [VitalSample]
 
-    @State private var selectedType: VitalType
     @State private var showingAdd = false
+    @State private var cards: [VitalCardSummary] = []
+
+    let initialType: VitalType
 
     init(initialType: VitalType = .weight) {
-        _selectedType = State(initialValue: initialType)
+        self.initialType = initialType
     }
 
+    var body: some View {
+        Group {
+            if cards.isEmpty {
+                ContentUnavailableView {
+                    Label("No Vitals Logged", systemImage: "waveform.path.ecg")
+                } description: {
+                    Text("Log a reading — blood pressure, heart rate, weight, and more — to start tracking trends.")
+                } actions: {
+                    Button("Log a Vital") { showingAdd = true }
+                        .buttonStyle(GlassProminentButtonStyle())
+                        .frame(maxWidth: 220)
+                }
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                        ForEach(cards) { card in
+                            NavigationLink {
+                                VitalTypeDetailView(type: card.type)
+                            } label: {
+                                VitalMetricCard(card: card)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(16)
+                }
+            }
+        }
+        .ambientScreen()
+        .navigationTitle("Vitals")
+        .toolbar {
+            Button {
+                showingAdd = true
+            } label: {
+                Image(systemName: "plus")
+            }
+            .accessibilityLabel("Add vital")
+        }
+        .sheet(isPresented: $showingAdd) {
+            AddVitalSheet(initialType: initialType)
+        }
+        .task(id: vitals.count) {
+            cards = Self.buildCards(from: vitals)
+        }
+    }
+
+    /// One card per vital type that has at least one reading, latest-first
+    /// within each type's own history so the delta and sparkline reflect
+    /// genuine chronological order. Recomputed only when the reading count
+    /// changes (see `.task(id:)` above) since grouping every sample on every
+    /// render would be wasted work for a screen that mostly just displays.
+    private static func buildCards(from vitals: [VitalSample]) -> [VitalCardSummary] {
+        VitalType.allCases.compactMap { type in
+            let ascending = vitals.filter { $0.type == type }.sorted { $0.date < $1.date }
+            guard let latest = ascending.last else { return nil }
+            let previous = ascending.dropLast().last
+            return VitalCardSummary(
+                type: type,
+                latest: latest,
+                previous: previous,
+                sparklinePoints: Array(ascending.suffix(6))
+            )
+        }
+    }
+}
+
+// MARK: - Vital grid card
+
+/// Pure summary of one vital type's latest reading, previous reading (for
+/// the delta), and a short recent history (for the sparkline). Kept
+/// SwiftData-free beyond holding `VitalSample` references so it is cheap to
+/// cache in `@State` and diff.
+private struct VitalCardSummary: Identifiable {
+    let type: VitalType
+    let latest: VitalSample
+    let previous: VitalSample?
+    let sparklinePoints: [VitalSample]
+
+    var id: VitalType { type }
+}
+
+/// Per-vital-type tint used for the card label, sparkline stroke, and (when
+/// unambiguous) the delta. Distinct hue per type so a dense 2-column grid
+/// stays scannable.
+private func vitalTint(for type: VitalType) -> Color {
+    switch type {
+    case .bloodPressure: Color(red: 0x40 / 255, green: 0xC8 / 255, blue: 0xE0 / 255)
+    case .heartRate: Color(red: 0xFF / 255, green: 0x7A / 255, blue: 0x88 / 255)
+    case .oxygenSaturation: Color(red: 0x78 / 255, green: 0xBE / 255, blue: 0xFF / 255)
+    case .weight: Color(red: 0x7E / 255, green: 0xE8 / 255, blue: 0xB0 / 255)
+    case .temperature: Color(red: 0xFF / 255, green: 0xB2 / 255, blue: 0x66 / 255)
+    case .bloodGlucose: Color(red: 0xA8 / 255, green: 0x96 / 255, blue: 0xFF / 255)
+    case .respiratoryRate: Color(red: 0x63 / 255, green: 0xE6 / 255, blue: 0xBE / 255)
+    case .sleepHours: Color(red: 0x8E / 255, green: 0x8C / 255, blue: 0xFF / 255)
+    }
+}
+
+/// Change vs. the previous reading, colored conservatively: green only when
+/// the value moved from outside the type's healthy range measurably closer
+/// to (or into) it. Types with no defined healthy range — weight chief among
+/// them, since "lower" isn't inherently better or worse — and any reading
+/// that was already inside its range stay neutral gray rather than guessing
+/// at a value judgment `AnalysisEngine` doesn't make either.
+private struct VitalDelta {
+    let symbol: String
+    let magnitude: String
+    let color: Color
+    let directionWord: String
+}
+
+private func vitalDelta(for card: VitalCardSummary) -> VitalDelta? {
+    guard let previous = card.previous else { return nil }
+    let latestDisplay = Units.display(card.latest.value, for: card.type)
+    let previousDisplay = Units.display(previous.value, for: card.type)
+    let diff = latestDisplay - previousDisplay
+
+    let symbol: String
+    let directionWord: String
+    if diff > 0.0005 {
+        symbol = "\u{2191}"
+        directionWord = "up"
+    } else if diff < -0.0005 {
+        symbol = "\u{2193}"
+        directionWord = "down"
+    } else {
+        symbol = "\u{2192}"
+        directionWord = "unchanged"
+    }
+
+    return VitalDelta(
+        symbol: symbol,
+        magnitude: abs(diff).compactFormatted,
+        color: deltaColor(type: card.type, previous: previous.value, latest: card.latest.value),
+        directionWord: directionWord
+    )
+}
+
+private func deltaColor(type: VitalType, previous: Double, latest: Double) -> Color {
+    guard let range = type.healthyRange else { return .secondary }
+
+    func distanceOutsideRange(_ value: Double) -> Double {
+        if value < range.lowerBound { return range.lowerBound - value }
+        if value > range.upperBound { return value - range.upperBound }
+        return 0
+    }
+
+    let previousDistance = distanceOutsideRange(previous)
+    let latestDistance = distanceOutsideRange(latest)
+    guard previousDistance > 1e-9, latestDistance < previousDistance - 1e-9 else { return .secondary }
+    return .green
+}
+
+/// One metric card in the Vitals grid: uppercase tinted label, delta vs. the
+/// previous reading, big value + unit, a 6-point sparkline, and a relative
+/// "when" caption. Tapping the card (via the enclosing `NavigationLink`)
+/// drills into `VitalTypeDetailView` for that type's full history.
+private struct VitalMetricCard: View {
+    let card: VitalCardSummary
+
+    private var tint: Color { vitalTint(for: card.type) }
+    private var delta: VitalDelta? { vitalDelta(for: card) }
+
+    private var valueText: String {
+        if card.type == .bloodPressure, let secondary = card.latest.secondaryValue {
+            return "\(Int(card.latest.value.rounded()))/\(Int(secondary.rounded()))"
+        }
+        return Units.display(card.latest.value, for: card.type).compactFormatted
+    }
+
+    private var unitText: String {
+        card.type == .bloodPressure ? card.type.unit : Units.label(for: card.type)
+    }
+
+    private var whenText: String {
+        "Updated \(card.latest.date.formatted(.relative(presentation: .named)))"
+    }
+
+    private var accessibilityText: String {
+        var parts = ["\(card.type.displayName), \(valueText) \(unitText)"]
+        if let delta {
+            parts.append("\(delta.directionWord) \(delta.magnitude) \(unitText) from previous reading")
+        }
+        parts.append(whenText)
+        return parts.joined(separator: ", ")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                Text(card.type.displayName.uppercased())
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(tint)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                if let delta {
+                    Text("\(delta.symbol) \(delta.magnitude)")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(delta.color)
+                        .lineLimit(1)
+                }
+            }
+            HStack(alignment: .lastTextBaseline, spacing: 4) {
+                Text(valueText)
+                    .font(.system(size: 26, weight: .heavy, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text(unitText)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            sparkline
+                .frame(height: 26)
+            Text(whenText)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard(cornerRadius: 16)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityText)
+    }
+
+    /// Decorative recent-history sparkline — hidden from accessibility since
+    /// the card's combined label already conveys value, delta, and date.
+    @ViewBuilder
+    private var sparkline: some View {
+        if card.sparklinePoints.count >= 2 {
+            Chart(card.sparklinePoints) { sample in
+                LineMark(
+                    x: .value("Date", sample.date),
+                    y: .value("Value", Units.display(sample.value, for: card.type))
+                )
+                .interpolationMethod(.monotone)
+                .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
+            }
+            .foregroundStyle(tint)
+            .chartXAxis(.hidden)
+            .chartYAxis(.hidden)
+            .chartYScale(domain: .automatic(includesZero: false))
+            .accessibilityHidden(true)
+        } else {
+            Color.clear.accessibilityHidden(true)
+        }
+    }
+}
+
+// MARK: - Per-type history (drill-down)
+
+/// Full history for one vital type: the trend chart and every logged
+/// reading with delete, reached by tapping a card in the `VitalsView` grid.
+/// This is the pre-redesign `VitalsView` body, scoped to a single `type`
+/// instead of driven by a picker, so no existing capability (chart, history,
+/// delete, add) is lost by the grid becoming the top-level browse screen.
+private struct VitalTypeDetailView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \VitalSample.date, order: .reverse) private var allVitals: [VitalSample]
+
+    let type: VitalType
+
+    @State private var showingAdd = false
+
     private var samples: [VitalSample] {
-        vitals.filter { $0.type == selectedType }
+        allVitals.filter { $0.type == type }
     }
 
     var body: some View {
         List {
-            Section {
-                Picker("Vital", selection: $selectedType) {
-                    ForEach(VitalType.allCases) { type in
-                        Text(type.displayName).tag(type)
-                    }
-                }
-                if samples.count >= 2 {
+            if samples.count >= 2 {
+                Section {
                     chart
                         .frame(height: 200)
                         .padding(.vertical, 8)
                         .listRowSeparator(.hidden)
                 }
+                .listRowBackground(GlassRowBackground())
+                .listRowSeparator(.hidden)
             }
-            .listRowBackground(GlassRowBackground())
-            .listRowSeparator(.hidden)
 
             Section("History") {
-                if samples.isEmpty {
-                    Text("No readings yet. Tap + to add your first \(selectedType.displayName.lowercased()) reading.")
-                        .foregroundStyle(.secondary)
-                }
                 ForEach(samples) { sample in
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
@@ -64,25 +319,26 @@ struct VitalsView: View {
             .listRowSeparator(.hidden)
         }
         .ambientScreen()
-        .navigationTitle("Vitals")
+        .navigationTitle(type.displayName)
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             Button {
                 showingAdd = true
             } label: {
                 Image(systemName: "plus")
             }
-            .accessibilityLabel("Add vital")
+            .accessibilityLabel("Add \(type.displayName.lowercased())")
         }
         .sheet(isPresented: $showingAdd) {
-            AddVitalSheet(initialType: selectedType)
+            AddVitalSheet(initialType: type)
         }
     }
 
     private var chart: some View {
         let ascending = samples.sorted { $0.date < $1.date }
         return Chart {
-            if let healthyRange = selectedType.healthyRange {
-                let range = Units.displayRange(healthyRange, for: selectedType)
+            if let healthyRange = type.healthyRange {
+                let range = Units.displayRange(healthyRange, for: type)
                 RectangleMark(
                     yStart: .value("Range low", range.lowerBound),
                     yEnd: .value("Range high", range.upperBound)
@@ -92,16 +348,16 @@ struct VitalsView: View {
             ForEach(ascending) { sample in
                 LineMark(
                     x: .value("Date", sample.date),
-                    y: .value("Value", Units.display(sample.value, for: selectedType)),
+                    y: .value("Value", Units.display(sample.value, for: type)),
                     series: .value("Series", "primary")
                 )
                 .interpolationMethod(.monotone)
                 PointMark(
                     x: .value("Date", sample.date),
-                    y: .value("Value", Units.display(sample.value, for: selectedType))
+                    y: .value("Value", Units.display(sample.value, for: type))
                 )
             }
-            if selectedType == .bloodPressure {
+            if type == .bloodPressure {
                 ForEach(ascending.filter { $0.secondaryValue != nil }) { sample in
                     LineMark(
                         x: .value("Date", sample.date),
@@ -113,8 +369,8 @@ struct VitalsView: View {
                 }
             }
         }
-        .chartYAxisLabel(Units.label(for: selectedType))
-        .accessibilityLabel("\(selectedType.displayName) trend chart")
+        .chartYAxisLabel(Units.label(for: type))
+        .accessibilityLabel("\(type.displayName) trend chart")
     }
 
     private func deleteSamples(at offsets: IndexSet) {

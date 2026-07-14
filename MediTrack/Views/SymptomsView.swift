@@ -24,28 +24,7 @@ struct SymptomsView: View {
                 List {
                     Section {
                         ForEach(symptoms) { entry in
-                            HStack(alignment: .top) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(entry.name)
-                                        .font(.subheadline.weight(.semibold))
-                                    Text(entry.date.formatted(date: .abbreviated, time: .shortened))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                    if !entry.notes.isEmpty {
-                                        Text(entry.notes)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                                Spacer()
-                                StatusPill(
-                                    text: "\(entry.severity)/10",
-                                    color: severityColor(entry.severity)
-                                )
-                                .accessibilityLabel("Severity \(entry.severity) out of 10")
-                            }
-                            .padding(.vertical, 2)
-                            .accessibilityElement(children: .combine)
+                            SymptomLogRow(entry: entry)
                         }
                         .onDelete(perform: delete)
                     } footer: {
@@ -81,6 +60,58 @@ func severityColor(_ severity: Int) -> Color {
     case ..<4: .green
     case 4...6: .orange
     default: .red
+    }
+}
+
+/// One entry in the symptom log: name + severity pill up top, a 10-segment
+/// severity meter, then a note/when caption row. Reuses `severityColor(_:)`
+/// (the same thresholds the severity slider and old pill used) for the pill,
+/// the filled dots, and the accessibility summary, so all three never
+/// disagree about what counts as mild/moderate/severe.
+private struct SymptomLogRow: View {
+    let entry: SymptomEntry
+
+    private var color: Color { severityColor(entry.severity) }
+
+    private var accessibilityText: String {
+        var parts = ["\(entry.name), severity \(entry.severity) out of 10"]
+        if !entry.notes.isEmpty { parts.append(entry.notes) }
+        parts.append(entry.date.formatted(date: .abbreviated, time: .shortened))
+        return parts.joined(separator: ", ")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                Text(entry.name)
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                StatusPill(text: "\(entry.severity) / 10", color: color)
+            }
+            HStack(spacing: 3) {
+                ForEach(0..<10, id: \.self) { dot in
+                    Capsule()
+                        .fill(dot < entry.severity ? color : Color.primary.opacity(0.1))
+                        .frame(height: 4)
+                }
+            }
+            HStack(alignment: .firstTextBaseline) {
+                if !entry.notes.isEmpty {
+                    Text(entry.notes)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                Text(entry.date.formatted(date: .abbreviated, time: .shortened))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityText)
     }
 }
 
