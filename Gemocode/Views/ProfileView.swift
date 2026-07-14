@@ -416,10 +416,12 @@ private struct ProfileForm: View {
     }
 
     /// Called by `BackupExportPassphraseSheet` once a valid passphrase has
-    /// been entered and confirmed.
-    private func performExport(passphrase: String) {
+    /// been entered and confirmed. `BackupService.export` hops off the main
+    /// actor internally for the PBKDF2/AES-GCM work, so this only blocks
+    /// the sheet (via its own `isExporting` state), never the whole UI.
+    private func performExport(passphrase: String) async {
         do {
-            exportDocument = BackupJSONDocument(data: try BackupService.export(from: modelContext, passphrase: passphrase))
+            exportDocument = BackupJSONDocument(data: try await BackupService.export(from: modelContext, passphrase: passphrase))
             showingExporter = true
         } catch {
             dataMessage = "Export failed: \(error.localizedDescription)"
@@ -429,12 +431,12 @@ private struct ProfileForm: View {
     /// Called by `BackupRestorePassphraseSheet` for each attempt. Returns an
     /// error message to display inline (and keep the sheet open) on failure,
     /// or `nil` on success (the sheet dismisses itself).
-    private func attemptRestore(passphrase: String) -> String? {
+    private func attemptRestore(passphrase: String) async -> String? {
         guard let data = pendingRestoreData else {
             return "No backup file selected."
         }
         do {
-            let count = try BackupService.restore(from: data, passphrase: passphrase, into: modelContext)
+            let count = try await BackupService.restore(from: data, passphrase: passphrase, into: modelContext)
             pendingRestoreData = nil
             Haptics.success()
             dataMessage = "Backup restored — \(count) record\(count == 1 ? "" : "s"). Medication and appointment reminders need to be re-enabled."
@@ -482,11 +484,15 @@ private struct ProfileForm: View {
 /// Requests and confirms a new passphrase before exporting a backup.
 private struct BackupExportPassphraseSheet: View {
     @Environment(\.dismiss) private var dismiss
-    let onExport: (String) -> Void
+    let onExport: (String) async -> Void
 
     @State private var passphrase = ""
     @State private var confirm = ""
     @State private var error: String?
+    /// True while `onExport` (PBKDF2 + AES-GCM over the whole store) is
+    /// running. Gates the fields/buttons so the sheet can't be double-tapped
+    /// mid-export the way the old synchronous call site could be.
+    @State private var isExporting = false
     @FocusState private var firstFieldFocused: Bool
 
     private static let minimumLength = 8
@@ -503,9 +509,20 @@ private struct BackupExportPassphraseSheet: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .focused($firstFieldFocused)
+                        .disabled(isExporting)
                     SecureField("Confirm passphrase", text: $confirm)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .disabled(isExporting)
+                    if isExporting {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                            Text("Encrypting your backup…")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
                 } footer: {
                     if let error {
                         Text(error).foregroundStyle(.red)
@@ -522,10 +539,11 @@ private struct BackupExportPassphraseSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .disabled(isExporting)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Export") { attemptExport() }
-                        .disabled(!isValid)
+                        .disabled(!isValid || isExporting)
                 }
             }
             .onAppear { firstFieldFocused = true }
@@ -533,6 +551,7 @@ private struct BackupExportPassphraseSheet: View {
     }
 
     private func attemptExport() {
+        guard !isExporting else { return }
         guard isValid else {
             error = "Passphrase must be at least \(Self.minimumLength) characters."
             return
@@ -542,8 +561,13 @@ private struct BackupExportPassphraseSheet: View {
             confirm = ""
             return
         }
-        onExport(passphrase)
-        dismiss()
+        error = nil
+        isExporting = true
+        Task {
+            await onExport(passphrase)
+            isExporting = false
+            dismiss()
+        }
     }
 }
 
@@ -552,10 +576,14 @@ private struct BackupExportPassphraseSheet: View {
 private struct BackupRestorePassphraseSheet: View {
     @Environment(\.dismiss) private var dismiss
     /// Returns an error message on failure, or `nil` on success.
-    let attemptRestore: (String) -> String?
+    let attemptRestore: (String) async -> String?
 
     @State private var passphrase = ""
     @State private var error: String?
+    /// True while `attemptRestore` (AES-GCM open + PBKDF2 + the delete/apply
+    /// pass over the store) is running. Gates the field/buttons so the sheet
+    /// can't be double-tapped mid-restore.
+    @State private var isRestoring = false
     @FocusState private var fieldFocused: Bool
 
     var body: some View {
@@ -566,7 +594,17 @@ private struct BackupRestorePassphraseSheet: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .focused($fieldFocused)
+                        .disabled(isRestoring)
                         .onSubmit(submit)
+                    if isRestoring {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                            Text("Restoring your backup…")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
                 } footer: {
                     if let error {
                         Text(error).foregroundStyle(.red)
@@ -583,9 +621,11 @@ private struct BackupRestorePassphraseSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .disabled(isRestoring)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Restore") { submit() }
+                        .disabled(isRestoring)
                 }
             }
             .onAppear { fieldFocused = true }
@@ -593,11 +633,17 @@ private struct BackupRestorePassphraseSheet: View {
     }
 
     private func submit() {
-        if let message = attemptRestore(passphrase) {
-            error = message
-            passphrase = ""
-        } else {
-            dismiss()
+        guard !isRestoring else { return }
+        isRestoring = true
+        Task {
+            let message = await attemptRestore(passphrase)
+            isRestoring = false
+            if let message {
+                error = message
+                passphrase = ""
+            } else {
+                dismiss()
+            }
         }
     }
 }

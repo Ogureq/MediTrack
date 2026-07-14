@@ -193,6 +193,14 @@ This document records the phased plan executed to build Gemocode, a privacy-firs
 - [x] AI report PDF export (`Services/AIReportPDFExporter.swift`) — paginated US-Letter PDF (scanned-values table with status dots, AI overview and sections, score context, "Questions & topics for your doctor" with a discuss-with-your-doctor lead-in, dual disclaimers); attached to the report as a `ReportAttachment` so it lands in Documents, then shared via the system sheet; pure `layoutBlocks`/`layoutText` core with 8 content unit tests, including a regression that the fixed copy never issues an imperative "take" instruction
 - [x] One free AI scan — the lifetime AI-report meter (`AIReportQuota`) now also admits free users into the scan flow while their trial remains, consumed only on a successful generation after entitlements resolve; paywall and locked-state copy updated to "one free AI scan and report"
 
+## Phase 24 — Performance Wave & Medical-Grade PDF
+
+- [x] Main-thread unblocking — backup export/restore's 310k-round PBKDF2 + whole-store JSON + AES-GCM moved off the main actor (wire format untouched) with progress spinners on both passphrase sheets; camera JPEG encoding detached from the UIKit callback; AI-PDF export yields so its progress state paints; first HealthKit sync yields every 100 inserts
+- [x] Render-path caching — Trends series cached (no more full rebuild per chart-scrub tick), Dashboard vitals grouped once per render + earliest-data date cached, More-screen document count cached, vitals detail narrowed with a #Predicate query, lab detail results cached; established `.task(id:)` convention applied everywhere it was missing
+- [x] Storage efficiency — Documents no longer faults every attachment blob to show file sizes (lazy per-visible-row byte counts behind a cache-first actor); all captured/imported photos downsampled to ≤2200px before storage (60–85% smaller, OCR-legible) via new `ImageDownsampler` with tests; thumbnail/byte-count caches bounded; scan flow OCRs only newly attached documents and drops its six always-live table subscriptions
+- [x] AI report PDF, medical-grade — gradient header band, "Needs attention" summary box (or all-clear), typical-range column with zebra/status-tinted table rows, section rules, per-page footers with page numbers; content tests extended
+- [x] Lifestyle & nutrition section — the AI report now includes "Lifestyle & nutrition to discuss" for out-of-range markers only: mainstream dietary/hydration topics framed strictly as discuss-with-your-doctor items (never fixes, doses, brands, supplements, or medication instructions), encoded identically in the relay's server-owned prompt and the BYOK prompt; verification guards confirmed compatible; backend 128 tests green
+
 ## Future Milestones
 
 Not part of the current plan; captured here for future scoping:

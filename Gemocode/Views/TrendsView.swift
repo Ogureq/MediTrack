@@ -43,9 +43,29 @@ struct TrendsView: View {
     @State private var timeRange: TrendTimeRange = .all
     @State private var selectedDate: Date?
 
-    private var allSeries: [MetricSeries] {
+    /// Cached instead of recomputed per render — `buildSeries` groups every
+    /// lab result across every report plus 8x filter+sorts the vitals, and
+    /// was previously an uncached computed property read 3-6x per body pass
+    /// (and the body reruns continuously while `.chartXSelection` mutates
+    /// `selectedDate` during a chart-scrub drag). Rebuilt only when
+    /// `seriesSignature` changes.
+    @State private var allSeries: [MetricSeries] = []
+    /// Guards against flashing the "Not Enough Data" empty state for the one
+    /// frame before the initial `.task` build completes.
+    @State private var hasBuiltSeries = false
+
+    /// Covers everything `buildSeries` reads: report/vital *counts* alone
+    /// would miss a lab result added to an already-counted report, so the
+    /// flattened lab-result count stands in for its contents too.
+    private var seriesSignature: String {
+        let labResultCount = reports.reduce(0) { $0 + $1.labResults.count }
+        return "\(reports.count)-\(labResultCount)-\(vitals.count)-\(profiles.first?.sex.rawValue ?? "")"
+    }
+
+    /// Pure builder for `allSeries` — see the `@State` declaration above for
+    /// why this must not run as a plain computed property.
+    private static func buildSeries(reports: [MedicalReport], vitals: [VitalSample], sex: BiologicalSex?) -> [MetricSeries] {
         var series: [MetricSeries] = []
-        let sex = profiles.first?.sex
 
         // Lab test series (grouped across all reports).
         let grouped = Dictionary(grouping: reports.flatMap { $0.labResults }) { $0.seriesKey }
@@ -129,7 +149,12 @@ struct TrendsView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if allSeries.isEmpty {
+                if !hasBuiltSeries {
+                    // First-build gap before `.task` below runs — avoids
+                    // flashing "Not Enough Data" while `allSeries` is still
+                    // its initial empty value.
+                    Color.clear
+                } else if allSeries.isEmpty {
                     ContentUnavailableView(
                         "Not Enough Data",
                         systemImage: "chart.line.uptrend.xyaxis",
@@ -149,6 +174,10 @@ struct TrendsView: View {
                 }
                 .accessibilityLabel("View health timeline")
             }
+        }
+        .task(id: seriesSignature) {
+            allSeries = Self.buildSeries(reports: reports, vitals: vitals, sex: profiles.first?.sex)
+            hasBuiltSeries = true
         }
     }
 

@@ -10,7 +10,19 @@ struct LabDetailView: View {
     @Query private var reports: [MedicalReport]
     @Query private var profiles: [HealthProfile]
 
-    private var results: [LabResult] {
+    /// Cached instead of a plain computed property — flattening every
+    /// report's lab results and filtering to this series was previously
+    /// redone on every access (~6x per body pass: the empty check, the nav
+    /// title, the history-count check, the history chart, the history rows,
+    /// and the chart's own `ForEach`). Rebuilt only when `reports.count`
+    /// changes, matching `DocumentsView`'s `allItems` cache.
+    @State private var results: [LabResult] = []
+    /// Guards against flashing "No Results" for the one frame before the
+    /// initial `.task` build completes.
+    @State private var hasBuiltResults = false
+
+    /// Pure builder for `results` — see the `@State` declaration above.
+    private static func buildResults(reports: [MedicalReport], seriesKey: String) -> [LabResult] {
         reports.flatMap(\.labResults)
             .filter { $0.seriesKey == seriesKey }
             .sorted { $0.date < $1.date }
@@ -18,7 +30,9 @@ struct LabDetailView: View {
 
     var body: some View {
         Group {
-            if let latest = results.last {
+            if !hasBuiltResults {
+                Color.clear
+            } else if let latest = results.last {
                 content(latest: latest)
             } else {
                 ContentUnavailableView("No Results", systemImage: "testtube.2")
@@ -27,6 +41,10 @@ struct LabDetailView: View {
         .ambientScreen()
         .navigationTitle(results.last?.displayName ?? "Lab Test")
         .navigationBarTitleDisplayMode(.inline)
+        .task(id: reports.count) {
+            results = Self.buildResults(reports: reports, seriesKey: seriesKey)
+            hasBuiltResults = true
+        }
     }
 
     private func content(latest: LabResult) -> some View {

@@ -177,6 +177,10 @@ enum HealthKitService {
                 let value = (raw * 10).rounded() / 10
                 context.insert(VitalSample(type: vitalType, value: value, date: sample.startDate, note: note))
                 imported += 1
+                // The first-ever sync can insert up to 500 samples per type
+                // on the main actor in one stretch; yield periodically so
+                // the run loop can keep the UI responsive.
+                if imported % 100 == 0 { await Task.yield() }
             }
         }
 
@@ -198,6 +202,7 @@ enum HealthKitService {
                     note: note
                 ))
                 imported += 1
+                if imported % 100 == 0 { await Task.yield() }
             }
         }
 

@@ -194,7 +194,7 @@ final class BackupServiceTests: XCTestCase {
 
     // MARK: Real BackupService.export / restore round trip
 
-    func testExportAndRestoreRoundTripThroughRealService() throws {
+    func testExportAndRestoreRoundTripThroughRealService() async throws {
         let profile = HealthProfile()
         profile.name = "Jane Doe"
         profile.heightCm = 168
@@ -229,9 +229,9 @@ final class BackupServiceTests: XCTestCase {
 
         try sourceContext.save()
 
-        let data = try BackupService.export(from: sourceContext, passphrase: "correct horse battery staple")
+        let data = try await BackupService.export(from: sourceContext, passphrase: "correct horse battery staple")
 
-        let restoredCount = try BackupService.restore(from: data, passphrase: "correct horse battery staple", into: destinationContext)
+        let restoredCount = try await BackupService.restore(from: data, passphrase: "correct horse battery staple", into: destinationContext)
         XCTAssertGreaterThan(restoredCount, 0)
 
         let restoredProfiles = try destinationContext.fetch(FetchDescriptor<HealthProfile>())

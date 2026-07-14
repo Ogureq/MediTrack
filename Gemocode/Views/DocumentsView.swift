@@ -12,11 +12,11 @@ import ImageIO
 /// attachment's raw `data` — that's an `@Attribute(.externalStorage)` blob,
 /// and copying it into every item on every flatten would multiply memory
 /// use for no benefit; the row's icon chip looks up the live
-/// `ReportAttachment` by `id` instead (see `DocumentIconChip`). `byteCount`
-/// is the one piece of size information worth carrying: it's read once (as
-/// `.count`, never retaining the `Data`) while flattening, so the list can
-/// show a "· 2.4 MB" caption without re-touching external storage on every
-/// scroll frame.
+/// `ReportAttachment` by `id` instead (see `DocumentIconChip`). Byte size is
+/// deliberately NOT carried here either, for the same reason: reading
+/// `.count` touches the external-storage blob, so `DocumentRow` resolves it
+/// lazily, once per visible row, via `ByteCountCache` — never eagerly for
+/// every attachment while flattening.
 struct DocumentItem: Identifiable, Equatable {
     let id: PersistentIdentifier
     let filename: String
@@ -24,7 +24,6 @@ struct DocumentItem: Identifiable, Equatable {
     let reportTitle: String
     let reportCategory: ReportCategory
     let reportDate: Date
-    let byteCount: Int
 }
 
 /// A recency-grouped bucket of documents for section headers ("This Month",
@@ -41,6 +40,10 @@ enum DocumentLibrary {
     /// Flattens every attachment across all reports into one list, newest
     /// report first; when two attachments share a report date, filename
     /// breaks the tie so ordering is stable regardless of fetch order.
+    /// Deliberately never touches `attachment.data` — that would fault
+    /// every attachment's full external-storage blob into memory on every
+    /// call (see `byteCount(for:)` and `ByteCountCache`, which resolve size
+    /// lazily instead).
     static func items(from reports: [MedicalReport]) -> [DocumentItem] {
         reports
             .flatMap { report in
@@ -51,8 +54,7 @@ enum DocumentLibrary {
                         kind: attachment.kind,
                         reportTitle: report.title,
                         reportCategory: report.category,
-                        reportDate: report.date,
-                        byteCount: attachment.data.count
+                        reportDate: report.date
                     )
                 }
             }
@@ -62,6 +64,15 @@ enum DocumentLibrary {
                 }
                 return lhs.filename.localizedStandardCompare(rhs.filename) == .orderedAscending
             }
+    }
+
+    /// Reads an attachment's external-storage blob size. Kept as a small,
+    /// separate, synchronously-testable function — never called from
+    /// `items(from:)` — since touching `.data` faults the whole blob into
+    /// memory and callers must only do that for an attachment that's about
+    /// to be shown (see `ByteCountCache` in DocumentsView's row UI).
+    static func byteCount(for attachment: ReportAttachment) -> Int {
+        attachment.data.count
     }
 
     /// Matches `query` against filename OR report title, case- and
@@ -153,13 +164,13 @@ struct DocumentsView: View {
     @State private var selectedCategory: ReportCategory?
 
     /// Cached instead of recomputed from scratch — via `DocumentLibrary
-    /// .items(from:)`, a full flatten over every report's attachments that
-    /// also reads each attachment's external-storage byte count — on every
-    /// one of the call sites below (`body`'s empty check,
-    /// `availableCategories`, `filteredItems`), which otherwise re-ran on
-    /// every search keystroke. Rebuilt once per `.task(id: reports.count)`,
-    /// not per render, so the external-storage touch for `byteCount` happens
-    /// once per data change rather than once per row per frame.
+    /// .items(from:)`, a full flatten + sort over every report's
+    /// attachments — on every one of the call sites below (`body`'s empty
+    /// check, `availableCategories`, `filteredItems`), which otherwise
+    /// re-ran on every search keystroke. Rebuilt once per
+    /// `.task(id: reports.count)`, not per render. `items(from:)` never
+    /// reads attachment byte size (see `ByteCountCache`), so this cache
+    /// build itself never faults external-storage blobs.
     @State private var allItems: [DocumentItem] = []
 
     private var availableCategories: [ReportCategory] {
@@ -299,8 +310,16 @@ private struct DocumentRow: View {
     let item: DocumentItem
     let resolveAttachment: (PersistentIdentifier) -> ReportAttachment?
 
+    /// Resolved lazily on appearance via `ByteCountCache` — nil means "not
+    /// resolved yet," not "zero bytes." Grid/list rows are virtualized, so
+    /// only visible rows ever fault their attachment's external-storage
+    /// blob, and only once per row identity (mirrors `DocumentIconChip`'s
+    /// `image` state below).
+    @State private var byteCount: Int?
+
     private var sizeText: String {
-        ByteCountFormatter.string(fromByteCount: Int64(item.byteCount), countStyle: .file)
+        guard let byteCount else { return "—" }
+        return ByteCountFormatter.string(fromByteCount: Int64(byteCount), countStyle: .file)
     }
 
     private var dateText: String {
@@ -333,6 +352,18 @@ private struct DocumentRow: View {
         .accessibilityLabel(
             "\(item.filename), \(item.reportTitle), \(sizeText), \(item.reportDate.formatted(date: .long, time: .omitted))"
         )
+        .task(id: item.id) {
+            guard byteCount == nil else { return }
+            // Cache-first: `attachment.data` faults the whole external-storage
+            // blob, so it must only be touched on a cache miss — evaluating it
+            // as a call argument would fault it even for cached ids.
+            if let cached = await ByteCountCache.shared.cachedByteCount(for: item.id) {
+                byteCount = cached
+                return
+            }
+            guard let attachment = resolveAttachment(item.id) else { return }
+            byteCount = await ByteCountCache.shared.byteCount(for: item.id, data: attachment.data)
+        }
     }
 }
 
@@ -406,9 +437,20 @@ private actor ThumbnailCache {
 
     private var storage: [PersistentIdentifier: UIImage] = [:]
 
+    /// Bounds memory for a very large document library: once the cache
+    /// holds this many decoded thumbnails, half are evicted (arbitrary
+    /// order — this is a decode cache, not history) to make room, rather
+    /// than growing without limit for the life of the app.
+    private static let capacity = 300
+
     func thumbnail(for id: PersistentIdentifier, data: Data) async -> UIImage? {
         if let cached = storage[id] { return cached }
         guard let decoded = Self.decode(data) else { return nil }
+        if storage.count >= Self.capacity {
+            for key in storage.keys.prefix(storage.count / 2) {
+                storage.removeValue(forKey: key)
+            }
+        }
         storage[id] = decoded
         return decoded
     }
@@ -422,6 +464,36 @@ private actor ThumbnailCache {
         ]
         guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
         return UIImage(cgImage: cgImage)
+    }
+}
+
+/// Off-main-thread, memoized attachment byte-size lookup shared by every
+/// row — mirrors `ThumbnailCache`'s shape (including the eviction cap)
+/// exactly, so an attachment's external-storage blob is only ever faulted
+/// once per resolved id, not once per attachment on every document-library
+/// rebuild.
+private actor ByteCountCache {
+    static let shared = ByteCountCache()
+
+    private var storage: [PersistentIdentifier: Int] = [:]
+    private static let capacity = 300
+
+    /// Cache lookup that never touches the blob — callers check this first
+    /// and only fault `attachment.data` on a miss.
+    func cachedByteCount(for id: PersistentIdentifier) -> Int? {
+        storage[id]
+    }
+
+    func byteCount(for id: PersistentIdentifier, data: Data) async -> Int {
+        if let cached = storage[id] { return cached }
+        if storage.count >= Self.capacity {
+            for key in storage.keys.prefix(storage.count / 2) {
+                storage.removeValue(forKey: key)
+            }
+        }
+        let count = data.count
+        storage[id] = count
+        return count
     }
 }
 

@@ -258,7 +258,14 @@ struct EditReportView: View {
 
     private func loadPhotos(_ items: [PhotosPickerItem]) async {
         for item in items {
-            if let data = try? await item.loadTransferable(type: Data.self) {
+            if let raw = try? await item.loadTransferable(type: Data.self) {
+                // Downsampling is pure and off-main (ImageDownsampler decodes
+                // via ImageIO's thumbnail pipeline, never a full-resolution
+                // bitmap); never inflates, and falls back to the original
+                // bytes if the source isn't a decodable image.
+                let data = await Task.detached {
+                    ImageDownsampler.downsampledJPEG(from: raw) ?? raw
+                }.value
                 attachments.append(AttachmentDraft(
                     filename: "Photo \(attachments.count + 1)",
                     kind: .image,
@@ -284,6 +291,9 @@ struct EditReportView: View {
         }
     }
 
+    // `.fileImporter` below is restricted to `allowedContentTypes: [.pdf]`,
+    // so every attachment built here is `kind: .pdf` — no downsampling path
+    // applies (`ImageDownsampler` is for `.image` attachments only).
     private func handleFileImport(_ result: Result<[URL], Error>) {
         guard case .success(let urls) = result else { return }
         for url in urls {

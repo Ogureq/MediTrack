@@ -27,19 +27,20 @@ struct ScanReportView: View {
     @Environment(\.modelContext) private var modelContext
     @ObservedObject private var premiumStore = PremiumStore.shared
 
-    // Queried so the post-save AI stage can build a `HealthReview` over the
-    // freshly saved data exactly as `ReviewScreen` does — this view has no
-    // other way to see the rest of the user's records.
-    @Query(sort: \MedicalReport.date, order: .reverse) private var reports: [MedicalReport]
-    @Query private var vitals: [VitalSample]
-    @Query private var medications: [Medication]
-    @Query private var profiles: [HealthProfile]
-    @Query private var symptoms: [SymptomEntry]
-    @Query(sort: \Appointment.date) private var appointments: [Appointment]
+    // Deliberately NOT @Query: this sheet is shown while the user is
+    // photographing, and a live subscription to every one of these tables
+    // would re-render it on every mutation app-wide for the entire scan
+    // flow, even though the data is only needed once, after save, to build
+    // the post-save `HealthReview` (see `currentReview(including:)` and
+    // `aiProfileSummary()` below, which fetch on demand via `modelContext`).
 
     @State private var attachments: [AttachmentDraft] = []
     @State private var confirmedLabs: [ScannedLabValue] = []
     @State private var scannedValues: [ScannedLabValue] = []
+    /// Attachment ids already run through `LabScanService` — lets
+    /// `scanAttachments()` OCR only what's new instead of re-scanning every
+    /// attachment on every add. See `scanAttachments()`.
+    @State private var scannedAttachmentIDs: Set<UUID> = []
     @State private var isScanning = false
     @State private var hasScanned = false
     @State private var showingScanResults = false
@@ -560,7 +561,14 @@ struct ScanReportView: View {
     private func loadPhotos(_ items: [PhotosPickerItem]) async {
         var addedAny = false
         for item in items {
-            if let data = try? await item.loadTransferable(type: Data.self) {
+            if let raw = try? await item.loadTransferable(type: Data.self) {
+                // Downsampling is pure and off-main (ImageDownsampler decodes
+                // via ImageIO's thumbnail pipeline, never a full-resolution
+                // bitmap); never inflates, and falls back to the original
+                // bytes if the source isn't a decodable image.
+                let data = await Task.detached {
+                    ImageDownsampler.downsampledJPEG(from: raw) ?? raw
+                }.value
                 attachments.append(AttachmentDraft(
                     filename: "Photo \(attachments.count + 1)",
                     kind: .image,
@@ -573,6 +581,9 @@ struct ScanReportView: View {
         if addedAny { scanAttachments() }
     }
 
+    // `.fileImporter` above is restricted to `allowedContentTypes: [.pdf]`,
+    // so every attachment built here is `kind: .pdf` — no downsampling path
+    // applies (`ImageDownsampler` is for `.image` attachments only).
     private func handleFileImport(_ result: Result<[URL], Error>) {
         guard case .success(let urls) = result else { return }
         var addedAny = false
@@ -598,25 +609,42 @@ struct ScanReportView: View {
         if attachments.isEmpty {
             scannedValues = []
             hasScanned = false
+            scannedAttachmentIDs = []
         } else {
+            // Removal has no per-attachment provenance for `scannedValues`
+            // (a value found earlier might have come from the attachment
+            // that's leaving), so — same as before this fix — fall back to
+            // a full rescan of what remains rather than risk stale values.
+            // This is the rare "remove" path, not the hot "keep
+            // photographing pages" path `scanAttachments()` optimizes below.
+            scannedAttachmentIDs = []
+            scannedValues = []
             scanAttachments()
         }
     }
 
-    /// Runs `LabScanService` over every current attachment — the same
-    /// scan machinery `EditReportView` exposes behind a button, just kicked
-    /// off automatically the moment a document is attached. Values already
-    /// confirmed are filtered out so re-scanning after a new attachment
-    /// only surfaces what's new.
+    /// Runs `LabScanService` only over attachments not yet OCR'd (tracked by
+    /// `scannedAttachmentIDs`), instead of re-scanning every attachment on
+    /// every add — the previous behavior re-ran Vision OCR over the whole
+    /// growing attachment list each time a page was photographed. Values
+    /// already confirmed, or already sitting unconfirmed in `scannedValues`
+    /// from an earlier scan, are filtered out of the newly found results
+    /// before merging so repeat scans accumulate rather than duplicate —
+    /// preserving the same "no duplicate detected value" behavior the old
+    /// full-replace (`scannedValues = found`) approach had for free.
     private func scanAttachments() {
-        guard !attachments.isEmpty else { return }
+        let unscanned = attachments.filter { !scannedAttachmentIDs.contains($0.id) }
+        guard !unscanned.isEmpty else { return }
         isScanning = true
-        let inputs = attachments.map { (kind: $0.kind, data: $0.data) }
+        let inputs = unscanned.map { (kind: $0.kind, data: $0.data) }
+        let newlyScannedIDs = Set(unscanned.map { $0.id })
         let existingKeys = Set(confirmedLabs.map { $0.reference.id.lowercased() })
+            .union(scannedValues.map { $0.reference.id.lowercased() })
         Task {
             let found = await LabScanService.scan(attachments: inputs)
                 .filter { !existingKeys.contains($0.reference.id.lowercased()) }
-            scannedValues = found
+            scannedValues.append(contentsOf: found)
+            scannedAttachmentIDs.formUnion(newlyScannedIDs)
             isScanning = false
             hasScanned = true
             if !found.isEmpty {
@@ -744,12 +772,22 @@ struct ScanReportView: View {
 
     // MARK: - AI report generation
 
+    /// One-shot lookup of the single `HealthProfile` — replaces the removed
+    /// `@Query private var profiles`. Shared by `currentReview(including:)`,
+    /// `aiProfileSummary()`, and `exportAIReportPDF()` so there's exactly one
+    /// place that knows how to fetch it.
+    private func fetchProfile() -> HealthProfile? {
+        (try? modelContext.fetch(FetchDescriptor<HealthProfile>()))?.first
+    }
+
     /// A short, caller-built profile description ("42-year-old male;
     /// conditions: hypertension"). Identical to `ReviewScreen.aiProfileSummary`
-    /// — duplicated rather than shared, per this file's edit-ownership: this
-    /// view has no shared AI-helper module of its own to put it in.
-    private var aiProfileSummary: String? {
-        guard let profile = profiles.first else { return nil }
+    /// in spirit — duplicated rather than shared, per this file's
+    /// edit-ownership: this view has no shared AI-helper module of its own
+    /// to put it in. A function rather than a computed property now that it
+    /// fetches (see `fetchProfile()`) instead of reading a live `@Query`.
+    private func aiProfileSummary() -> String? {
+        guard let profile = fetchProfile() else { return nil }
         var parts: [String] = []
         if let age = profile.age {
             parts.append("\(age)-year-old")
@@ -766,17 +804,29 @@ struct ScanReportView: View {
         return parts.isEmpty ? nil : parts.joined(separator: "; ")
     }
 
-    /// `AnalysisEngine.generateReview` over every queried record, patched to
-    /// guarantee `savedReport` is included even on the very first call right
-    /// after `save()` inserts it — this view's `@Query` results may not have
-    /// refreshed yet at that point.
+    /// `AnalysisEngine.generateReview` over every record, fetched one-shot
+    /// from `modelContext` (see the removed `@Query` properties above),
+    /// patched to guarantee `savedReport` is included even on the very first
+    /// call right after `save()` inserts it — a fetch immediately after
+    /// insert isn't guaranteed to observe it yet. Every fetch degrades to an
+    /// empty array on failure (`try?`) rather than throwing, so a fetch
+    /// hiccup only thins out the AI report input instead of crashing the
+    /// just-completed save.
     private func currentReview(including savedReport: MedicalReport) -> HealthReview {
-        var allReports = reports
+        var allReports = (try? modelContext.fetch(
+            FetchDescriptor<MedicalReport>(sortBy: [SortDescriptor(\.date, order: .reverse)])
+        )) ?? []
         if !allReports.contains(where: { $0.persistentModelID == savedReport.persistentModelID }) {
             allReports.append(savedReport)
         }
+        let vitals = (try? modelContext.fetch(FetchDescriptor<VitalSample>())) ?? []
+        let medications = (try? modelContext.fetch(FetchDescriptor<Medication>())) ?? []
+        let symptoms = (try? modelContext.fetch(FetchDescriptor<SymptomEntry>())) ?? []
+        let appointments = (try? modelContext.fetch(
+            FetchDescriptor<Appointment>(sortBy: [SortDescriptor(\.date)])
+        )) ?? []
         return AnalysisEngine.generateReview(
-            profile: profiles.first,
+            profile: fetchProfile(),
             reports: allReports,
             vitals: vitals,
             medications: medications,
@@ -787,15 +837,21 @@ struct ScanReportView: View {
 
     /// Runs the same `AnalysisEngine.generateReview` → `AISummaryService.generateReport`
     /// pipeline `ReviewScreen` uses, over the just-saved report plus every
-    /// other queried record. Never blocks or loses the scan: the report was
+    /// other fetched record. Never blocks or loses the scan: the report was
     /// already saved before this is called, and any failure or refusal here
     /// just shows a friendly inline error next to the `Done` button.
+    ///
+    /// `currentReview`/`aiProfileSummary` are called inside the `Task`
+    /// (rather than synchronously before it, as before) purely so SwiftUI
+    /// gets a chance to paint the just-set `.aiGenerating` stage first —
+    /// both remain main-actor work either way, since `modelContext` fetches
+    /// and `HealthReview`/`MedicalReport` are all main-actor-pinned.
     private func generateAIReport(for report: MedicalReport) {
         stage = .aiGenerating
-        let review = currentReview(including: report)
-        let profileSummary = aiProfileSummary
 
         Task {
+            let review = currentReview(including: report)
+            let profileSummary = aiProfileSummary()
             do {
                 let generated = try await AISummaryService.generateReport(
                     review: review,
@@ -831,38 +887,57 @@ struct ScanReportView: View {
     /// the file. The attachment is kept even if the user cancels or the
     /// share sheet itself can't be prepared — only rendering can fail this
     /// early, and that's surfaced inline via `pdfExportError`.
+    ///
+    /// `AIReportPDFExporter.render` takes SwiftData model objects directly
+    /// (`scannedLabs: [LabResult]`, and `HealthReview` is built from model
+    /// data too) — SwiftData models aren't `Sendable` and stay pinned to
+    /// this context's actor (main), so genuinely moving the render off-main
+    /// would require the exporter's API to accept `Sendable` value-type
+    /// snapshots instead, which is a larger change than this fix covers.
+    /// The minimal, actor-safe improvement taken here: do the work inside a
+    /// `Task { @MainActor in ... }` with an `await Task.yield()` right after
+    /// `isExportingPDF` flips to true (and again before the temp-file
+    /// write), so SwiftUI gets a chance to actually paint the "Preparing
+    /// PDF…" button state between those points instead of the whole
+    /// synchronous render+write hiding it entirely. The render itself still
+    /// runs on the main actor — one beat of latency, not a full off-main fix.
     private func exportAIReportPDF() {
         guard case .aiReport(let report) = stage, let savedReport, !isExportingPDF else { return }
         isExportingPDF = true
         pdfExportError = nil
 
-        let review = currentReview(including: savedReport)
-        let now = Date.now
-        let data = AIReportPDFExporter.render(
-            report: report,
-            review: review,
-            scannedLabs: savedReport.labResults,
-            profileName: profiles.first?.name ?? "",
-            generatedAt: now
-        )
+        Task { @MainActor in
+            await Task.yield()
 
-        guard !data.isEmpty else {
-            pdfExportError = "Couldn't create the PDF. Please try again."
+            let review = currentReview(including: savedReport)
+            let now = Date.now
+            let data = AIReportPDFExporter.render(
+                report: report,
+                review: review,
+                scannedLabs: savedReport.labResults,
+                profileName: fetchProfile()?.name ?? "",
+                generatedAt: now
+            )
+
+            guard !data.isEmpty else {
+                pdfExportError = "Couldn't create the PDF. Please try again."
+                isExportingPDF = false
+                return
+            }
+
+            let filename = "AI Analysis — \(now.formatted(date: .abbreviated, time: .omitted)).pdf"
+            savedReport.attachments.append(ReportAttachment(filename: filename, kind: .pdf, data: data))
+
+            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+            await Task.yield()
+            do {
+                try data.write(to: tempURL, options: .atomic)
+                shareItem = ShareItem(url: tempURL)
+            } catch {
+                pdfExportError = "The PDF was saved to the report, but couldn't be prepared for sharing."
+            }
             isExportingPDF = false
-            return
         }
-
-        let filename = "AI Analysis — \(now.formatted(date: .abbreviated, time: .omitted)).pdf"
-        savedReport.attachments.append(ReportAttachment(filename: filename, kind: .pdf, data: data))
-
-        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
-        do {
-            try data.write(to: tempURL, options: .atomic)
-            shareItem = ShareItem(url: tempURL)
-        } catch {
-            pdfExportError = "The PDF was saved to the report, but couldn't be prepared for sharing."
-        }
-        isExportingPDF = false
     }
 }
 
@@ -978,14 +1053,37 @@ private struct CameraCaptureView: UIViewControllerRepresentable {
             self.dismiss = dismiss
         }
 
+        /// JPEG encoding (`jpegData`) and downsampling (`ImageDownsampler`)
+        /// are both pure, read-only work over an already-captured `UIImage`
+        /// — safe to run off the main actor — so this hops to
+        /// `Task.detached` for that work instead of blocking the delegate
+        /// callback (which runs on main) with a full-resolution encode.
+        /// `onCapture`/`dismiss` are captured as locals rather than via
+        /// `self` so the detached closure doesn't need to touch the
+        /// (non-`Sendable`) `Coordinator` instance at all. Behavior is
+        /// unchanged: a nil image still just dismisses, and a decode/encode
+        /// failure still skips `onCapture` — only where the encode runs has
+        /// moved.
         func imagePickerController(
             _ picker: UIImagePickerController,
             didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
         ) {
-            if let image = info[.originalImage] as? UIImage, let data = image.jpegData(compressionQuality: 0.9) {
-                onCapture(data)
+            guard let image = info[.originalImage] as? UIImage else {
+                dismiss()
+                return
             }
-            dismiss()
+            let onCapture = onCapture
+            let dismiss = dismiss
+            Task.detached {
+                let data = image.jpegData(compressionQuality: 0.9)
+                    .map { jpeg in ImageDownsampler.downsampledJPEG(from: jpeg) ?? jpeg }
+                await MainActor.run {
+                    if let data {
+                        onCapture(data)
+                    }
+                    dismiss()
+                }
+            }
         }
 
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {

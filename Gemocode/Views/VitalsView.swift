@@ -272,21 +272,38 @@ private struct VitalMetricCard: View {
 /// delete, add) is lost by the grid becoming the top-level browse screen.
 private struct VitalTypeDetailView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \VitalSample.date, order: .reverse) private var allVitals: [VitalSample]
+    @Query private var allVitals: [VitalSample]
 
     let type: VitalType
 
     @State private var showingAdd = false
 
-    private var samples: [VitalSample] {
-        allVitals.filter { $0.type == type }
+    /// Narrows the fetch itself to `type` via a predicate on the raw stored
+    /// string — `VitalSample.type` is a computed property over `typeRaw`,
+    /// and `#Predicate` can only capture plain captured values (not a
+    /// computed expression), so `raw` is captured outside the predicate
+    /// closure. Replaces a `@Query` over every vital sample that was
+    /// re-filtered by `type` on every access (count check, `ForEach`, and
+    /// the chart's own sort — three full scans of the whole vitals table per
+    /// body pass).
+    init(type: VitalType) {
+        self.type = type
+        let raw = type.rawValue
+        _allVitals = Query(
+            filter: #Predicate<VitalSample> { $0.typeRaw == raw },
+            sort: [SortDescriptor(\.date, order: .reverse)]
+        )
     }
 
     var body: some View {
+        // Body-local: the query is already narrowed to `type`, so this is a
+        // cheap alias, not a re-filter — threaded into `chart`/`deleteSamples`
+        // instead of each reaching back into `allVitals` separately.
+        let samples = allVitals
         List {
             if samples.count >= 2 {
                 Section {
-                    chart
+                    chart(samples: samples)
                         .frame(height: 200)
                         .padding(.vertical, 8)
                         .listRowSeparator(.hidden)
@@ -313,7 +330,7 @@ private struct VitalTypeDetailView: View {
                     }
                     .accessibilityElement(children: .combine)
                 }
-                .onDelete(perform: deleteSamples)
+                .onDelete { offsets in deleteSamples(samples, at: offsets) }
             }
             .listRowBackground(GlassRowBackground())
             .listRowSeparator(.hidden)
@@ -334,7 +351,7 @@ private struct VitalTypeDetailView: View {
         }
     }
 
-    private var chart: some View {
+    private func chart(samples: [VitalSample]) -> some View {
         let ascending = samples.sorted { $0.date < $1.date }
         return Chart {
             if let healthyRange = type.healthyRange {
@@ -373,7 +390,7 @@ private struct VitalTypeDetailView: View {
         .accessibilityLabel("\(type.displayName) trend chart")
     }
 
-    private func deleteSamples(at offsets: IndexSet) {
+    private func deleteSamples(_ samples: [VitalSample], at offsets: IndexSet) {
         for index in offsets {
             modelContext.delete(samples[index])
         }

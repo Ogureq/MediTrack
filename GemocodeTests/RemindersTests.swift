@@ -116,7 +116,7 @@ final class RemindersTests: XCTestCase {
 
     // MARK: BackupService round trip
 
-    func testExportAndRestoreRoundTripIncludesRemindersAndQuizFields() throws {
+    func testExportAndRestoreRoundTripIncludesRemindersAndQuizFields() async throws {
         let sourceContainer = try Self.makeInMemoryContainer()
         let sourceContext = sourceContainer.mainContext
         let destinationContainer = try Self.makeInMemoryContainer()
@@ -150,8 +150,8 @@ final class RemindersTests: XCTestCase {
         context.insert(ReminderCompletion(date: completionDate, reminder: reminder))
         try sourceContext.save()
 
-        let data = try BackupService.export(from: sourceContext, passphrase: "correct horse battery staple")
-        let restoredCount = try BackupService.restore(from: data, passphrase: "correct horse battery staple", into: destinationContext)
+        let data = try await BackupService.export(from: sourceContext, passphrase: "correct horse battery staple")
+        let restoredCount = try await BackupService.restore(from: data, passphrase: "correct horse battery staple", into: destinationContext)
         XCTAssertGreaterThan(restoredCount, 0)
 
         let restoredProfiles = try destinationContext.fetch(FetchDescriptor<HealthProfile>())

@@ -306,32 +306,21 @@ final class DocumentLibraryTests: XCTestCase {
 
     // MARK: Byte count
 
-    /// `byteCount` is read from the attachment's external-storage `data`
-    /// once, while flattening — `DocumentItem` never retains the `Data`
-    /// itself, only its size.
-    func testItemsCaptureByteCountFromAttachmentData() throws {
-        let report = MedicalReport(title: "Panel", category: .labReport, date: try date(year: 2025, month: 3, day: 1))
-        context.insert(report)
-        report.attachments.append(ReportAttachment(filename: "scan.jpg", kind: .image, data: Data(repeating: 0, count: 2048)))
-        try context.save()
+    /// `items(from:)` never touches an attachment's external-storage `data`
+    /// (that would fault every attachment's full blob into memory on every
+    /// flatten) — byte size is resolved separately, lazily, by
+    /// `DocumentLibrary.byteCount(for:)` only for an attachment that's
+    /// actually about to be shown (see `ByteCountCache` in DocumentsView).
+    func testByteCountReadsAttachmentDataSize() throws {
+        let attachment = ReportAttachment(filename: "scan.jpg", kind: .image, data: Data(repeating: 0, count: 2048))
 
-        let items = DocumentLibrary.items(from: [report])
-
-        XCTAssertEqual(items.first?.byteCount, 2048)
+        XCTAssertEqual(DocumentLibrary.byteCount(for: attachment), 2048)
     }
 
-    func testItemsWithEmptyDataHaveZeroByteCount() throws {
-        let report = makeReport(
-            title: "Panel",
-            category: .labReport,
-            date: try date(year: 2025, month: 3, day: 1),
-            attachments: [(filename: "a.pdf", kind: .pdf)]
-        )
-        try context.save()
+    func testByteCountForEmptyDataIsZero() throws {
+        let attachment = ReportAttachment(filename: "a.pdf", kind: .pdf, data: Data())
 
-        let items = DocumentLibrary.items(from: [report])
-
-        XCTAssertEqual(items.first?.byteCount, 0)
+        XCTAssertEqual(DocumentLibrary.byteCount(for: attachment), 0)
     }
 
     // MARK: File extension badge

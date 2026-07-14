@@ -229,6 +229,146 @@ final class AIReportPDFExporterTests: XCTestCase {
         XCTAssertFalse(lines.contains(""))
     }
 
+    // MARK: Attention box (out-of-range fixture)
+
+    /// The fixture's cholesterol snapshot is `.high` (out of range) and its
+    /// hemoglobin snapshot is `.normal` — the attention box must list
+    /// exactly the cholesterol row, with its range, and must not also emit
+    /// an all-clear box.
+    func testAttentionBoxListsExactlyOutOfRangeFixtureLabsWithRanges() throws {
+        let generatedAt = try date(year: 2026, month: 7, day: 14)
+        let blocks = AIReportPDFExporter.layoutBlocks(
+            report: makeReport(),
+            review: makeReview(generatedAt: generatedAt),
+            scannedLabs: makeScannedLabs(date: generatedAt),
+            profileName: "Jordan Rivera",
+            generatedAt: generatedAt
+        )
+
+        let attentionBoxes: [[AIReportPDFExporter.LabRow]] = blocks.compactMap {
+            if case .attentionBox(let rows) = $0 { return rows }
+            return nil
+        }
+        XCTAssertEqual(attentionBoxes.count, 1, "Expected exactly one attention box block.")
+        let rows = try XCTUnwrap(attentionBoxes.first)
+        XCTAssertEqual(rows.count, 1, "Expected exactly one out-of-range row (cholesterol).")
+        let row = try XCTUnwrap(rows.first)
+        XCTAssertEqual(row.name, "Total Cholesterol")
+        XCTAssertEqual(row.rangeSpanText, "100–199")
+        XCTAssertTrue(row.status.isOutOfRange)
+
+        let allClearBoxes = blocks.filter { if case .allClearBox = $0 { return true } else { return false } }
+        XCTAssertTrue(allClearBoxes.isEmpty, "Should not also emit an all-clear box when a value is out of range.")
+
+        // The same content must round-trip through layoutText.
+        let lines = AIReportPDFExporter.layoutText(
+            report: makeReport(),
+            review: makeReview(generatedAt: generatedAt),
+            scannedLabs: makeScannedLabs(date: generatedAt),
+            profileName: "Jordan Rivera",
+            generatedAt: generatedAt
+        )
+        XCTAssertTrue(lines.contains("Total Cholesterol: 245 mg/dL — High · typical 100–199"))
+        XCTAssertFalse(lines.contains(AIReportPDFExporter.allNormalMessage))
+    }
+
+    // MARK: All-clear box (all-normal fixture)
+
+    private func makeAllNormalScannedLabs(date: Date) -> [LabResult] {
+        [LabResult(catalogID: "hemoglobin", value: 14.2, unit: "g/dL", date: date)]
+    }
+
+    private func makeAllNormalReview(generatedAt: Date) -> HealthReview {
+        let hemoglobinSnapshot = LabSnapshot(
+            id: "hemoglobin",
+            name: "Hemoglobin",
+            unit: "g/dL",
+            value: 14.2,
+            date: generatedAt,
+            status: .normal,
+            range: 13.5...17.5,
+            reference: LabCatalog.reference(for: "hemoglobin")
+        )
+        return HealthReview(
+            generatedAt: generatedAt,
+            hasData: true,
+            score: 92,
+            summary: "Reviewed 1 lab result from 1 report. Everything is within typical ranges.",
+            findings: [],
+            trends: [],
+            labSnapshots: [hemoglobinSnapshot]
+        )
+    }
+
+    func testAllNormalFixtureProducesAllClearLine() throws {
+        let generatedAt = try date(year: 2026, month: 7, day: 14)
+        let scannedLabs = makeAllNormalScannedLabs(date: generatedAt)
+        let review = makeAllNormalReview(generatedAt: generatedAt)
+
+        let blocks = AIReportPDFExporter.layoutBlocks(
+            report: makeReport(),
+            review: review,
+            scannedLabs: scannedLabs,
+            profileName: "Jordan Rivera",
+            generatedAt: generatedAt
+        )
+
+        let allClearMessages: [String] = blocks.compactMap {
+            if case .allClearBox(let text) = $0 { return text }
+            return nil
+        }
+        XCTAssertEqual(allClearMessages, [AIReportPDFExporter.allNormalMessage])
+
+        let attentionBoxes = blocks.filter { if case .attentionBox = $0 { return true } else { return false } }
+        XCTAssertTrue(attentionBoxes.isEmpty, "Should not emit an attention box when every scanned value is normal.")
+
+        let lines = AIReportPDFExporter.layoutText(
+            report: makeReport(),
+            review: review,
+            scannedLabs: scannedLabs,
+            profileName: "Jordan Rivera",
+            generatedAt: generatedAt
+        )
+        XCTAssertTrue(lines.contains("All scanned values are within their typical ranges."))
+        XCTAssertEqual(
+            AIReportPDFExporter.allNormalMessage,
+            "All scanned values are within their typical ranges."
+        )
+    }
+
+    // MARK: Typical-range table column
+
+    func testRangeColumnTextPresentForKnownRangeLabs() throws {
+        let generatedAt = try date(year: 2026, month: 7, day: 14)
+        let blocks = AIReportPDFExporter.layoutBlocks(
+            report: makeReport(),
+            review: makeReview(generatedAt: generatedAt),
+            scannedLabs: makeScannedLabs(date: generatedAt),
+            profileName: "Jordan Rivera",
+            generatedAt: generatedAt
+        )
+
+        let tableRows: [AIReportPDFExporter.LabRow] = blocks.compactMap {
+            if case .tableRow(let row) = $0 { return row }
+            return nil
+        }
+        XCTAssertEqual(tableRows.count, 2)
+        let cholesterolRow = try XCTUnwrap(tableRows.first { $0.name == "Total Cholesterol" })
+        XCTAssertEqual(cholesterolRow.rangeColumnText, "100–199 mg/dL")
+        let hemoglobinRow = try XCTUnwrap(tableRows.first { $0.name == "Hemoglobin" })
+        XCTAssertEqual(hemoglobinRow.rangeColumnText, "13.5–17.5 g/dL")
+
+        let lines = AIReportPDFExporter.layoutText(
+            report: makeReport(),
+            review: makeReview(generatedAt: generatedAt),
+            scannedLabs: makeScannedLabs(date: generatedAt),
+            profileName: "Jordan Rivera",
+            generatedAt: generatedAt
+        )
+        XCTAssertTrue(lines.contains(where: { $0.contains("100–199 mg/dL") }))
+        XCTAssertTrue(lines.contains(where: { $0.contains("13.5–17.5 g/dL") }))
+    }
+
     // MARK: render — sanity check on the actual PDF bytes
 
     func testRenderProducesNonEmptyValidPDFData() throws {

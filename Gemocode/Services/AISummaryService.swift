@@ -165,6 +165,18 @@ enum AISummaryService {
         to their doctor.
         6. Keep the tone warm, plain-language, and non-alarmist — this is educational only, \
         not medical advice.
+        7. If any labValues have status "low", "high", "criticalLow", or "criticalHigh", \
+        include exactly one additional section titled exactly "Lifestyle & nutrition to \
+        discuss" covering only those out-of-range markers. You may mention general \
+        mainstream dietary/hydration topics commonly discussed for that marker — for \
+        example: water intake and limiting sugary drinks for elevated glucose; sodium \
+        reduction for elevated blood pressure; soluble fiber such as oats, and limiting \
+        saturated fat, for elevated LDL/cholesterol; limiting alcohol for elevated liver \
+        enzymes or triglycerides. Every item must be framed as a topic to confirm with a \
+        doctor or registered dietitian. Never present anything as a fix, treatment, or \
+        cure. Never give doses, amounts, brands, supplements, or herbal remedies. Never \
+        instruct starting, stopping, or changing any medication. If no labValues are out \
+        of range, omit this section entirely.
 
         Respond with a single JSON object and nothing else (no markdown, no commentary, no \
         code fence) matching exactly this shape:

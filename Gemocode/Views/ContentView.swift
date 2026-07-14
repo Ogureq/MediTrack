@@ -142,9 +142,11 @@ struct MoreView: View {
         "\(goalsInProgressCount) in progress"
     }
 
-    private var documentsCount: Int {
-        reports.flatMap(\.attachments).count
-    }
+    /// Cached instead of a plain computed property — `.attachments` faults
+    /// each report's relationship, and this view's five `@Query`s can each
+    /// retrigger a render, so recomputing on every render would repeatedly
+    /// fault every report. Rebuilt only when `reports.count` changes.
+    @State private var documentsCount = 0
 
     private var documentsSubtitle: String {
         "\(documentsCount) files"
@@ -190,6 +192,9 @@ struct MoreView: View {
             }
             .ambientScreen()
             .navigationTitle("More")
+        }
+        .task(id: reports.count) {
+            documentsCount = reports.reduce(0) { $0 + $1.attachments.count }
         }
     }
 

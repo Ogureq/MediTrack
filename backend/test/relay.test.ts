@@ -175,4 +175,26 @@ describe("REPORT_SUMMARY_SYSTEM_PROMPT", () => {
     expect(REPORT_SUMMARY_SYSTEM_PROMPT).toContain("educational only");
     expect(REPORT_SUMMARY_SYSTEM_PROMPT).toContain("follow-up questions");
   });
+
+  it("instructs an exactly-titled Lifestyle & nutrition section for out-of-range markers only", () => {
+    expect(REPORT_SUMMARY_SYSTEM_PROMPT).toContain("Lifestyle & nutrition to discuss");
+    // Scoped to out-of-range labValues only (never a general lifestyle section).
+    expect(REPORT_SUMMARY_SYSTEM_PROMPT).toContain(
+      'If any labValues have status "low", "high", "criticalLow", or "criticalHigh"'
+    );
+    expect(REPORT_SUMMARY_SYSTEM_PROMPT).toContain("covering only those out-of-range markers");
+    // Illustrative mainstream topics the model may draw on.
+    expect(REPORT_SUMMARY_SYSTEM_PROMPT).toContain("water intake and limiting sugary drinks for elevated glucose");
+    expect(REPORT_SUMMARY_SYSTEM_PROMPT).toContain("sodium reduction for elevated blood pressure");
+    expect(REPORT_SUMMARY_SYSTEM_PROMPT).toContain("soluble fiber such as oats");
+    expect(REPORT_SUMMARY_SYSTEM_PROMPT).toContain("limiting alcohol for elevated liver enzymes or triglycerides");
+  });
+
+  it("encodes every lifestyle-section safety rail: doctor/dietitian framing, no fix/cure claims, no doses/brands/supplements, no medication instructions, and omission when nothing is out of range", () => {
+    expect(REPORT_SUMMARY_SYSTEM_PROMPT).toContain("framed as a topic to confirm with a doctor or registered dietitian");
+    expect(REPORT_SUMMARY_SYSTEM_PROMPT).toContain("Never present anything as a fix, treatment, or cure");
+    expect(REPORT_SUMMARY_SYSTEM_PROMPT).toContain("Never give doses, amounts, brands, supplements, or herbal remedies");
+    expect(REPORT_SUMMARY_SYSTEM_PROMPT).toContain("Never instruct starting, stopping, or changing any medication");
+    expect(REPORT_SUMMARY_SYSTEM_PROMPT).toContain("If no labValues are out of range, omit this section entirely");
+  });
 });

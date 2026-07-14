@@ -193,10 +193,23 @@ enum BackupService {
     private static let saltLength = 16
 
     /// Serializes the entire store (including attachments), then seals it
-    /// behind a passphrase-derived AES-GCM key.
+    /// behind a passphrase-derived AES-GCM key. Only the `ModelContext`
+    /// fetch (`buildPayload`) needs the main actor; the CPU-heavy encode +
+    /// PBKDF2 + AES-GCM seal happens in `sealEnvelope`, which is `async` and
+    /// carries no actor annotation, so `await`-ing it (SE-0338) hops off the
+    /// main actor instead of blocking the UI thread for the ~0.5-2s a full
+    /// backup with attachments can take.
     @MainActor
-    static func export(from context: ModelContext, passphrase: String) throws -> Data {
+    static func export(from context: ModelContext, passphrase: String) async throws -> Data {
         let payload = try buildPayload(from: context)
+        return try await sealEnvelope(payload, passphrase: passphrase)
+    }
+
+    /// Pure CPU work with no `ModelContext` access: JSON-encodes the
+    /// payload, derives a PBKDF2 key, and AES-GCM seals it. Deliberately
+    /// `nonisolated` (no actor annotation) + `async` so it always runs off
+    /// whatever actor called it.
+    private static func sealEnvelope(_ payload: BackupPayload, passphrase: String) async throws -> Data {
         let plaintext = try encodePayload(payload)
 
         let salt = randomBytes(count: saltLength)
@@ -354,10 +367,15 @@ enum BackupService {
     /// `data` may be either a v2 encrypted envelope (in which case
     /// `passphrase` must match) or a legacy plaintext payload (in which case
     /// `passphrase` is ignored).
+    ///
+    /// Decrypting/decoding (`resolvePayload`) is CPU-heavy (PBKDF2 + AES-GCM
+    /// open + JSON decode of the whole store) and runs off the main actor;
+    /// everything after it touches `context` directly and stays on the main
+    /// actor, matching `export`'s split.
     @MainActor
     @discardableResult
-    static func restore(from data: Data, passphrase: String, into context: ModelContext) throws -> Int {
-        let payload = try resolvePayload(from: data, passphrase: passphrase)
+    static func restore(from data: Data, passphrase: String, into context: ModelContext) async throws -> Int {
+        let payload = try await resolvePayload(from: data, passphrase: passphrase)
 
         // Wipe everything except the profile object itself.
         try? context.delete(model: MedicalReport.self)
@@ -554,7 +572,9 @@ enum BackupService {
 
     /// Detects whether `data` is a v2 envelope or a legacy plaintext
     /// payload and returns the decoded `BackupPayload` either way.
-    private static func resolvePayload(from data: Data, passphrase: String) throws -> BackupPayload {
+    /// `async` (with no actor annotation) so `await`-ing it from `restore`
+    /// runs the PBKDF2 derivation and AES-GCM open off the main actor.
+    private static func resolvePayload(from data: Data, passphrase: String) async throws -> BackupPayload {
         if let envelope = try? JSONDecoder().decode(BackupEnvelope.self, from: data) {
             guard envelope.version == envelopeVersion else {
                 throw BackupError.corruptData

@@ -46,13 +46,13 @@ final class BackupCryptoTests: XCTestCase {
 
     // MARK: Round trip
 
-    func testEncryptDecryptRoundTripWithCorrectPassphrase() throws {
+    func testEncryptDecryptRoundTripWithCorrectPassphrase() async throws {
         let sourceContainer = try Self.makeInMemoryContainer()
         let sourceContext = sourceContainer.mainContext
         seedMinimalData(in: sourceContext)
         try sourceContext.save()
 
-        let data = try BackupService.export(from: sourceContext, passphrase: correctPassphrase)
+        let data = try await BackupService.export(from: sourceContext, passphrase: correctPassphrase)
 
         // Confirm this really is the v2 envelope, not a plaintext fallback.
         let envelope = try JSONDecoder().decode(BackupEnvelope.self, from: data)
@@ -64,7 +64,7 @@ final class BackupCryptoTests: XCTestCase {
 
         let destinationContainer = try Self.makeInMemoryContainer()
         let destinationContext = destinationContainer.mainContext
-        let restoredCount = try BackupService.restore(from: data, passphrase: correctPassphrase, into: destinationContext)
+        let restoredCount = try await BackupService.restore(from: data, passphrase: correctPassphrase, into: destinationContext)
         XCTAssertGreaterThan(restoredCount, 0)
 
         let restoredProfiles = try destinationContext.fetch(FetchDescriptor<HealthProfile>())
@@ -76,26 +76,30 @@ final class BackupCryptoTests: XCTestCase {
 
     // MARK: Wrong passphrase
 
-    func testWrongPassphraseThrowsTypedError() throws {
+    func testWrongPassphraseThrowsTypedError() async throws {
         let sourceContainer = try Self.makeInMemoryContainer()
         let sourceContext = sourceContainer.mainContext
         seedMinimalData(in: sourceContext)
         try sourceContext.save()
 
-        let data = try BackupService.export(from: sourceContext, passphrase: correctPassphrase)
+        let data = try await BackupService.export(from: sourceContext, passphrase: correctPassphrase)
 
         let destinationContainer = try Self.makeInMemoryContainer()
         let destinationContext = destinationContainer.mainContext
-        XCTAssertThrowsError(
-            try BackupService.restore(from: data, passphrase: "totally wrong passphrase", into: destinationContext)
-        ) { error in
+        // XCTAssertThrowsError's expression is a non-async autoclosure, so
+        // an `await`-ing call can't be passed to it directly; do/catch is
+        // the standard substitute for async-throwing expectations.
+        do {
+            _ = try await BackupService.restore(from: data, passphrase: "totally wrong passphrase", into: destinationContext)
+            XCTFail("Expected BackupError.wrongPassphrase")
+        } catch {
             XCTAssertEqual(error as? BackupError, .wrongPassphrase)
         }
     }
 
     // MARK: Legacy plaintext fallback
 
-    func testLegacyPlaintextPayloadStillRestoresRegardlessOfPassphrase() throws {
+    func testLegacyPlaintextPayloadStillRestoresRegardlessOfPassphrase() async throws {
         // Mirrors a pre-encryption (v1) backup file: a bare `BackupPayload`
         // JSON with no envelope wrapper at all.
         let legacyJSON = """
@@ -124,7 +128,7 @@ final class BackupCryptoTests: XCTestCase {
         let context = container.mainContext
         // The passphrase is deliberately nonsense here: legacy payloads
         // aren't encrypted, so it must be ignored rather than rejected.
-        let restoredCount = try BackupService.restore(
+        let restoredCount = try await BackupService.restore(
             from: Data(legacyJSON.utf8),
             passphrase: "this passphrase is never checked",
             into: context
@@ -137,13 +141,13 @@ final class BackupCryptoTests: XCTestCase {
 
     // MARK: Tampered ciphertext
 
-    func testTamperedCiphertextThrows() throws {
+    func testTamperedCiphertextThrows() async throws {
         let sourceContainer = try Self.makeInMemoryContainer()
         let sourceContext = sourceContainer.mainContext
         seedMinimalData(in: sourceContext)
         try sourceContext.save()
 
-        let data = try BackupService.export(from: sourceContext, passphrase: correctPassphrase)
+        let data = try await BackupService.export(from: sourceContext, passphrase: correctPassphrase)
 
         var envelope = try JSONDecoder().decode(BackupEnvelope.self, from: data)
         var sealedBytes = try XCTUnwrap(Data(base64Encoded: envelope.sealed))
@@ -157,21 +161,23 @@ final class BackupCryptoTests: XCTestCase {
 
         let destinationContainer = try Self.makeInMemoryContainer()
         let destinationContext = destinationContainer.mainContext
-        XCTAssertThrowsError(
-            try BackupService.restore(from: tamperedData, passphrase: correctPassphrase, into: destinationContext)
-        ) { error in
+        do {
+            _ = try await BackupService.restore(from: tamperedData, passphrase: correctPassphrase, into: destinationContext)
+            XCTFail("Expected a BackupError")
+        } catch {
             XCTAssertTrue(error is BackupError)
         }
     }
 
     // MARK: Corrupt / unreadable data
 
-    func testGarbageDataThrowsUnreadableFile() throws {
+    func testGarbageDataThrowsUnreadableFile() async throws {
         let container = try Self.makeInMemoryContainer()
         let context = container.mainContext
-        XCTAssertThrowsError(
-            try BackupService.restore(from: Data("not a backup".utf8), passphrase: "whatever", into: context)
-        ) { error in
+        do {
+            _ = try await BackupService.restore(from: Data("not a backup".utf8), passphrase: "whatever", into: context)
+            XCTFail("Expected BackupError.unreadableFile")
+        } catch {
             XCTAssertEqual(error as? BackupError, .unreadableFile)
         }
     }

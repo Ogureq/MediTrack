@@ -46,7 +46,22 @@ struct DashboardView: View {
     /// considers report and lab-result dates (not just snapshots/vitals) so
     /// a user who has only ever logged lab reports still gets credit for
     /// their history and sees the Quarterly Review card once it's due.
-    private var earliestDataDate: Date? {
+    ///
+    /// Cached instead of a plain computed property — it flattens every
+    /// report's lab results, which is wasted work to redo on every render
+    /// when it's only needed once `isQuarterlyReviewDue` is checked.
+    /// Rebuilt via `.task(id: earliestDataSignature)`.
+    @State private var earliestDataDate: Date?
+
+    private var earliestDataSignature: String {
+        "\(reports.count)-\(vitals.count)-\(snapshots.count)"
+    }
+
+    private static func computeEarliestDataDate(
+        reports: [MedicalReport],
+        vitals: [VitalSample],
+        snapshots: [ScoreSnapshot]
+    ) -> Date? {
         let dates = [
             snapshots.first?.date,
             vitals.map(\.date).min(),
@@ -131,6 +146,10 @@ struct DashboardView: View {
                 // access, so every section below takes it as a parameter
                 // instead of reading the computed property directly.
                 let review = self.review
+                // Same idea: `vitalsGrid`/`goalsCard` each used to filter+sort
+                // every vital per `VitalType`/goal on every render; grouping
+                // once here and threading the dictionary through does it once.
+                let vitalsByType = Dictionary(grouping: vitals, by: \.type)
                 VStack(alignment: .leading, spacing: 16) {
                     greetingHeader
                     quickAddButton
@@ -142,8 +161,8 @@ struct DashboardView: View {
                         BiomarkerCarouselSection()
                         alertsSection(review: review)
                         appointmentCard
-                        vitalsGrid
-                        goalsCard
+                        vitalsGrid(vitalsByType: vitalsByType)
+                        goalsCard(vitalsByType: vitalsByType)
                         recentReportsSection
                     } else {
                         emptyState
@@ -174,6 +193,9 @@ struct DashboardView: View {
             .sheet(isPresented: $showingAddVital) { AddVitalSheet() }
             .sheet(isPresented: $showingQuickAdd) { QuickAddView() }
             .sheet(isPresented: $showingQuarterlyReview) { QuarterlyReviewView() }
+        }
+        .task(id: earliestDataSignature) {
+            earliestDataDate = Self.computeEarliestDataDate(reports: reports, vitals: vitals, snapshots: snapshots)
         }
     }
 
@@ -494,9 +516,9 @@ struct DashboardView: View {
     }
 
     @ViewBuilder
-    private var vitalsGrid: some View {
+    private func vitalsGrid(vitalsByType: [VitalType: [VitalSample]]) -> some View {
         let tiles = VitalType.allCases.compactMap { type -> (type: VitalType, latest: VitalSample, history: [VitalSample])? in
-            let samples = vitals.filter { $0.type == type }.sorted { $0.date < $1.date }
+            let samples = (vitalsByType[type] ?? []).sorted { $0.date < $1.date }
             guard let latest = samples.last else { return nil }
             return (type, latest, Array(samples.suffix(12)))
         }
@@ -550,7 +572,7 @@ struct DashboardView: View {
     }
 
     @ViewBuilder
-    private var goalsCard: some View {
+    private func goalsCard(vitalsByType: [VitalType: [VitalSample]]) -> some View {
         let active = Array(goals.filter(\.isActive).prefix(2))
         if !active.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
@@ -563,7 +585,7 @@ struct DashboardView: View {
                         ForEach(active) { goal in
                             GoalRow(
                                 goal: goal,
-                                latest: vitals.filter { $0.type == goal.type }.max { $0.date < $1.date }?.value
+                                latest: (vitalsByType[goal.type] ?? []).max { $0.date < $1.date }?.value
                             )
                         }
                     }
