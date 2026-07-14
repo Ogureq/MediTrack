@@ -62,7 +62,11 @@ final class BackupServiceTests: XCTestCase {
             heightCm: 168,
             bloodType: "O+",
             allergies: "Penicillin",
-            conditions: "None"
+            conditions: "None",
+            emergencyContactName: "Jordan Doe",
+            emergencyContactRelation: "Spouse",
+            emergencyContactPhone: "555-0132",
+            organDonorStatus: "yes"
         )
         payload.reports = [
             BackupReport(
@@ -123,6 +127,10 @@ final class BackupServiceTests: XCTestCase {
         XCTAssertEqual(decoded.exportedAt, fixedNow)
         XCTAssertEqual(decoded.profile?.name, "Jane Doe")
         XCTAssertEqual(decoded.profile?.heightCm, 168)
+        XCTAssertEqual(decoded.profile?.emergencyContactName, "Jordan Doe")
+        XCTAssertEqual(decoded.profile?.emergencyContactRelation, "Spouse")
+        XCTAssertEqual(decoded.profile?.emergencyContactPhone, "555-0132")
+        XCTAssertEqual(decoded.profile?.organDonorStatus, "yes")
         XCTAssertEqual(decoded.reports.count, 1)
         XCTAssertEqual(decoded.reports.first?.labResults.first?.value, 13.9)
         XCTAssertEqual(decoded.reports.first?.attachments.first?.filename, "report.pdf")
@@ -158,12 +166,37 @@ final class BackupServiceTests: XCTestCase {
         XCTAssertTrue(decoded.reports.isEmpty)
     }
 
+    func testBackupProfileDecodesWhenEmergencyContactKeysAreMissing() throws {
+        // Simulates a backup created before the Medical ID redesign added
+        // emergency-contact/organ-donor fields: the keys are absent. They
+        // should decode to nil rather than throwing.
+        let json = """
+        {
+            "name": "Jane Doe",
+            "sex": "female",
+            "allergies": "",
+            "conditions": ""
+        }
+        """
+        let decoder = JSONDecoder()
+        let decoded = try decoder.decode(BackupProfile.self, from: Data(json.utf8))
+        XCTAssertEqual(decoded.name, "Jane Doe")
+        XCTAssertNil(decoded.emergencyContactName)
+        XCTAssertNil(decoded.emergencyContactRelation)
+        XCTAssertNil(decoded.emergencyContactPhone)
+        XCTAssertNil(decoded.organDonorStatus)
+    }
+
     // MARK: Real BackupService.export / restore round trip
 
     func testExportAndRestoreRoundTripThroughRealService() throws {
         let profile = HealthProfile()
         profile.name = "Jane Doe"
         profile.heightCm = 168
+        profile.emergencyContactName = "Jordan Doe"
+        profile.emergencyContactRelation = "Spouse"
+        profile.emergencyContactPhone = "555-0132"
+        profile.organDonorStatus = "yes"
         sourceContext.insert(profile)
 
         let report = MedicalReport(
@@ -199,6 +232,10 @@ final class BackupServiceTests: XCTestCase {
         let restoredProfiles = try destinationContext.fetch(FetchDescriptor<HealthProfile>())
         XCTAssertEqual(restoredProfiles.first?.name, "Jane Doe")
         XCTAssertEqual(restoredProfiles.first?.heightCm, 168)
+        XCTAssertEqual(restoredProfiles.first?.emergencyContactName, "Jordan Doe")
+        XCTAssertEqual(restoredProfiles.first?.emergencyContactRelation, "Spouse")
+        XCTAssertEqual(restoredProfiles.first?.emergencyContactPhone, "555-0132")
+        XCTAssertEqual(restoredProfiles.first?.organDonorStatus, "yes")
 
         let restoredReports = try destinationContext.fetch(FetchDescriptor<MedicalReport>())
         XCTAssertEqual(restoredReports.count, 1)

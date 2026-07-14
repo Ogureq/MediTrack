@@ -52,6 +52,12 @@ struct BackupProfile: Codable {
     var healthConcerns: [String]?
     var supplements: [String]?
     var hasCompletedQuiz: Bool?
+    /// Medical ID emergency fields. Optional so backups made before Medical ID
+    /// redesign existed still decode; nil is treated as "unset" on restore.
+    var emergencyContactName: String?
+    var emergencyContactRelation: String?
+    var emergencyContactPhone: String?
+    var organDonorStatus: String?
 }
 
 struct BackupReminder: Codable {
@@ -233,7 +239,11 @@ enum BackupService {
                 healthGoalTags: profile.healthGoalTags,
                 healthConcerns: profile.healthConcerns,
                 supplements: profile.supplements,
-                hasCompletedQuiz: profile.hasCompletedQuiz
+                hasCompletedQuiz: profile.hasCompletedQuiz,
+                emergencyContactName: profile.emergencyContactName,
+                emergencyContactRelation: profile.emergencyContactRelation,
+                emergencyContactPhone: profile.emergencyContactPhone,
+                organDonorStatus: profile.organDonorStatus
             )
         }
 
@@ -387,6 +397,10 @@ enum BackupService {
             profile.healthConcerns = dto.healthConcerns ?? []
             profile.supplements = dto.supplements ?? []
             profile.hasCompletedQuiz = dto.hasCompletedQuiz ?? false
+            profile.emergencyContactName = dto.emergencyContactName ?? ""
+            profile.emergencyContactRelation = dto.emergencyContactRelation ?? ""
+            profile.emergencyContactPhone = dto.emergencyContactPhone ?? ""
+            profile.organDonorStatus = dto.organDonorStatus ?? ""
         } else {
             profile.name = ""
             profile.dateOfBirth = nil
@@ -403,6 +417,10 @@ enum BackupService {
             profile.healthConcerns = []
             profile.supplements = []
             profile.hasCompletedQuiz = false
+            profile.emergencyContactName = ""
+            profile.emergencyContactRelation = ""
+            profile.emergencyContactPhone = ""
+            profile.organDonorStatus = ""
         }
 
         var restored = 0

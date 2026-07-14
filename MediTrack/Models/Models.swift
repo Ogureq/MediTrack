@@ -447,6 +447,14 @@ final class HealthProfile {
     var supplements: [String] = []
     var hasCompletedQuiz: Bool = false
 
+    // Medical ID emergency fields. All default so existing stores migrate
+    // cleanly via SwiftData lightweight migration; `organDonorStatus == ""`
+    // means "unknown" (vs. explicit "yes"/"no").
+    var emergencyContactName: String = ""
+    var emergencyContactRelation: String = ""
+    var emergencyContactPhone: String = ""
+    var organDonorStatus: String = ""
+
     var sex: BiologicalSex {
         get { BiologicalSex(rawValue: sexRaw) ?? .unspecified }
         set { sexRaw = newValue.rawValue }
@@ -460,7 +468,11 @@ final class HealthProfile {
         healthGoalTags: [String] = [],
         healthConcerns: [String] = [],
         supplements: [String] = [],
-        hasCompletedQuiz: Bool = false
+        hasCompletedQuiz: Bool = false,
+        emergencyContactName: String = "",
+        emergencyContactRelation: String = "",
+        emergencyContactPhone: String = "",
+        organDonorStatus: String = ""
     ) {
         self.activityLevel = activityLevel
         self.typicalSleepHours = typicalSleepHours
@@ -470,6 +482,10 @@ final class HealthProfile {
         self.healthConcerns = healthConcerns
         self.supplements = supplements
         self.hasCompletedQuiz = hasCompletedQuiz
+        self.emergencyContactName = emergencyContactName
+        self.emergencyContactRelation = emergencyContactRelation
+        self.emergencyContactPhone = emergencyContactPhone
+        self.organDonorStatus = organDonorStatus
     }
 
     var age: Int? {

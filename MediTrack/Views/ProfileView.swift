@@ -118,6 +118,24 @@ private struct ProfileForm: View {
             .listRowSeparator(.hidden)
 
             Section {
+                TextField("Contact name", text: $profile.emergencyContactName)
+                TextField("Relationship", text: $profile.emergencyContactRelation)
+                TextField("Phone number", text: $profile.emergencyContactPhone)
+                    .keyboardType(.phonePad)
+                Picker("Organ donor", selection: $profile.organDonorStatus) {
+                    Text("Unknown").tag("")
+                    Text("Yes").tag("yes")
+                    Text("No").tag("no")
+                }
+            } header: {
+                Text("Emergency")
+            } footer: {
+                Text("Shown on your Medical ID card for quick reference in an emergency.")
+            }
+            .listRowBackground(GlassRowBackground())
+            .listRowSeparator(.hidden)
+
+            Section {
                 Picker("Weight", selection: $weightUnitRaw) {
                     ForEach(WeightUnit.allCases) { unit in
                         Text(unit.label).tag(unit.rawValue)
