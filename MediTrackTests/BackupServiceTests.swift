@@ -170,10 +170,15 @@ final class BackupServiceTests: XCTestCase {
         // Simulates a backup created before the Medical ID redesign added
         // emergency-contact/organ-donor fields: the keys are absent. They
         // should decode to nil rather than throwing.
+        // The fixture must carry every REQUIRED legacy key (bloodType
+        // included) and omit only the four new optional ones — otherwise
+        // the decode throws on the missing required key and the test
+        // proves nothing about the new fields.
         let json = """
         {
             "name": "Jane Doe",
             "sex": "female",
+            "bloodType": "A+",
             "allergies": "",
             "conditions": ""
         }
