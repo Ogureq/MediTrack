@@ -37,7 +37,12 @@ struct ReviewScreen: View {
     }
 
     var body: some View {
-        Group {
+        // One engine pass per render: `review` is a computed property that
+        // runs the full AnalysisEngine, so every helper below takes this
+        // local instead of touching the property again (same pattern as
+        // DashboardView).
+        let review = self.review
+        return Group {
             if !review.hasData {
                 ContentUnavailableView(
                     "No Data to Review",
@@ -47,13 +52,13 @@ struct ReviewScreen: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        headerCard
-                        aiSummaryCard
+                        headerCard(review: review)
+                        aiSummaryCard(review: review)
                         findingsGroup("Critical", severity: .critical, findings: review.criticalFindings)
                         findingsGroup("Needs Attention", severity: .attention, findings: review.attentionFindings)
                         findingsGroup("Informational", severity: .info, findings: review.infoFindings)
-                        trendsCard
-                        labValuesCard
+                        trendsCard(review: review)
+                        labValuesCard(review: review)
                         disclaimerCard
                     }
                     .padding()
@@ -80,7 +85,7 @@ struct ReviewScreen: View {
                 .accessibilityLabel("Share health review")
             }
         }
-        .task(id: review.score) { recordSnapshot() }
+        .task(id: review.score) { recordSnapshot(review: review) }
         .sheet(isPresented: $showingAIChat) {
             AIChatView(review: review, profileSummary: aiProfileSummary ?? "")
         }
@@ -90,9 +95,8 @@ struct ReviewScreen: View {
     }
 
     /// Keeps one score snapshot per day so the dashboard can chart history.
-    private func recordSnapshot() {
-        guard review.hasData else { return }
-        let current = review
+    private func recordSnapshot(review current: HealthReview) {
+        guard current.hasData else { return }
         if let last = snapshots.last, Calendar.current.isDate(last.date, inSameDayAs: .now) {
             if last.score != current.score {
                 last.date = .now
@@ -144,7 +148,7 @@ struct ReviewScreen: View {
 
     // MARK: Cards
 
-    private var headerCard: some View {
+    private func headerCard(review: HealthReview) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 16) {
                 ScoreRing(score: review.score)
@@ -168,7 +172,7 @@ struct ReviewScreen: View {
     }
 
     @ViewBuilder
-    private var aiSummaryCard: some View {
+    private func aiSummaryCard(review: HealthReview) -> some View {
         if AISummaryService.isConfigured {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
@@ -202,7 +206,7 @@ struct ReviewScreen: View {
                 if aiReport == nil && !isGeneratingSummary {
                     if AIReportQuota.canGenerate(isPremium: premiumStore.isPremium, defaults: .standard) {
                         Button {
-                            generateAISummary()
+                            generateAISummary(review: review)
                         } label: {
                             Label("Generate AI Health Analyst Report", systemImage: "sparkles")
                         }
@@ -319,11 +323,11 @@ struct ReviewScreen: View {
         return ["Health score changed from \(previous.score) to \(latest.score) since the previous review."]
     }
 
-    private func generateAISummary() {
+    private func generateAISummary(review: HealthReview) {
         guard !isGeneratingSummary else { return }
         isGeneratingSummary = true
         aiError = nil
-        let current = review
+        let current = review  // the caller's already-computed pass
         let profileSummary = aiProfileSummary
         let deltas = aiScoreDeltas
         Task {
@@ -368,7 +372,7 @@ struct ReviewScreen: View {
     }
 
     @ViewBuilder
-    private var trendsCard: some View {
+    private func trendsCard(review: HealthReview) -> some View {
         if !review.trends.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Trends")
@@ -408,7 +412,7 @@ struct ReviewScreen: View {
     }
 
     @ViewBuilder
-    private var labValuesCard: some View {
+    private func labValuesCard(review: HealthReview) -> some View {
         if !review.labSnapshots.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Latest Lab Values")

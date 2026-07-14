@@ -34,9 +34,26 @@ enum Glass {
 
 // MARK: - Ambient background
 
-/// Soft gradient with blurred color orbs — gives the glass something to refract.
+/// Soft gradient with glowing color orbs — gives the glass something to
+/// refract. The orbs are radial gradients rather than `.blur`-ed circles:
+/// a live Gaussian blur is re-composited by the GPU whenever the content
+/// above it scrolls, which reads as jank on real devices, while a radial
+/// falloff renders once and looks the same.
 struct AmbientBackground: View {
     @Environment(\.colorScheme) private var colorScheme
+
+    private func orb(_ color: Color, opacity: Double, size: CGFloat) -> some View {
+        Circle()
+            .fill(
+                RadialGradient(
+                    colors: [color.opacity(opacity), color.opacity(opacity * 0.55), color.opacity(0)],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: size * 0.62
+                )
+            )
+            .frame(width: size * 1.25, height: size * 1.25)
+    }
 
     var body: some View {
         ZStack {
@@ -47,20 +64,11 @@ struct AmbientBackground: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            Circle()
-                .fill(Color.teal.opacity(colorScheme == .dark ? 0.30 : 0.34))
-                .frame(width: 320, height: 320)
-                .blur(radius: 80)
+            orb(.teal, opacity: colorScheme == .dark ? 0.30 : 0.34, size: 320)
                 .offset(x: -130, y: -250)
-            Circle()
-                .fill(Color.blue.opacity(colorScheme == .dark ? 0.26 : 0.28))
-                .frame(width: 300, height: 300)
-                .blur(radius: 90)
+            orb(.blue, opacity: colorScheme == .dark ? 0.26 : 0.28, size: 300)
                 .offset(x: 150, y: -40)
-            Circle()
-                .fill(Color.purple.opacity(0.20))
-                .frame(width: 360, height: 360)
-                .blur(radius: 100)
+            orb(.purple, opacity: 0.20, size: 360)
                 .offset(x: 70, y: 330)
         }
         .ignoresSafeArea()
