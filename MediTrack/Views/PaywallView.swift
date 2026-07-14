@@ -17,6 +17,7 @@ struct PaywallView: View {
     @State private var purchasingProductID: String?
     @State private var purchaseErrorMessage: String?
     @State private var isRestoring = false
+    @State private var presentedLegalDocument: LegalDocument?
 
     var body: some View {
         ScrollView {
@@ -61,6 +62,9 @@ struct PaywallView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(purchaseErrorMessage ?? "")
+        }
+        .sheet(item: $presentedLegalDocument) { document in
+            LegalView(document: document)
         }
     }
 
@@ -173,15 +177,23 @@ struct PaywallView: View {
 
     private var footerLinks: some View {
         HStack(spacing: 6) {
-            Text("Terms of Service")
+            Button {
+                presentedLegalDocument = .termsOfService
+            } label: {
+                Text("Terms of Service").underline()
+            }
             Text("•")
-            Text("Privacy Policy")
+                .foregroundStyle(.tertiary)
+            Button {
+                presentedLegalDocument = .privacyPolicy
+            } label: {
+                Text("Privacy Policy").underline()
+            }
         }
         .font(.caption2)
-        .foregroundStyle(.tertiary)
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Terms of Service and Privacy Policy")
     }
 
     private var closeButton: some View {

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — MediTrack</title>
+<meta name="description" content="What MediTrack stores, what it never collects, and the one opt-in exception for AI features.">
+<style>
+  :root{
+    --bg-top:#0F1421; --bg-bottom:#050812;
+    --ink:#FFFFFF; --ink-2:rgba(235,235,245,.65); --ink-3:rgba(235,235,245,.45);
+    --teal:#40C8E0; --blue:#0A84FF; --purple:#BF5AF2;
+    --good:#30D158; --warn:#FF9F0A;
+    --glass:rgba(60,70,92,.35); --hairline:rgba(255,255,255,.14);
+    --accent-grad:linear-gradient(135deg,var(--teal),var(--blue));
+    --radius:22px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:ui-rounded,-apple-system,"SF Pro Rounded",BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    background:linear-gradient(180deg,var(--bg-top),var(--bg-bottom)) fixed;
+    color:var(--ink); line-height:1.55; overflow-x:hidden;
+  }
+  .orbs{position:fixed;inset:0;pointer-events:none;z-index:0}
+  .orb{position:absolute;border-radius:50%;filter:blur(90px)}
+  .orb.t{width:340px;height:340px;background:var(--teal);opacity:.24;left:-100px;top:-130px}
+  .orb.b{width:300px;height:300px;background:var(--blue);opacity:.20;right:-80px;top:220px}
+  .orb.p{width:380px;height:380px;background:var(--purple);opacity:.14;left:40px;bottom:-140px}
+  main{position:relative;z-index:1;max-width:680px;margin:0 auto;padding:0 22px 80px}
+  .eyebrow{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+  header{padding:48px 0 24px}
+  .brand{display:flex;align-items:center;gap:10px;margin-bottom:36px;text-decoration:none}
+  .brand .mark{width:34px;height:34px;border-radius:9px;background:var(--accent-grad);display:grid;place-items:center;font-weight:800;font-size:1.05rem;color:#08101d}
+  .brand span{font-weight:700;letter-spacing:.01em;color:var(--ink)}
+  .back{display:inline-flex;align-items:center;gap:6px;font-size:.82rem;color:var(--ink-3);text-decoration:none;margin-bottom:18px}
+  .back:hover{color:var(--ink-2)}
+  h1{font-size:clamp(1.7rem,5vw,2.3rem);font-weight:800;line-height:1.15;letter-spacing:-.01em}
+  .updated{margin-top:10px;font-size:.85rem;color:var(--ink-3)}
+  .lead{margin-top:16px;font-size:1rem;color:var(--ink-2);max-width:38em}
+  .doc{display:grid;gap:14px;margin-top:32px}
+  .card{background:var(--glass);border:1px solid var(--hairline);border-radius:var(--radius);padding:22px}
+  .card h2{font-size:1rem;font-weight:700;letter-spacing:-.005em}
+  .card p{margin-top:10px;font-size:.92rem;color:var(--ink-2)}
+  footer{margin-top:64px;border-top:1px solid rgba(255,255,255,.08);padding-top:26px;font-size:.78rem;color:var(--ink-3);display:grid;gap:10px}
+  footer a{color:var(--teal);text-decoration:none}
+  footer a:hover{text-decoration:underline}
+  .footlinks{display:flex;gap:8px;flex-wrap:wrap}
+  a{color:var(--teal)}
+</style>
+</head>
+<body>
+<div class="orbs" aria-hidden="true"><div class="orb t"></div><div class="orb b"></div><div class="orb p"></div></div>
+<main>
+  <header>
+    <a class="brand" href="index.html"><div class="mark" aria-hidden="true">+</div><span>MediTrack</span></a>
+    <a class="back" href="index.html">&larr; Back to meditrack.app</a>
+    <p class="eyebrow">Legal</p>
+    <h1>Privacy Policy</h1>
+    <p class="updated">Effective July 2026</p>
+    <p class="lead">MediTrack is built local-first: your medical reports, lab results, vitals, medications, symptoms, appointments, and health profile are stored only on your iPhone. There is no MediTrack account and no server that holds your health records. The only exception is the optional AI features described below, which you must actively choose to use.</p>
+  </header>
+
+  <div class="doc">
+    <div class="card">
+      <h2>What We Never Collect</h2>
+      <p>We do not collect or receive your medical reports, photos, PDFs, lab values, vitals, medication lists, symptom entries, appointments, or Medical ID. We do not collect your name, date of birth, email address, or any other identity information — MediTrack has no account system, so there is nothing to attach your data to even if we wanted to. We do not use analytics or crash-reporting tools that phone home, we do not run advertising, and we do not track you across other apps or the web. Everything you enter lives in the app's local database on your device, protected by your device's own security and, if you choose to set one, MediTrack's own app passcode with optional Face ID or Touch ID unlock.</p>
+    </div>
+
+    <div class="card">
+      <h2>The One Exception: Optional AI Features</h2>
+      <p>MediTrack's AI features — generating a narrated health report, chatting about your results, or using "Fill with AI" to parse a Quick Add sentence — are opt-in and do nothing unless you tap them. When you use one, MediTrack sends a text summary to make the AI request: for a health report, that's the score, findings, and lab or vital values your on-device analysis engine already computed; for chat, it's your typed questions plus that same summary; for Quick Add, it's the single sentence you typed. That text goes to our relay service, which forwards it to Anthropic's API to generate a response and returns the answer to the app.</p>
+      <p>Your original documents, scanned photos and PDFs, your full database, and identity fields like your name, date of birth, blood type, allergies, and Medical ID are never included in these requests, regardless of which AI feature you use. Our relay does not store the content of your requests or the AI's replies — it logs only operational metadata (timestamps and token counts) needed to run the service and enforce fair-use limits. Each device generates its own random, anonymous identifier — not your Apple ID, not linked to your identity — used to apply rate limits and track your one free lifetime AI report. If you instead add your own Anthropic API key in Profile &amp; Settings, your device talks directly to Anthropic's API using that key — our relay, its metadata logging, and the anonymous identifier aren't involved at all in that case. If you never tap an AI feature, MediTrack makes no network calls of any kind.</p>
+    </div>
+
+    <div class="card">
+      <h2>Apple Services — Purchases &amp; Health</h2>
+      <p>MediTrack Premium subscriptions are sold and processed entirely through Apple's App Store using StoreKit. We never see or store your payment method, billing address, or card details — Apple handles all of that under its own privacy policy; we only learn whether a purchase succeeded. Separately, if you turn on the optional "Import from Apple Health" or "Save new vitals to Apple Health" features in Profile, MediTrack reads or writes vitals only after you grant permission through Apple's own system prompt, and that exchange happens directly between MediTrack and the Health app on your device — it never passes through our servers.</p>
+    </div>
+
+    <div class="card">
+      <h2>Backups</h2>
+      <p>The "Export Backup" feature creates a single JSON file containing your data, encrypted with AES-GCM using a key derived from a passphrase you choose. MediTrack can't open that file without your passphrase, and neither can we — we never see it, because it isn't sent anywhere by the app. Where you store or share that file afterward is entirely up to you and outside MediTrack's control.</p>
+    </div>
+
+    <div class="card">
+      <h2>Deleting Your Data</h2>
+      <p>Because everything lives on your device, deleting MediTrack from your iPhone deletes your data with it. You can also use "Erase All Data" in Profile → Data to wipe everything immediately while keeping the app installed. There is no MediTrack server copy to separately request deletion of. The only server-side records tied to AI use are the relay's transient, metadata-only logs described above and an anonymous per-device flag marking whether your free report has been used — neither contains health content, and neither is linked to your identity.</p>
+    </div>
+
+    <div class="card">
+      <h2>Children</h2>
+      <p>MediTrack is not directed at children under 13, and we do not knowingly collect information from them. Because MediTrack has no account system and no server-side health data collection, there is no personal information for us to identify as belonging to a child in the first place, and the AI relay's anonymous metadata carries no age or identity signal either.</p>
+    </div>
+
+    <div class="card">
+      <h2>Changes to This Policy</h2>
+      <p>If MediTrack's data practices change, this policy and the in-app "Privacy &amp; Your Data" screen will be updated together, and the effective date above will change. Material changes — like a new feature that sends different data off-device — will be called out in the app's release notes.</p>
+    </div>
+
+    <div class="card">
+      <h2>Contact</h2>
+      <p>Questions about this policy can be sent to <a href="mailto:support@meditrack.app">support@meditrack.app</a> (TODO: replace with the owner's actual support address before submission).</p>
+    </div>
+  </div>
+
+  <footer>
+    <p>MediTrack is educational, not medical advice. It never diagnoses, treats, or prescribes — always consult a qualified healthcare professional about your results and decisions.</p>
+    <div class="footlinks"><a href="privacy.html">Privacy Policy</a> · <a href="terms.html">Terms of Service</a></div>
+    <p>© 2026 MediTrack · Made for people with a folder full of lab PDFs.</p>
+  </footer>
+</main>
+</body>
+</html>
