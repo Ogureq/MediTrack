@@ -11,8 +11,12 @@ import ImageIO
 /// without a live `ModelContext`. Deliberately does *not* carry the
 /// attachment's raw `data` — that's an `@Attribute(.externalStorage)` blob,
 /// and copying it into every item on every flatten would multiply memory
-/// use for no benefit; the grid thumbnail looks up the live
-/// `ReportAttachment` by `id` instead (see `DocumentThumbnail`).
+/// use for no benefit; the row's icon chip looks up the live
+/// `ReportAttachment` by `id` instead (see `DocumentIconChip`). `byteCount`
+/// is the one piece of size information worth carrying: it's read once (as
+/// `.count`, never retaining the `Data`) while flattening, so the list can
+/// show a "· 2.4 MB" caption without re-touching external storage on every
+/// scroll frame.
 struct DocumentItem: Identifiable, Equatable {
     let id: PersistentIdentifier
     let filename: String
@@ -20,9 +24,18 @@ struct DocumentItem: Identifiable, Equatable {
     let reportTitle: String
     let reportCategory: ReportCategory
     let reportDate: Date
+    let byteCount: Int
 }
 
-// MARK: - Flattening & filtering
+/// A recency-grouped bucket of documents for section headers ("This Month",
+/// "Earlier This Year", then one section per earlier calendar year).
+struct DocumentSection: Identifiable, Equatable {
+    let id: String
+    let label: String
+    let items: [DocumentItem]
+}
+
+// MARK: - Flattening, filtering & grouping
 
 enum DocumentLibrary {
     /// Flattens every attachment across all reports into one list, newest
@@ -38,7 +51,8 @@ enum DocumentLibrary {
                         kind: attachment.kind,
                         reportTitle: report.title,
                         reportCategory: report.category,
-                        reportDate: report.date
+                        reportDate: report.date,
+                        byteCount: attachment.data.count
                     )
                 }
             }
@@ -63,12 +77,75 @@ enum DocumentLibrary {
                 || item.reportTitle.localizedStandardContains(trimmedQuery)
         }
     }
+
+    /// Buckets `items` into recency sections relative to `now`: the current
+    /// calendar month, the remainder of the current calendar year, then one
+    /// section per earlier year (most recent first). Empty buckets are
+    /// omitted. Items keep their incoming relative order within a bucket —
+    /// callers normally pass output from `items(from:)`, which is already
+    /// newest-first, so each section reads newest-first too. Deterministic
+    /// and unit-testable: `now` is a parameter, never `Date()` internally.
+    static func sections(from items: [DocumentItem], now: Date, calendar: Calendar = .current) -> [DocumentSection] {
+        guard let nowYear = calendar.dateComponents([.year], from: now).year else { return [] }
+        let nowMonth = calendar.component(.month, from: now)
+
+        var thisMonth: [DocumentItem] = []
+        var earlierThisYear: [DocumentItem] = []
+        var byYear: [Int: [DocumentItem]] = [:]
+        var yearOrder: [Int] = []
+
+        for item in items {
+            let year = calendar.component(.year, from: item.reportDate)
+            if year == nowYear {
+                let month = calendar.component(.month, from: item.reportDate)
+                if month == nowMonth {
+                    thisMonth.append(item)
+                } else {
+                    earlierThisYear.append(item)
+                }
+            } else {
+                if byYear[year] == nil { yearOrder.append(year) }
+                byYear[year, default: []].append(item)
+            }
+        }
+
+        var sections: [DocumentSection] = []
+        if !thisMonth.isEmpty {
+            sections.append(DocumentSection(id: "this-month", label: "This Month", items: thisMonth))
+        }
+        if !earlierThisYear.isEmpty {
+            sections.append(DocumentSection(id: "earlier-this-year", label: "Earlier This Year", items: earlierThisYear))
+        }
+        for year in yearOrder.sorted(by: >) {
+            sections.append(DocumentSection(id: "year-\(year)", label: String(year), items: byYear[year] ?? []))
+        }
+        return sections
+    }
+
+    /// Uppercased filename extension for the row's format badge (e.g.
+    /// "PDF", "JPG"); falls back to "FILE" when the filename has none.
+    static func fileExtension(for filename: String) -> String {
+        let ext = (filename as NSString).pathExtension
+        return ext.isEmpty ? "FILE" : ext.uppercased()
+    }
+
+    /// Deterministic tint per report category, matching the app-wide
+    /// category-tint convention introduced by the More-grid redesign: labs
+    /// blue, imaging purple, prescriptions green, everything else orange.
+    static func tint(for category: ReportCategory) -> Color {
+        switch category {
+        case .labReport: Color(red: 120 / 255, green: 190 / 255, blue: 255 / 255)
+        case .imaging: Color(red: 168 / 255, green: 150 / 255, blue: 255 / 255)
+        case .prescription: Color(red: 126 / 255, green: 232 / 255, blue: 176 / 255)
+        case .consultation, .vaccination, .procedure, .other: Color(red: 255 / 255, green: 178 / 255, blue: 102 / 255)
+        }
+    }
 }
 
 // MARK: - Screen
 
-/// A library of every photo/PDF attachment across all reports, in one
-/// searchable, filterable grid. Pushed from the More tab.
+/// A library of every photo/PDF attachment across all reports, grouped by
+/// recency and filterable by category. Pushed from the More tab.
 struct DocumentsView: View {
     @Query(sort: \MedicalReport.date, order: .reverse) private var reports: [MedicalReport]
 
@@ -76,10 +153,13 @@ struct DocumentsView: View {
     @State private var selectedCategory: ReportCategory?
 
     /// Cached instead of recomputed from scratch — via `DocumentLibrary
-    /// .items(from:)`, a full flatten over every report's attachments — on
-    /// every one of the 3 call sites below (`body`'s empty check,
+    /// .items(from:)`, a full flatten over every report's attachments that
+    /// also reads each attachment's external-storage byte count — on every
+    /// one of the call sites below (`body`'s empty check,
     /// `availableCategories`, `filteredItems`), which otherwise re-ran on
-    /// every search keystroke.
+    /// every search keystroke. Rebuilt once per `.task(id: reports.count)`,
+    /// not per render, so the external-storage touch for `byteCount` happens
+    /// once per data change rather than once per row per frame.
     @State private var allItems: [DocumentItem] = []
 
     private var availableCategories: [ReportCategory] {
@@ -90,7 +170,9 @@ struct DocumentsView: View {
         DocumentLibrary.filter(allItems, query: searchText, category: selectedCategory)
     }
 
-    private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+    private var groupedSections: [DocumentSection] {
+        DocumentLibrary.sections(from: filteredItems, now: .now)
+    }
 
     var body: some View {
         Group {
@@ -102,21 +184,14 @@ struct DocumentsView: View {
                 }
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
+                    LazyVStack(alignment: .leading, spacing: 18) {
                         categoryChips
                         if filteredItems.isEmpty {
                             ContentUnavailableView.search(text: searchText)
                                 .padding(.top, 40)
                         } else {
-                            LazyVGrid(columns: columns, spacing: 12) {
-                                ForEach(filteredItems) { item in
-                                    NavigationLink {
-                                        destination(for: item)
-                                    } label: {
-                                        DocumentCard(item: item, resolveAttachment: attachment(matching:))
-                                    }
-                                    .buttonStyle(.plain)
-                                }
+                            ForEach(groupedSections) { section in
+                                sectionView(section)
                             }
                         }
                     }
@@ -132,6 +207,28 @@ struct DocumentsView: View {
         }
     }
 
+    private func sectionView(_ section: DocumentSection) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text(section.label)
+                .font(.system(size: 13, weight: .semibold))
+                .tracking(0.4)
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .accessibilityAddTraits(.isHeader)
+
+            VStack(spacing: 9) {
+                ForEach(section.items) { item in
+                    NavigationLink {
+                        destination(for: item)
+                    } label: {
+                        DocumentRow(item: item, resolveAttachment: attachment(matching:))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
     @ViewBuilder
     private func destination(for item: DocumentItem) -> some View {
         if let attachment = attachment(matching: item.id) {
@@ -144,7 +241,7 @@ struct DocumentsView: View {
     /// Recovers the live `ReportAttachment` behind a `DocumentItem`'s id so
     /// the tap-through preview can reuse `AttachmentViewer` — the same
     /// full-screen image/PDF viewer `ReportDetailView` uses — instead of a
-    /// second preview pipeline, and so the grid thumbnail can decode the
+    /// second preview pipeline, and so the row's icon chip can decode the
     /// real `data` without `DocumentItem` having to carry a copy of it.
     private func attachment(matching id: PersistentIdentifier) -> ReportAttachment? {
         for report in reports {
@@ -167,103 +264,134 @@ struct DocumentsView: View {
         }
     }
 
+    /// Matches `TrendsView.metricChipsRow`'s selected-chip treatment exactly
+    /// (accent-gradient fill + dark ink text when selected, plain glass pill
+    /// otherwise) so the chip language reads as one system across screens.
     private func categoryChip(title: String, category: ReportCategory?) -> some View {
         let isSelected = selectedCategory == category
         return Button {
             selectedCategory = category
         } label: {
             Text(title)
-                .font(.caption.weight(.semibold))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay(
-                    Capsule().strokeBorder(
-                        isSelected ? Color.accentColor.opacity(0.7) : Color.primary.opacity(0.1),
-                        lineWidth: 1
-                    )
-                )
-                .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(isSelected ? Self.selectedChipTextColor : Color.primary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background {
+                    if isSelected {
+                        Capsule().fill(Glass.accentGradient)
+                    } else {
+                        Capsule().fill(.ultraThinMaterial)
+                    }
+                }
+                .overlay(Capsule().strokeBorder(Glass.bevelStroke, lineWidth: 1))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
+
+    private static let selectedChipTextColor = Color(red: 0x0B / 255.0, green: 0x12 / 255.0, blue: 0x20 / 255.0)
 }
 
-// MARK: - Grid card
+// MARK: - List row
 
-private struct DocumentCard: View {
+private struct DocumentRow: View {
     let item: DocumentItem
     let resolveAttachment: (PersistentIdentifier) -> ReportAttachment?
 
+    private var sizeText: String {
+        ByteCountFormatter.string(fromByteCount: Int64(item.byteCount), countStyle: .file)
+    }
+
+    private var dateText: String {
+        item.reportDate.formatted(.dateTime.month(.abbreviated).day())
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            DocumentThumbnail(item: item, resolveAttachment: resolveAttachment)
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: 12) {
+            DocumentIconChip(item: item, resolveAttachment: resolveAttachment)
+
+            VStack(alignment: .leading, spacing: 3) {
                 Text(item.filename)
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
-                Text(item.reportTitle)
+                Text("\(item.reportTitle) · \(sizeText)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                Text(item.reportDate.formatted(date: .abbreviated, time: .omitted))
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
             }
+
+            Spacer(minLength: 8)
+
+            Text(dateText)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
-        .padding(10)
+        .padding(12)
         .glassCard(cornerRadius: Glass.chipRadius)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            "\(item.filename), \(item.reportTitle), \(item.reportDate.formatted(date: .long, time: .omitted)), \(item.kind == .pdf ? "PDF document" : "photo")"
+            "\(item.filename), \(item.reportTitle), \(sizeText), \(item.reportDate.formatted(date: .long, time: .omitted))"
         )
     }
 }
 
-// MARK: - Thumbnail
+// MARK: - Icon chip
 
-/// Downsampled preview for a document card. Image attachments are decoded
-/// once, off the main thread, via ImageIO (never a full-resolution
-/// `UIImage(data:)`) and memoized by attachment id so re-scrolling the grid
-/// never redecodes; PDFs render a static doc icon since a full PDF render
-/// isn't needed for a small grid tile. Looks up the live `ReportAttachment`
-/// by id (via `resolveAttachment`) rather than `DocumentItem` carrying its
-/// own copy of the raw `data`.
-private struct DocumentThumbnail: View {
+/// Tinted, per-category icon chip leading each row. Image attachments show
+/// a real downsampled preview (decoded once, off the main thread, via
+/// ImageIO and memoized by attachment id in `ThumbnailCache` — never a
+/// full-resolution `UIImage(data:)`, and never redecoded on re-scroll); PDFs
+/// and anything else show a document glyph. Either way a small format badge
+/// (from `DocumentLibrary.fileExtension(for:)`) overlays the bottom-trailing
+/// corner. Looks up the live `ReportAttachment` by id (via
+/// `resolveAttachment`) rather than `DocumentItem` carrying its own copy of
+/// the raw `data`.
+private struct DocumentIconChip: View {
     let item: DocumentItem
     let resolveAttachment: (PersistentIdentifier) -> ReportAttachment?
 
     @State private var image: UIImage?
 
-    private let height: CGFloat = 96
+    private let size: CGFloat = 44
+
+    private var tint: Color { DocumentLibrary.tint(for: item.reportCategory) }
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.ultraThinMaterial)
+                .fill(tint.opacity(0.16))
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(tint.opacity(0.32), lineWidth: 1)
+
             switch item.kind {
             case .pdf:
                 Image(systemName: "doc.richtext")
-                    .font(.system(size: 28))
-                    .foregroundStyle(Glass.accentGradient)
+                    .font(.system(size: 17))
+                    .foregroundStyle(tint)
             case .image:
                 if let image {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
+                        .frame(width: size, height: size)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 } else {
                     ProgressView()
+                        .tint(tint)
                 }
             }
         }
-        .frame(height: height)
-        .frame(maxWidth: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Glass.bevelStroke, lineWidth: 1)
-        )
+        .frame(width: size, height: size)
+        .overlay(alignment: .bottomTrailing) {
+            Text(DocumentLibrary.fileExtension(for: item.filename))
+                .font(.system(size: 7.5, weight: .heavy))
+                .foregroundStyle(tint)
+                .padding(.horizontal, 3)
+                .padding(.vertical, 1.5)
+                .background(.black.opacity(0.55), in: Capsule())
+                .offset(x: 4, y: 4)
+        }
         .accessibilityHidden(true)
         .task(id: item.id) {
             guard item.kind == .image, image == nil, let attachment = resolveAttachment(item.id) else { return }
@@ -272,7 +400,7 @@ private struct DocumentThumbnail: View {
     }
 }
 
-/// Off-main-thread, memoized thumbnail decoder shared by every grid cell.
+/// Off-main-thread, memoized thumbnail decoder shared by every row.
 private actor ThumbnailCache {
     static let shared = ThumbnailCache()
 
@@ -289,7 +417,7 @@ private actor ThumbnailCache {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceThumbnailMaxPixelSize: 240,
+            kCGImageSourceThumbnailMaxPixelSize: 120,
             kCGImageSourceCreateThumbnailWithTransform: true,
         ]
         guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }

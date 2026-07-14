@@ -1,9 +1,11 @@
 import XCTest
 import SwiftData
+import SwiftUI
 @testable import MediTrack
 
-/// Coverage for `DocumentLibrary.items(from:)` and `DocumentLibrary.filter(_:query:category:)`
-/// — the pure, testable flattening/filtering logic behind `DocumentsView`.
+/// Coverage for `DocumentLibrary.items(from:)`, `.filter(_:query:category:)`,
+/// `.sections(from:now:)`, `.fileExtension(for:)`, and `.tint(for:)` — the
+/// pure, testable flattening/filtering/grouping logic behind `DocumentsView`.
 /// Mirrors the `HealthTimelineTests` pattern: fixed dates built from
 /// `DateComponents`, an in-memory `ModelContainer` retained for the test's
 /// lifetime, and no force-unwraps besides `XCTUnwrap`.
@@ -300,5 +302,167 @@ final class DocumentLibraryTests: XCTestCase {
 
     func testFilterOnEmptyItemsReturnsEmpty() {
         XCTAssertTrue(DocumentLibrary.filter([], query: "anything", category: nil).isEmpty)
+    }
+
+    // MARK: Byte count
+
+    /// `byteCount` is read from the attachment's external-storage `data`
+    /// once, while flattening — `DocumentItem` never retains the `Data`
+    /// itself, only its size.
+    func testItemsCaptureByteCountFromAttachmentData() throws {
+        let report = MedicalReport(title: "Panel", category: .labReport, date: try date(year: 2025, month: 3, day: 1))
+        context.insert(report)
+        report.attachments.append(ReportAttachment(filename: "scan.jpg", kind: .image, data: Data(repeating: 0, count: 2048)))
+        try context.save()
+
+        let items = DocumentLibrary.items(from: [report])
+
+        XCTAssertEqual(items.first?.byteCount, 2048)
+    }
+
+    func testItemsWithEmptyDataHaveZeroByteCount() throws {
+        let report = makeReport(
+            title: "Panel",
+            category: .labReport,
+            date: try date(year: 2025, month: 3, day: 1),
+            attachments: [(filename: "a.pdf", kind: .pdf)]
+        )
+        try context.save()
+
+        let items = DocumentLibrary.items(from: [report])
+
+        XCTAssertEqual(items.first?.byteCount, 0)
+    }
+
+    // MARK: File extension badge
+
+    func testFileExtensionUppercasesKnownExtension() {
+        XCTAssertEqual(DocumentLibrary.fileExtension(for: "LabScan.jpg"), "JPG")
+        XCTAssertEqual(DocumentLibrary.fileExtension(for: "report.PDF"), "PDF")
+    }
+
+    func testFileExtensionDefaultsToFileWhenMissing() {
+        XCTAssertEqual(DocumentLibrary.fileExtension(for: "noextension"), "FILE")
+    }
+
+    func testFileExtensionUsesFinalDotForMultiDotFilenames() {
+        XCTAssertEqual(DocumentLibrary.fileExtension(for: "archive.tar.gz"), "GZ")
+    }
+
+    // MARK: Category tint
+
+    func testTintIsDeterministicAndDistinctAcrossPrimaryCategories() {
+        XCTAssertEqual(DocumentLibrary.tint(for: .labReport), DocumentLibrary.tint(for: .labReport))
+        XCTAssertNotEqual(DocumentLibrary.tint(for: .labReport), DocumentLibrary.tint(for: .imaging))
+        XCTAssertNotEqual(DocumentLibrary.tint(for: .imaging), DocumentLibrary.tint(for: .prescription))
+        XCTAssertNotEqual(DocumentLibrary.tint(for: .labReport), DocumentLibrary.tint(for: .prescription))
+    }
+
+    func testTintBucketsNonPrimaryCategoriesTogetherAsOther() {
+        let otherTint = DocumentLibrary.tint(for: .other)
+        XCTAssertEqual(DocumentLibrary.tint(for: .consultation), otherTint)
+        XCTAssertEqual(DocumentLibrary.tint(for: .vaccination), otherTint)
+        XCTAssertEqual(DocumentLibrary.tint(for: .procedure), otherTint)
+    }
+
+    // MARK: Recency sections
+
+    func testSectionsGroupsCurrentMonthItemsIntoThisMonth() throws {
+        let now = try date(year: 2025, month: 6, day: 15)
+        let report = makeReport(
+            title: "June Panel",
+            category: .labReport,
+            date: try date(year: 2025, month: 6, day: 2),
+            attachments: [(filename: "june.pdf", kind: .pdf)]
+        )
+        try context.save()
+        let items = DocumentLibrary.items(from: [report])
+
+        let sections = DocumentLibrary.sections(from: items, now: now)
+
+        XCTAssertEqual(sections.map(\.label), ["This Month"])
+        XCTAssertEqual(sections.first?.items.map(\.filename), ["june.pdf"])
+    }
+
+    func testSectionsGroupsSameYearEarlierMonthIntoEarlierThisYear() throws {
+        let now = try date(year: 2025, month: 6, day: 15)
+        let report = makeReport(
+            title: "Spring Panel",
+            category: .labReport,
+            date: try date(year: 2025, month: 3, day: 2),
+            attachments: [(filename: "spring.pdf", kind: .pdf)]
+        )
+        try context.save()
+        let items = DocumentLibrary.items(from: [report])
+
+        let sections = DocumentLibrary.sections(from: items, now: now)
+
+        XCTAssertEqual(sections.map(\.label), ["Earlier This Year"])
+    }
+
+    func testSectionsGroupsEarlierYearsDescendingByYear() throws {
+        let now = try date(year: 2025, month: 6, day: 15)
+        let report2023 = makeReport(
+            title: "2023 Panel",
+            category: .labReport,
+            date: try date(year: 2023, month: 4, day: 1),
+            attachments: [(filename: "y2023.pdf", kind: .pdf)]
+        )
+        let report2024 = makeReport(
+            title: "2024 Panel",
+            category: .labReport,
+            date: try date(year: 2024, month: 4, day: 1),
+            attachments: [(filename: "y2024.pdf", kind: .pdf)]
+        )
+        try context.save()
+        let items = DocumentLibrary.items(from: [report2023, report2024])
+
+        let sections = DocumentLibrary.sections(from: items, now: now)
+
+        XCTAssertEqual(sections.map(\.label), ["2024", "2023"])
+    }
+
+    func testSectionsOmitEmptyBuckets() throws {
+        let now = try date(year: 2025, month: 6, day: 15)
+        let report = makeReport(
+            title: "Panel",
+            category: .labReport,
+            date: try date(year: 2025, month: 6, day: 1),
+            attachments: [(filename: "a.pdf", kind: .pdf)]
+        )
+        try context.save()
+        let items = DocumentLibrary.items(from: [report])
+
+        let sections = DocumentLibrary.sections(from: items, now: now)
+
+        XCTAssertEqual(sections.count, 1)
+        XCTAssertEqual(sections.first?.label, "This Month")
+    }
+
+    func testSectionsPreservesNewestFirstOrderWithinBucket() throws {
+        let now = try date(year: 2025, month: 6, day: 15)
+        let earlier = makeReport(
+            title: "Earlier",
+            category: .labReport,
+            date: try date(year: 2025, month: 6, day: 1),
+            attachments: [(filename: "old.pdf", kind: .pdf)]
+        )
+        let later = makeReport(
+            title: "Later",
+            category: .labReport,
+            date: try date(year: 2025, month: 6, day: 10),
+            attachments: [(filename: "new.pdf", kind: .pdf)]
+        )
+        try context.save()
+        let items = DocumentLibrary.items(from: [earlier, later])
+
+        let sections = DocumentLibrary.sections(from: items, now: now)
+
+        XCTAssertEqual(sections.first?.items.map(\.filename), ["new.pdf", "old.pdf"])
+    }
+
+    func testSectionsOnEmptyItemsReturnsEmpty() throws {
+        let now = try date(year: 2025, month: 6, day: 15)
+        XCTAssertTrue(DocumentLibrary.sections(from: [], now: now).isEmpty)
     }
 }
