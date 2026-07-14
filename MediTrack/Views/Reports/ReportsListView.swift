@@ -57,7 +57,7 @@ struct ReportsListView: View {
                 }
                 .accessibilityLabel("Add report")
             }
-            .sheet(isPresented: $showingAdd) { AddReportView() }
+            .sheet(isPresented: $showingAdd) { ScanReportView() }
         }
     }
 

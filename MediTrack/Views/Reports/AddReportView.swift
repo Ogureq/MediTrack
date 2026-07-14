@@ -39,11 +39,42 @@ struct AttachmentDraft: Identifiable {
     let data: Data
 }
 
+/// Entry point used by existing call sites that construct `AddReportView()`
+/// (new report) or `AddReportView(report:)` (edit) — `DashboardView` and
+/// `ReportDetailView` keep working unchanged against this API.
+///
+/// Creating a report is scan-only now (see `ScanReportView`, gated by
+/// `PremiumGates.reportCreation`), so a `nil` report routes straight there.
+/// Editing an existing report keeps the full manual form below
+/// (`EditReportView`) regardless of that gate — editing after creation is
+/// how users fix or fill in anything the scan missed, and it must keep
+/// working.
 struct AddReportView: View {
+    private let report: MedicalReport?
+
+    init(report: MedicalReport? = nil) {
+        self.report = report
+    }
+
+    var body: some View {
+        if let report {
+            EditReportView(report: report)
+        } else {
+            ScanReportView()
+        }
+    }
+}
+
+// MARK: - Edit flow (manual form)
+
+/// Full manual editor for an existing `MedicalReport` — title, category,
+/// date, provider, facility, lab results, attachments and notes are all
+/// still editable here even though *creating* a report is scan-only.
+struct EditReportView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
-    private let existingReport: MedicalReport?
+    let report: MedicalReport
 
     @State private var title: String
     @State private var category: ReportCategory
@@ -64,29 +95,25 @@ struct AddReportView: View {
     @State private var scannedValues: [ScannedLabValue] = []
     @State private var showingScanResults = false
 
-    init(report: MedicalReport? = nil) {
-        existingReport = report
-        _title = State(initialValue: report?.title ?? "")
-        _category = State(initialValue: report?.category ?? .labReport)
-        _date = State(initialValue: report?.date ?? .now)
-        _provider = State(initialValue: report?.provider ?? "")
-        _facility = State(initialValue: report?.facility ?? "")
-        _notes = State(initialValue: report?.notes ?? "")
+    init(report: MedicalReport) {
+        self.report = report
+        _title = State(initialValue: report.title)
+        _category = State(initialValue: report.category)
+        _date = State(initialValue: report.date)
+        _provider = State(initialValue: report.provider)
+        _facility = State(initialValue: report.facility)
+        _notes = State(initialValue: report.notes)
     }
-
-    private var isEditing: Bool { existingReport != nil }
 
     /// Existing lab results minus the ones marked for removal in this edit session.
     private var remainingLabResults: [LabResult] {
-        guard let existingReport else { return [] }
-        return existingReport.labResults
+        report.labResults
             .filter { result in !removedLabResults.contains(where: { $0 === result }) }
             .sorted { $0.displayName < $1.displayName }
     }
 
     private var remainingAttachments: [ReportAttachment] {
-        guard let existingReport else { return [] }
-        return existingReport.attachments.filter { attachment in
+        report.attachments.filter { attachment in
             !removedAttachments.contains(where: { $0 === attachment })
         }
     }
@@ -191,7 +218,7 @@ struct AddReportView: View {
                 .listRowSeparator(.hidden)
             }
             .ambientScreen()
-            .navigationTitle(isEditing ? "Edit Report" : "New Report")
+            .navigationTitle("Edit Report")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -274,41 +301,22 @@ struct AddReportView: View {
         }
     }
 
-    /// Stable identifier for the 90-day re-test nudge, so scheduling it
-    /// again (from a later new report) replaces rather than stacks.
-    private static let retestNudgeID = "retest.nudge"
-
     private func save() {
-        let isNewReport = existingReport == nil
-        let report: MedicalReport
-        if let existingReport {
-            report = existingReport
-            report.title = title.trimmingCharacters(in: .whitespaces)
-            report.category = category
-            report.date = date
-            report.provider = provider.trimmingCharacters(in: .whitespaces)
-            report.facility = facility.trimmingCharacters(in: .whitespaces)
-            report.notes = notes
-            for result in removedLabResults {
-                modelContext.delete(result)
-            }
-            for attachment in removedAttachments {
-                modelContext.delete(attachment)
-            }
-            // Keep lab result dates aligned with the (possibly changed) report date.
-            for result in remainingLabResults {
-                result.date = date
-            }
-        } else {
-            report = MedicalReport(
-                title: title.trimmingCharacters(in: .whitespaces),
-                category: category,
-                date: date,
-                provider: provider.trimmingCharacters(in: .whitespaces),
-                facility: facility.trimmingCharacters(in: .whitespaces),
-                notes: notes
-            )
-            modelContext.insert(report)
+        report.title = title.trimmingCharacters(in: .whitespaces)
+        report.category = category
+        report.date = date
+        report.provider = provider.trimmingCharacters(in: .whitespaces)
+        report.facility = facility.trimmingCharacters(in: .whitespaces)
+        report.notes = notes
+        for result in removedLabResults {
+            modelContext.delete(result)
+        }
+        for attachment in removedAttachments {
+            modelContext.delete(attachment)
+        }
+        // Keep lab result dates aligned with the (possibly changed) report date.
+        for result in remainingLabResults {
+            result.date = date
         }
 
         for draft in labDrafts {
@@ -333,32 +341,8 @@ struct AddReportView: View {
             ))
         }
 
-        if isNewReport && !report.labResults.isEmpty {
-            scheduleRetestNudge()
-        }
-
         Haptics.success()
         dismiss()
-    }
-
-    /// Nudges the user to re-test in ~90 days after they log a *new*
-    /// report that includes at least one lab result. Neutral, non-urgent
-    /// copy — a wellness nudge, not medical advice. Replaces any
-    /// previously scheduled nudge so only the most recent lab report
-    /// restarts the countdown.
-    private func scheduleRetestNudge() {
-        NotificationService.cancelReminder(id: Self.retestNudgeID)
-        let fireDate = Calendar.current.date(byAdding: .day, value: 90, to: .now) ?? .now.addingTimeInterval(90 * 86_400)
-        Task {
-            if await NotificationService.requestAuthorization() {
-                NotificationService.scheduleOneTime(
-                    id: Self.retestNudgeID,
-                    title: "Time for a Follow-Up?",
-                    body: "It's been 3 months since your last lab report — re-test to see your trend.",
-                    at: fireDate
-                )
-            }
-        }
     }
 }
 
