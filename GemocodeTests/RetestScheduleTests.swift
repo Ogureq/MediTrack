@@ -1,0 +1,257 @@
+import XCTest
+import SwiftData
+@testable import Gemocode
+
+/// Coverage for `RetestSchedule`: the deterministic, on-device "when should
+/// I re-test this?" engine. Mirrors the `AnalysisEngineTests` /
+/// `HealthTimelineTests` pattern — fixed dates built from `DateComponents`,
+/// an in-memory `ModelContainer` retained for the test's lifetime, and no
+/// force-unwraps besides `XCTUnwrap`.
+@MainActor
+final class RetestScheduleTests: XCTestCase {
+
+    var container: ModelContainer!
+    var context: ModelContext!
+
+    /// Deterministic "today" used across most tests: 2025-07-15 (mid-month,
+    /// so month-based interval math never clips against a short month like
+    /// February when tests add/subtract months around it).
+    var fixedNow: Date!
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        container = try ModelContainer(
+            for: HealthProfile.self,
+                 MedicalReport.self,
+                 LabResult.self,
+                 ReportAttachment.self,
+                 VitalSample.self,
+                 Medication.self,
+                 HealthGoal.self,
+                 SymptomEntry.self,
+                 Appointment.self,
+                 ScoreSnapshot.self,
+                 Reminder.self,
+                 ReminderCompletion.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        context = container.mainContext
+        fixedNow = try date(year: 2025, month: 7, day: 15)
+    }
+
+    override func tearDownWithError() throws {
+        context = nil
+        container = nil
+        fixedNow = nil
+        try super.tearDownWithError()
+    }
+
+    /// Builds a deterministic date from components so tests never depend on
+    /// the wall clock.
+    private func date(year: Int, month: Int, day: Int, hour: Int = 9) throws -> Date {
+        var comps = DateComponents()
+        comps.year = year
+        comps.month = month
+        comps.day = day
+        comps.hour = hour
+        return try XCTUnwrap(Calendar.current.date(from: comps))
+    }
+
+    private func makeReport(date: Date, catalogID: String, value: Double = 1, unit: String = "unit") -> MedicalReport {
+        let report = MedicalReport(title: "Panel", category: .labReport, date: date)
+        context.insert(report)
+        report.labResults.append(LabResult(catalogID: catalogID, value: value, unit: unit, date: date))
+        return report
+    }
+
+    // MARK: - Interval lookup
+
+    func testIntervalLookupForHbA1cIsSixMonths() {
+        XCTAssertEqual(RetestSchedule.intervalMonths(for: "hba1c"), 6)
+    }
+
+    func testIntervalLookupForLDLCholesterolIsTwelveMonths() {
+        XCTAssertEqual(RetestSchedule.intervalMonths(for: "ldlCholesterol"), 12)
+    }
+
+    func testIntervalLookupIsCaseInsensitive() {
+        XCTAssertEqual(RetestSchedule.intervalMonths(for: "HbA1c"), 6)
+        XCTAssertEqual(RetestSchedule.intervalMonths(for: "LDLCHOLESTEROL"), 12)
+    }
+
+    func testIntervalLookupReturnsNilForIDsWithoutASensibleCadence() {
+        // Situational/inconsistently-recommended markers deliberately have
+        // no entry: CRP/ESR, and nutrients normally rechecked only after an
+        // abnormal result.
+        XCTAssertNil(RetestSchedule.intervalMonths(for: "crp"))
+        XCTAssertNil(RetestSchedule.intervalMonths(for: "esr"))
+        XCTAssertNil(RetestSchedule.intervalMonths(for: "ferritin"))
+        XCTAssertNil(RetestSchedule.intervalMonths(for: "vitaminB12"))
+        XCTAssertNil(RetestSchedule.intervalMonths(for: "insulin"))
+    }
+
+    func testIntervalLookupReturnsNilForUnknownID() {
+        XCTAssertNil(RetestSchedule.intervalMonths(for: "notARealTest"))
+    }
+
+    // MARK: - Latest-date-wins across reports
+
+    func testLatestDateAcrossMultipleReportsWinsForTheSameSeries() throws {
+        let earlierDate = try date(year: 2024, month: 1, day: 15)
+        let laterDate = try date(year: 2025, month: 1, day: 15)
+        let reportA = makeReport(date: earlierDate, catalogID: "ldlCholesterol", value: 150)
+        let reportB = makeReport(date: laterDate, catalogID: "ldlCholesterol", value: 110)
+        try context.save()
+
+        let items = RetestSchedule.items(reports: [reportA, reportB], now: fixedNow)
+
+        XCTAssertEqual(items.count, 1)
+        let item = try XCTUnwrap(items.first)
+        XCTAssertTrue(Calendar.current.isDate(item.lastTestedAt, inSameDayAs: laterDate))
+    }
+
+    func testLatestDateWinsRegardlessOfReportArrayOrder() throws {
+        // Same as above but with the later-dated report listed FIRST, to
+        // guard against an implementation that assumes array order implies
+        // chronological order.
+        let earlierDate = try date(year: 2024, month: 1, day: 15)
+        let laterDate = try date(year: 2025, month: 1, day: 15)
+        let reportLater = makeReport(date: laterDate, catalogID: "totalCholesterol", value: 200)
+        let reportEarlier = makeReport(date: earlierDate, catalogID: "totalCholesterol", value: 240)
+        try context.save()
+
+        let items = RetestSchedule.items(reports: [reportLater, reportEarlier], now: fixedNow)
+
+        let item = try XCTUnwrap(items.first)
+        XCTAssertTrue(Calendar.current.isDate(item.lastTestedAt, inSameDayAs: laterDate))
+    }
+
+    // MARK: - Display name resolves from the catalog
+
+    func testDisplayNameResolvesFromLabCatalog() throws {
+        let report = makeReport(date: fixedNow, catalogID: "ldlCholesterol")
+        try context.save()
+
+        let item = try XCTUnwrap(RetestSchedule.items(reports: [report], now: fixedNow).first)
+        XCTAssertEqual(item.displayName, "LDL Cholesterol")
+    }
+
+    // MARK: - Classification boundaries
+
+    func testDueYesterdayIsOverdue() throws {
+        let dueDate = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: -1, to: fixedNow))
+        let lastTested = try XCTUnwrap(Calendar.current.date(byAdding: .month, value: -6, to: dueDate)) // hba1c: 6 months
+        let report = makeReport(date: lastTested, catalogID: "hba1c")
+        try context.save()
+
+        let item = try XCTUnwrap(RetestSchedule.items(reports: [report], now: fixedNow).first)
+        XCTAssertEqual(item.status, .overdue)
+    }
+
+    func testDueInThirtyDaysIsDueSoon() throws {
+        let dueDate = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 30, to: fixedNow))
+        let lastTested = try XCTUnwrap(Calendar.current.date(byAdding: .month, value: -6, to: dueDate))
+        let report = makeReport(date: lastTested, catalogID: "hba1c")
+        try context.save()
+
+        let item = try XCTUnwrap(RetestSchedule.items(reports: [report], now: fixedNow).first)
+        XCTAssertEqual(item.status, .dueSoon)
+    }
+
+    func testDueInThirtyOneDaysIsUpcoming() throws {
+        let dueDate = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 31, to: fixedNow))
+        let lastTested = try XCTUnwrap(Calendar.current.date(byAdding: .month, value: -6, to: dueDate))
+        let report = makeReport(date: lastTested, catalogID: "hba1c")
+        try context.save()
+
+        let item = try XCTUnwrap(RetestSchedule.items(reports: [report], now: fixedNow).first)
+        XCTAssertEqual(item.status, .upcoming)
+    }
+
+    func testDueTodayIsNotOverdue() throws {
+        // "Due yesterday" is overdue; due exactly today should not be —
+        // it falls inside the 0...30 day dueSoon window.
+        let lastTested = try XCTUnwrap(Calendar.current.date(byAdding: .month, value: -6, to: fixedNow))
+        let report = makeReport(date: lastTested, catalogID: "hba1c")
+        try context.save()
+
+        let item = try XCTUnwrap(RetestSchedule.items(reports: [report], now: fixedNow).first)
+        XCTAssertEqual(item.status, .dueSoon)
+    }
+
+    // MARK: - Never due: empty input, no catalog id, unlisted catalog id
+
+    func testEmptyReportsProduceNoItems() {
+        XCTAssertTrue(RetestSchedule.items(reports: [], now: fixedNow).isEmpty)
+    }
+
+    func testCustomNamedLabWithoutCatalogIDNeverAppears() throws {
+        let report = MedicalReport(title: "Panel", category: .labReport, date: fixedNow)
+        context.insert(report)
+        report.labResults.append(LabResult(customName: "My Custom Test", value: 5, unit: "unit", date: fixedNow))
+        try context.save()
+
+        XCTAssertTrue(RetestSchedule.items(reports: [report], now: fixedNow).isEmpty)
+    }
+
+    func testCatalogIDWithoutASensibleCadenceNeverAppears() throws {
+        // CRP has no cadence entry in RetestSchedule by design.
+        let report = makeReport(date: fixedNow, catalogID: "crp")
+        try context.save()
+
+        XCTAssertTrue(RetestSchedule.items(reports: [report], now: fixedNow).isEmpty)
+    }
+
+    // MARK: - Sort order
+
+    func testSortOrderIsOverdueThenDueSoonThenUpcomingWithOldestDueFirstWithinOverdue() throws {
+        // Overdue, further in the past (due 2 months ago) — must sort first.
+        let overdueOlderLast = try XCTUnwrap(Calendar.current.date(byAdding: .month, value: -14, to: fixedNow))
+        // Overdue, more recent (due 1 month ago) — must sort second.
+        let overdueNewerLast = try XCTUnwrap(Calendar.current.date(byAdding: .month, value: -13, to: fixedNow))
+        // Due soon: due in 15 days.
+        let dueSoonDueDate = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 15, to: fixedNow))
+        let dueSoonLast = try XCTUnwrap(Calendar.current.date(byAdding: .month, value: -12, to: dueSoonDueDate))
+        // Upcoming: due in 1 month.
+        let upcomingLast = try XCTUnwrap(Calendar.current.date(byAdding: .month, value: -11, to: fixedNow))
+
+        let report = MedicalReport(title: "Panel", category: .labReport, date: fixedNow)
+        context.insert(report)
+        report.labResults.append(LabResult(catalogID: "totalCholesterol", value: 200, unit: "mg/dL", date: overdueOlderLast))
+        report.labResults.append(LabResult(catalogID: "ldlCholesterol", value: 120, unit: "mg/dL", date: overdueNewerLast))
+        report.labResults.append(LabResult(catalogID: "hdlCholesterol", value: 55, unit: "mg/dL", date: dueSoonLast))
+        report.labResults.append(LabResult(catalogID: "triglycerides", value: 100, unit: "mg/dL", date: upcomingLast))
+        try context.save()
+
+        let items = RetestSchedule.items(reports: [report], now: fixedNow)
+
+        XCTAssertEqual(items.map(\.id), ["totalcholesterol", "ldlcholesterol", "hdlcholesterol", "triglycerides"])
+        XCTAssertEqual(items.map(\.status), [.overdue, .overdue, .dueSoon, .upcoming])
+    }
+
+    // MARK: - dueOrSoon convenience
+
+    func testDueOrSoonExcludesUpcomingItems() throws {
+        let lastTested = try XCTUnwrap(Calendar.current.date(byAdding: .month, value: -11, to: fixedNow)) // due in 1 month
+        let report = makeReport(date: lastTested, catalogID: "triglycerides")
+        try context.save()
+
+        XCTAssertTrue(RetestSchedule.dueOrSoon(reports: [report], now: fixedNow).isEmpty)
+    }
+
+    func testDueOrSoonIncludesOverdueAndDueSoon() throws {
+        let overdueLast = try XCTUnwrap(Calendar.current.date(byAdding: .month, value: -13, to: fixedNow))
+        let dueSoonDueDate = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 10, to: fixedNow))
+        let dueSoonLast = try XCTUnwrap(Calendar.current.date(byAdding: .month, value: -12, to: dueSoonDueDate))
+
+        let report = MedicalReport(title: "Panel", category: .labReport, date: fixedNow)
+        context.insert(report)
+        report.labResults.append(LabResult(catalogID: "ldlCholesterol", value: 120, unit: "mg/dL", date: overdueLast))
+        report.labResults.append(LabResult(catalogID: "hdlCholesterol", value: 55, unit: "mg/dL", date: dueSoonLast))
+        try context.save()
+
+        let dueOrSoon = RetestSchedule.dueOrSoon(reports: [report], now: fixedNow)
+        XCTAssertEqual(dueOrSoon.count, 2)
+        XCTAssertTrue(dueOrSoon.allSatisfy { $0.status != .upcoming })
+    }
+}

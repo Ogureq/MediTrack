@@ -750,20 +750,38 @@ struct ScanReportView: View {
         }
     }
 
-    /// Nudges the user to re-test in ~90 days after they log a new report
-    /// that includes at least one lab result. Neutral, non-urgent copy — a
-    /// wellness nudge, not medical advice. Replaces any previously
-    /// scheduled nudge so only the most recent lab report restarts the
-    /// countdown.
+    /// Nudges the user to re-test after they log a new report that includes
+    /// at least one lab result. When the confirmed labs include catalog ids
+    /// with a known `RetestSchedule` interval, the SHORTEST such interval
+    /// sets the nudge date — e.g. a panel mixing an annual lipid test with a
+    /// 6-month HbA1c nudges at 6 months, since that's the soonest anything
+    /// in this report is next due. Otherwise this falls back to the
+    /// original ~90-day (3-month) wellness nudge. Neutral, non-urgent copy —
+    /// a wellness nudge, not medical advice, and `RetestSchedule`'s
+    /// intervals are commonly recommended cadences, not a personalized
+    /// schedule. Replaces any previously scheduled nudge so only the most
+    /// recent lab report restarts the countdown.
     private func scheduleRetestNudge() {
         NotificationService.cancelReminder(id: Self.retestNudgeID)
-        let fireDate = Calendar.current.date(byAdding: .day, value: 90, to: .now) ?? .now.addingTimeInterval(90 * 86_400)
+
+        let knownIntervalMonths = confirmedLabs.compactMap { RetestSchedule.intervalMonths(for: $0.reference.id) }
+        let fireDate: Date
+        let intervalDescription: String
+        if let shortestMonths = knownIntervalMonths.min() {
+            fireDate = Calendar.current.date(byAdding: .month, value: shortestMonths, to: .now)
+                ?? .now.addingTimeInterval(Double(shortestMonths) * 30 * 86_400)
+            intervalDescription = shortestMonths == 1 ? "1 month" : "\(shortestMonths) months"
+        } else {
+            fireDate = Calendar.current.date(byAdding: .day, value: 90, to: .now) ?? .now.addingTimeInterval(90 * 86_400)
+            intervalDescription = "3 months"
+        }
+
         Task {
             if await NotificationService.requestAuthorization() {
                 NotificationService.scheduleOneTime(
                     id: Self.retestNudgeID,
                     title: "Time for a Follow-Up?",
-                    body: "It's been 3 months since your last lab report — re-test to see your trend.",
+                    body: "It's been \(intervalDescription) since your last lab report — re-test to see your trend.",
                     at: fireDate
                 )
             }

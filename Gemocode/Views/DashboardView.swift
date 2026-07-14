@@ -26,6 +26,12 @@ struct DashboardView: View {
     @State private var showingQuickAdd = false
     @State private var showingQuarterlyReview = false
 
+    /// Lab series that are overdue or due soon for a re-test, per
+    /// `RetestSchedule.dueOrSoon`. Cached the same way as `earliestDataDate`
+    /// below — it flattens every report's lab results, which is wasted work
+    /// to redo on every render — and rebuilt via `.task(id: retestSignature)`.
+    @State private var retestItems: [RetestItem] = []
+
     private var review: HealthReview {
         AnalysisEngine.generateReview(
             profile: profiles.first,
@@ -69,6 +75,13 @@ struct DashboardView: View {
             reports.flatMap(\.labResults).map(\.date).min(),
         ].compactMap { $0 }
         return dates.min()
+    }
+
+    /// Signature for the "Tests due" cache: changes whenever the number of
+    /// reports or the total number of lab results changes, which is exactly
+    /// when `RetestSchedule.dueOrSoon` could produce a different result.
+    private var retestSignature: String {
+        "\(reports.count)-\(reports.reduce(0) { $0 + $1.labResults.count })"
     }
 
     private var isQuarterlyReviewDue: Bool {
@@ -158,6 +171,7 @@ struct DashboardView: View {
                         remindersCard
                         quarterlyReviewCard
                         scoreHistoryCard
+                        retestCard
                         BiomarkerCarouselSection()
                         alertsSection(review: review)
                         appointmentCard
@@ -196,6 +210,9 @@ struct DashboardView: View {
         }
         .task(id: earliestDataSignature) {
             earliestDataDate = Self.computeEarliestDataDate(reports: reports, vitals: vitals, snapshots: snapshots)
+        }
+        .task(id: retestSignature) {
+            retestItems = RetestSchedule.dueOrSoon(reports: reports, now: .now)
         }
     }
 
@@ -433,6 +450,40 @@ struct DashboardView: View {
                 .frame(height: 110)
                 .padding()
                 .glassCard(cornerRadius: 16)
+            }
+        }
+    }
+
+    /// "Tests Due" card: lab series overdue or due soon for a re-test per
+    /// `RetestSchedule`, only shown when `retestItems` is non-empty. Capped
+    /// at 4 rows with an "and N more" caption for the rest, and always
+    /// paired with `RetestSchedule.disclaimer` — these are commonly
+    /// recommended cadences, not a personalized or clinical schedule.
+    @ViewBuilder
+    private var retestCard: some View {
+        if !retestItems.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Tests Due")
+                    .font(.headline)
+                VStack(spacing: 10) {
+                    ForEach(Array(retestItems.prefix(4).enumerated()), id: \.element.id) { index, item in
+                        if index > 0 {
+                            Divider()
+                        }
+                        RetestRow(item: item)
+                    }
+                    if retestItems.count > 4 {
+                        Text("and \(retestItems.count - 4) more")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(12)
+                .glassCard(cornerRadius: 16)
+                Text(RetestSchedule.disclaimer)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
         }
     }
@@ -727,6 +778,49 @@ struct TodayReminderRow: View {
         )
         .accessibilityValue(isCompleted ? "Done" : "Not done")
         .accessibilityAction(named: isCompleted ? "Mark as not done" : "Mark as done", onToggle)
+    }
+}
+
+/// A single row in the dashboard's "Tests Due" card: test name, last-tested
+/// date, and an "Overdue"/"Due Soon" status chip. `.upcoming` is handled
+/// only for `RetestStatus`'s exhaustiveness — `retestCard` only ever passes
+/// rows sourced from `RetestSchedule.dueOrSoon`, which excludes it.
+private struct RetestRow: View {
+    let item: RetestItem
+
+    private var statusText: String {
+        switch item.status {
+        case .overdue: "Overdue"
+        case .dueSoon: "Due Soon"
+        case .upcoming: "Upcoming"
+        }
+    }
+
+    private var statusColor: Color {
+        switch item.status {
+        case .overdue: .red
+        case .dueSoon: .orange
+        case .upcoming: .blue
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.displayName)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                Text("Last tested \(item.lastTestedAt.formatted(date: .abbreviated, time: .omitted))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            StatusPill(text: statusText, color: statusColor)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "\(item.displayName), \(statusText), last tested \(item.lastTestedAt.formatted(date: .abbreviated, time: .omitted))"
+        )
     }
 }
 
