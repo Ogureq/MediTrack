@@ -201,6 +201,12 @@ This document records the phased plan executed to build Gemocode, a privacy-firs
 - [x] AI report PDF, medical-grade — gradient header band, "Needs attention" summary box (or all-clear), typical-range column with zebra/status-tinted table rows, section rules, per-page footers with page numbers; content tests extended
 - [x] Lifestyle & nutrition section — the AI report now includes "Lifestyle & nutrition to discuss" for out-of-range markers only: mainstream dietary/hydration topics framed strictly as discuss-with-your-doctor items (never fixes, doses, brands, supplements, or medication instructions), encoded identically in the relay's server-owned prompt and the BYOK prompt; verification guards confirmed compatible; backend 128 tests green
 
+## Phase 25 — Relay Live, Retest Schedule & the Money-Saving Reposition
+
+- [x] Relay deployed and wired — the owner's Cloudflare Worker (gemocode-relay) is live with secrets in Cloudflare's store; its URL is the compiled-in default AI route (BYOK/off-relay override behavior unchanged); ENFORCE_PREMIUM stays "false" until App Store verification ships
+- [x] Retest schedule — pure `RetestSchedule` engine (38 catalog tests with commonly recommended intervals, overdue/due-soon/upcoming classification from each series' latest result, 20 fixed-date tests), a Dashboard "Tests due" card, and an interval-aware post-scan retest nudge; every mention carries "your doctor may advise a different schedule"
+- [x] Marketing repositioned — all assets now lead with the money-and-timing story (never lose a result, know when you're due and when you're not, skip duplicate tests) with privacy as the strong second pillar; every stale "free scanning" claim resolved to the real tiering (tracking + basic Quick Add free forever, one free AI scan-and-report trial, scanning/AI Premium at $19.99/mo); App Store fields re-verified within limits
+
 ## Future Milestones
 
 Not part of the current plan; captured here for future scoping:

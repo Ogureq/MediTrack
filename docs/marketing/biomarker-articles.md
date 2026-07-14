@@ -5,12 +5,20 @@ Four educational explainers supporting Engine C in `docs/MARKETING.md`
 written for `LabDetailView`). Reference ranges below match the values in
 `Gemocode/Models/LabCatalog.swift` and are given as commonly used lab
 reference points, not individualized medical guidance — every article says
-so explicitly.
+so explicitly. Each article's closing section ties the marker back to
+Gemocode's lead message — knowing your trend and knowing when you're
+commonly due to retest it — with privacy as the strong supporting point,
+not the headline.
 
 **Compliance notes applied to all four:** educational framing throughout;
-no diagnostic, treatment, or outcome claims; no hype words; each article
-closes with a soft, factual mention of Gemocode (never a hard sell) and a
-medical disclaimer block. Each also carries its own SEO title and meta
+no diagnostic, treatment, or outcome claims; no hype words; retest cadence
+is always described as "commonly recommended" with an explicit "your doctor
+may advise differently"; each article closes with a soft, factual mention of
+Gemocode (never a hard sell) and a medical disclaimer block. Pricing, where
+mentioned, is stated accurately: tracking and the Tests Due retest schedule
+are free forever; scanning a lab report and AI features are Premium
+($19.99/mo) with one free lifetime scan-and-report trial — never described
+as free scanning. Each article also carries its own SEO title and meta
 description.
 
 ---
@@ -66,11 +74,15 @@ simply so it's on record.
 ### Tracking it over time
 
 A single LDL number is a snapshot; the more useful picture is usually the
-trend across several draws. Gemocode lets you photograph a lab report and
-have it read the values on-device, then shows your own LDL history as a
-chart against a reference range — privately, with no account and nothing
-uploaded anywhere. It's a way to see the pattern before your next
-appointment, not a substitute for the conversation you have there.
+trend across several draws — and knowing when you're actually due for the
+next one. Gemocode logs each draw for free and shows your own LDL history as
+a chart against a reference range, with a "Tests due" card that tracks when
+a lipid panel is commonly due again (always labeled "commonly recommended —
+your doctor may advise differently," never a fixed rule) — private, no
+account, nothing sent anywhere unless you choose to scan a report or use an
+AI feature, both of which are part of Premium after your first free scan. It's
+a way to see the pattern and the timing before your next appointment, not a
+substitute for the conversation you have there.
 
 ### Medical disclaimer
 
@@ -136,11 +148,13 @@ history rather than as a number that means the same thing for everyone.
 TSH tends to be more informative as a trend than as a single value,
 especially for anyone managing an ongoing thyroid condition, since the
 direction a result is moving often matters as much as where it sits on a
-given day. Gemocode logs each draw, shows the trend on a chart against
-the reference range, and explains what a rising or falling pattern
-commonly indicates — computed entirely on your device, with no account
-needed and nothing sent anywhere unless you choose to turn on the optional
-AI explanation feature.
+given day — and as when you're actually due to check it again. Gemocode
+logs each draw for free, shows the trend on a chart against the reference
+range, and tracks when a thyroid panel is commonly due again on its Tests
+Due card (labeled "commonly recommended — your doctor may advise
+differently"). All of that is computed entirely on your device, with no
+account needed; scanning a report and the optional AI explanation feature
+are part of Premium, with one scan-and-report free for life to try first.
 
 ### Medical disclaimer
 
@@ -205,10 +219,12 @@ Because A1C is inherently a trailing average, seeing it plotted across
 multiple draws tends to be more useful than any single result on its own —
 a slow upward drift across a year of draws tells a different story than
 one high result surrounded by otherwise-typical ones, even if the most
-recent number looks identical either way. Gemocode reads the value off a
-photographed lab report on-device, adds it to your history, and charts the
-trend against the reference range — all stored locally, with no account
-and nothing uploaded unless you opt into the AI explanation feature.
+recent number looks identical either way. Gemocode adds each draw to your
+history, charts the trend against the reference range, and shows on its
+Tests Due card when an A1C is commonly due again — all stored and computed
+locally, with no account. Reading the value straight off a photographed lab
+report is part of Premium (on-device OCR, one scan free for life to try),
+and the same goes for the optional AI explanation feature.
 
 ### Medical disclaimer
 
@@ -275,10 +291,12 @@ Vitamin D levels can shift with the seasons, supplementation habits, and
 time spent outdoors, so a single result is often less useful than seeing
 it across a year or more — a low reading in February and a normal one in
 August can both be unremarkable for the same person once the seasonal
-pattern is visible. Gemocode logs each draw from a photographed lab
-report, on-device, and charts your Vitamin D history against the reference
-range — privately, with no account required, and nothing sent anywhere
-unless you choose to enable the optional AI explanation feature.
+pattern is visible. Gemocode logs each draw, charts your Vitamin D history
+against the reference range, and shows when it's commonly due to be
+rechecked on its Tests Due card — private, no account required, free
+forever for tracking. Scanning the value straight off a photographed lab
+report and the optional AI explanation feature are part of Premium, with
+one scan free for life to try first.
 
 ### Medical disclaimer
 

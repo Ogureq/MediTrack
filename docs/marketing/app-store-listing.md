@@ -1,62 +1,83 @@
-> **PRICING CHANGE NOTICE (Jul 2026):** Lab report scanning is now a Premium feature (owner decision). Any line below describing scanning/OCR as free must be revised before publishing. Free tier = vitals/meds/symptoms/goals tracking + score/trends + one AI report.
-
 # App Store listing kit
 
 Paste-ready copy for App Store Connect. Character limits verified against
-Apple's current fields. Keywords chosen for the "lab results tracker" cluster
-identified in docs/MARKETING.md — high intent, low competition versus the
-saturated "health tracker" head term.
+Apple's current fields (see the count noted under each field below). Lead
+message is the owner's core value proposition: never lose a lab result,
+know exactly when your next one is due — and when it isn't — and walk into
+any appointment with your full history so nothing gets re-ordered from
+scratch. Privacy stays the strong #2. Keywords chosen for the "blood test
+tracker / lab results / test reminders / when to retest" cluster identified
+in docs/MARKETING.md — high intent, low competition versus the saturated
+"health tracker" head term.
+
+**Pricing facts baked into every field below:** free tier = vitals/meds/
+symptoms/goals tracking, health score & trends, Tests Due retest schedule,
+Quarterly Review, widget, Apple Health sync, and one free AI scan-and-report
+(lifetime trial — the only way a free account ever gets a lab scanned).
+Premium ($19.99/mo) = unlimited lab scanning, unlimited AI reports, AI chat,
+AI-assisted entry, and a professional PDF export of AI reports. Nothing
+below claims scanning/OCR is free forever.
 
 ## Name (30 chars max)
 
 ```
 Gemocode: Lab & Health Diary
 ```
-(29 chars. The name field is the strongest ASO signal — "Lab" must appear here;
-"Gemocode" alone wastes the field.)
+(28 chars. The name field is the strongest ASO signal — "Lab" must appear here;
+"Gemocode" alone wastes the field. Unchanged — still the right anchor for the
+"lab" keyword now that the subtitle carries the retest angle.)
 
 ## Subtitle (30 chars max)
 
 ```
-Private labs, vitals & trends
+Lab tracker & retest reminders
 ```
-(29 chars. Carries "private" — the brand wedge — plus two category terms the
-name doesn't repeat.)
+(30 chars, at the limit. Carries "retest reminders" — the new lead — plus
+"tracker," a category term the name doesn't repeat. Privacy no longer needs
+a subtitle slot: it's covered in the description's second section and by
+the dedicated screenshot.)
 
 ## Keyword field (100 chars max, comma-separated, no spaces)
 
 ```
-blood,test,results,lab,tracker,records,thyroid,cholesterol,glucose,biomarker,symptom,medication
+blood,test,results,records,due,panel,thyroid,cholesterol,glucose,biomarker,symptom,medication,vitals
 ```
-(96 chars. Never repeat words already in name/subtitle — Apple indexes those
-free. "blood+test+results" combine into the highest-intent phrases; condition
-terms (thyroid, cholesterol) capture the ICP's searches.)
+(100 chars exactly. Drops words already free from Name/Subtitle indexing
+("lab," "tracker," "retest," "reminders") and spends the saved characters on
+"results," "due," "panel," and "records" — the "lab results" / "when to
+retest" cluster — plus condition terms for the ICP's own searches.)
 
 ## Promotional text (170 chars max, editable without review)
 
 ```
-New: type one sentence — "bp 128/82 after breakfast" — and Gemocode files it. Scan any lab PDF and see every value decoded. Free, no account, all on your iPhone.
+New: Tests Due shows when each blood test is next due — skip duplicates, never miss one. Free tracking, private on-device. One free AI report, then $19.99/mo.
 ```
+(158 chars. Leads with the new retest-schedule feature and the money angle
+(skip duplicates), states the free/premium split accurately — no "free
+scanning" claim — and keeps it truthful about the one-time trial.)
 
 ## Description
 
 ```
-Your labs, decoded — on your phone, not our servers.
+Never lose a lab result. Never guess when you're due for the next one.
 
-Gemocode turns the lab PDFs you already have into trends you can actually
-read: scan any lab report and on-device text recognition finds the values,
-matches them against 46 common tests with reference ranges, and shows you
-where you stand — with history charts, plain-English explanations of what
-each marker measures, and questions worth asking your doctor.
+Gemocode remembers every blood test you've ever logged and tells you —
+based on commonly recommended intervals — when you're likely due again.
+Walk into any appointment with your full history already in your pocket,
+so nothing gets re-ordered from scratch. A single out-of-pocket lab panel
+can easily cost more than a month of Premium — Gemocode helps make sure
+you only pay for the tests you actually need, and never pay twice for one
+you already have.
 
-PRIVATE BY ARCHITECTURE
-• No account. No sign-up screen. No cloud.
-• Everything is stored on your iPhone. Delete the app, and it's gone.
-• Works in airplane mode. Optional passcode + Face ID lock with lockout
-  protection. Backups are encrypted files you control.
+TESTS DUE — KNOW YOUR SCHEDULE
+• A "Tests due" card on your dashboard tracks when each blood test was
+  last taken and shows when it's commonly due again
+• See at a glance what's overdue and what isn't due yet, so you can skip
+  a duplicate or premature test and stop missing the ones that matter
+• Reminders are based on commonly recommended intervals — your doctor may
+  always advise differently for your situation
 
 EVERYTHING YOU TRACK, IN ONE PLACE — FREE FOREVER
-• Lab reports with photo/PDF attachments and on-device OCR scanning
 • Vitals: weight, blood pressure, heart rate, glucose, SpO2, temperature,
   respiratory rate, sleep — with trend charts and healthy-range bands
 • Medications with interaction awareness and reminders
@@ -65,48 +86,72 @@ EVERYTHING YOU TRACK, IN ONE PLACE — FREE FOREVER
 • A 0–100 health score from a transparent, rule-based engine
 • A Quarterly Review: every 90 days, a recap of what changed, your wins,
   and what's worth watching
-• Quick Add: type "bp 128/82" or "aspirin 100mg twice daily" — done
+• Quick Add: type "bp 128/82" or "dentist tomorrow 3pm" — parsed on your
+  phone, no AI, no forms
 • Home-screen widget (redacted while your phone is locked)
 
-AI HEALTH ANALYST (OPTIONAL PREMIUM)
-Let AI narrate your review in plain language: what's working, what's worth
-watching, and questions for your next appointment. Only a text summary of
-your review is ever sent — never your documents, photos, or database — and
-every number in the answer is verified against your actual data before you
-see it. Your first AI report is free. Gemocode Premium unlocks unlimited
-reports, chat about your results, and AI-assisted entry.
+YOUR FIRST SCAN, ON US
+Photograph one lab report and let Gemocode read the values on-device and
+write an AI report about them — completely free, once, for life. See
+exactly what Premium does before you spend anything.
+
+PRIVATE BY ARCHITECTURE
+• No account. No sign-up screen. No cloud.
+• Everything is stored on your iPhone. Delete the app, and it's gone.
+• Works in airplane mode. Optional passcode + Face ID lock with lockout
+  protection. Backups are encrypted files you control.
+
+GEMOCODE PREMIUM — $19.99/MONTH
+• Unlimited lab report scanning: on-device text recognition finds the
+  values, matches them against 46 common tests with reference ranges, and
+  builds your history automatically
+• Unlimited AI health reports, plus chat about your results
+• AI-assisted entry — type one messy sentence ("headache since lunch,
+  bp 132/85, took an aspirin") and each item files itself
+• A professional PDF export of your AI report — gradient header, a
+  needs-attention box, typical ranges, and a "lifestyle & nutrition to
+  discuss" section — ready to print or bring to an appointment
 
 Gemocode is educational, not medical advice. It never diagnoses, and it
-will always point you to your doctor or pharmacist for decisions.
+will always point you to your doctor or pharmacist for decisions. Retest
+intervals shown in the app are commonly recommended starting points, not
+a prescription — your doctor may advise differently.
 
-Track everything. Understand more. Share nothing.
+Track everything. Know your schedule. Share nothing.
 ```
 
 ## What's-new template (first release)
 
 ```
-Hello! First release: scan lab PDFs, track vitals and meds, get your health
-score, and keep every byte on your own iPhone. Found a lab format we don't
-parse? Tell us — we read everything: gemocode.feedback@<domain>
+Hello! First release: track vitals, meds and symptoms, see your Tests Due
+schedule so you know when your next blood draw is (and when it isn't),
+get your health score, and keep every byte on your own iPhone. Your first
+lab scan and AI report are free. Found a lab format we don't parse? Tell
+us — we read everything: gemocode.feedback@<domain>
 ```
 
-## Screenshot plan (6, in order — captions overlaid in-app style)
+## Screenshot plan (7, in order — captions overlaid in-app style)
 
-1. Scan → decoded lab values with status pills. Caption: **"Scan any lab
-   report. Understand every number."**
-2. Privacy: the app open on the dashboard with airplane mode visible in the
-   status bar. Caption: **"No account. No cloud. Yours."**
-3. Trends chart with healthy-range band. Caption: **"See five years of
-   results as one trend."**
-4. Quick Add mid-typing "bp 128/82" with live preview card. Caption: **"Type
-   a sentence. It files itself."**
-5. Quarterly Review recap. Caption: **"Every 90 days: what changed, what to
-   ask your doctor."**
-6. AI report with the "Generated by Claude — informational only" footer
-   visible. Caption: **"AI that explains — and shows its work."**
+1. **NEW.** Dashboard "Tests due" card — one test overdue (red), one not
+   due for months (muted/green). Caption: **"Know when you're due — and
+   when you're not."**
+2. Privacy: the app open on the dashboard with airplane mode visible in
+   the status bar. Caption: **"No account. No cloud. Yours."**
+3. Scan → decoded lab values with status pills. Caption: **"Scan a lab.
+   Never re-order a test you already had."**
+4. Trends chart with healthy-range band. Caption: **"Every result, one
+   history — years, not a single draw."**
+5. Quick Add mid-typing "bp 128/82" with live preview card.
+   Caption: **"Type a sentence. It files itself. (Premium)"**
+6. Quarterly Review recap. Caption: **"Every 90 days: what changed, what
+   to ask your doctor."**
+7. **NEW.** AI report PDF export — gradient header, needs-attention box,
+   typical ranges, "Lifestyle & nutrition to discuss" section visible.
+   Caption: **"A doctor-ready report, built from your own data."**
 
-App preview video: 30-second script #1 from docs/marketing/content-bank.md
-(the scan demo), captioned, no voiceover required by Apple.
+App preview video: the "Tests Due" 30-second script from
+docs/marketing/content-bank.md (the retest-schedule demo), captioned, no
+voiceover required by Apple.
 
 ## Categories & metadata
 
@@ -119,7 +164,9 @@ App preview video: 30-second script #1 from docs/marketing/content-bank.md
   Not linked to identity" for the review summary sent on AI requests. This
   label is a marketing asset: screenshot it for content.
 - App Review notes: include a demo path ("Load Sample Data" in Profile →
-  Data), state that AI features require premium/relay and degrade gracefully,
+  Data), state that lab scanning and AI features require Premium (or the
+  one-time free trial) and degrade gracefully, note that retest intervals
+  are labeled "commonly recommended — your doctor may advise differently,"
   and cite the medical disclaimers shown at onboarding.
 
 ## Localization order (from MARKETING.md)

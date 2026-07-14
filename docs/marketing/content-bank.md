@@ -1,26 +1,45 @@
-> **PRICING CHANGE NOTICE (Jul 2026):** Lab report scanning is now a Premium feature (owner decision). Any line below describing scanning/OCR as free must be revised before publishing. Free tier = vitals/meds/symptoms/goals tracking + score/trends + one AI report.
-
 # Gemocode Content Bank
 
 Launch content executing the strategy in `docs/MARKETING.md`. Sourced from
 actual shipped features in `README.md` and the "educational, not diagnostic"
 stance in `CLAUDE.md`. Nothing here describes a feature the app doesn't have.
+Lead message: never lose a lab result, know exactly when your next one is
+due — and when it isn't — and walk into any appointment with your full
+history so nothing gets re-ordered from scratch. Privacy is the strong #2,
+never dropped, never leading.
 
 **Compliance rules applied throughout this file (see also CLAUDE.md):**
 - No medical claims. Never "improves your health," "catches disease,"
   "diagnoses," "treats," "prevents," or similar. Findings are described as
   educational, and the app's own "not medical advice" disclaimer is treated
   as a fact to surface, not a legal footnote to hide.
+- Retest intervals are always "commonly recommended" — every mention of the
+  Tests Due feature or a specific retest cadence carries "your doctor may
+  advise differently," never phrased as a guarantee or a schedule to follow
+  blindly.
 - No hype words. "Revolutionary," "game-changing," and similar are banned;
   none appear below.
 - Privacy claims are stated exactly as true: no account, on-device SwiftData
-  storage, AI is opt-in and sends only the review summary (or, for Quick
-  Add, the single sentence typed) through a metered relay — never documents,
-  attachments, or the on-device database. One free AI report for life, then
-  $19.99/mo (or yearly) for unlimited AI. Every tracking feature is free
-  forever.
+  storage, AI is opt-in and sends only the review summary (or, for
+  AI-assisted Quick Add, the single sentence typed) through a metered relay —
+  never documents, attachments, or the on-device database.
+- **Pricing stated exactly as true, everywhere:** tracking (vitals, meds,
+  symptoms, goals, health score, trends, the Tests Due retest schedule,
+  Quarterly Review, widget, Apple Health sync) is free forever — and so is
+  Quick Add's typed shorthand ("bp 128/82", "dentist tomorrow 3pm"), which
+  parses on-device with no AI. Lab report scanning, AI reports, AI chat,
+  and the AI button inside Quick Add (whole messy sentences with several
+  items, extracted in one go) are Premium at $19.99/mo. Free accounts get
+  exactly one lifetime AI scan-and-report as a trial — that trial is the
+  only time a free account ever scans a lab. Never say "free scanning" or
+  "OCR is free" — scanning is Premium, full stop.
 - No overpromising. The app is iOS-only and pre-launch. Nothing below says
   "available now" or implies Android/web support.
+- Money comparisons stay honest and non-quantified per user: never invent a
+  "$X saved" figure. Hypothetical comparisons are fine when phrased as
+  hypotheticals and kept plausible — e.g., "a single out-of-pocket lab panel
+  can easily cost more than a month of Premium" (true of nearly any real
+  cash-pay panel) — never a blanket promise of savings.
 - **CTA convention:** every script's CTA defaults to the pre-launch reality
   — "waitlist link in bio." The bracketed launch-week variant ("free on the
   App Store") should only go live the day the app actually ships. Do not
@@ -28,112 +47,66 @@ stance in `CLAUDE.md`. Nothing here describes a feature the app doesn't have.
 
 ---
 
-## A. Ten 30-second short-video scripts
+## A. Eleven 30-second short-video scripts
 
 Each script is a real screen recording of the shipped app plus a phone-shot
 or voiceover-only cold open. Runtime budget: ~2s hook, ~24s body, ~4s CTA.
+Ordered by pillar priority: money & timing leads, privacy is a strong
+second, lab literacy and product magic follow.
 
-### 1. "The Scan" — *Pillar: lab literacy*
+### 1. "The Card That Says Not Yet" — *Pillar: money & timing*
 
-**Hook (0:00–0:02, on-screen text):** "I got my labs back. 30 numbers. Zero explanations."
+**Hook (0:00–0:02, on-screen text):** "I almost got billed for a lab I'd already had six weeks earlier."
 
 **Shot list:**
-1. Cold open, phone camera: a crumpled lab-draw printout on a kitchen table.
-2. Cut to screen recording: open a report in Gemocode, tap "Scan for Lab Values."
-3. Vision OCR runs over the photographed page (show the brief on-device scanning state).
-4. Confirmation sheet appears: recognized values line up against the catalog, each with a status pill (green/yellow/red).
-5. Tap into one flagged value (e.g., LDL) → LabDetailView opens: history chart with the reference-range band, plain-language "what high means" text.
-6. Quick cut: Dashboard biomarker carousel showing the same marker's mini sparkline.
+1. Cold open, phone camera: two lab-draw receipts on a kitchen counter, dates six weeks apart, same panel name circled.
+2. Cut to screen recording: Dashboard, tap into the "Tests due" card.
+3. Card shows two rows: Lipid Panel — "not due for 11 weeks" (muted/green), Thyroid Panel — "overdue by 3 weeks" (amber/red).
+4. Phone-camera reenactment: at a front desk, showing the Tests Due card to a receptionist instead of shrugging and saying "I think I had that recently?"
+5. Back to screen recording: tap into the Lipid Panel row — shows the last-drawn date and the commonly recommended interval it used to calculate "not due yet."
+6. Close on the small print at the bottom of the card: "commonly recommended — your doctor may advise differently."
 
 **Voiceover:**
-- "Thirty numbers, and my doctor had eight minutes to explain them."
-- "So I photographed the page instead."
-- "It reads the values, matches them to a catalog, and shows me what's actually out of range — right there on my phone."
-- "Free. And it never leaves my phone to do it."
+- "I almost got billed for a lipid panel I'd already had six weeks earlier."
+- "Now my phone just tells me: this one's not due for eleven weeks, this one's actually overdue."
+- "It's not telling me what to do — it's using commonly recommended intervals, and it says so every time."
+- "I just stopped guessing, and stopped paying for guesses."
 
-**On-screen captions:** "on-device OCR" / "no upload" / "free, forever"
+**On-screen captions:** "commonly recommended" / "your doctor's call" / "skip the duplicate"
 
 **CTA (0:26–0:30):** "Waitlist link in bio." *(Launch-week variant: "Free on the App Store — link in bio.")*
 
-**Pillar:** lab literacy
+**Pillar:** money & timing
 
 ---
 
-### 2. "POV: You Finally Understand Your Thyroid Panel" — *Pillar: lab literacy*
+### 2. "Walk In With Five Years of History" — *Pillar: money & timing*
 
-**Hook (0:00–0:02, on-screen text):** "POV: you finally understand your thyroid panel."
-
-**Shot list:**
-1. Nurse-tok-style direct-to-camera open, no app yet: "If you've ever stared at 'TSH: 6.2' and had no idea if that's bad—"
-2. Cut to screen recording: LabDetailView for TSH — current value, status pill, the "what this test measures" text, and the plain-language high/low explanation.
-3. Scroll to the history chart — several draws over time, reference band overlaid.
-4. Cut to the Health Review screen: the same marker appears as a Finding, grouped by severity, with a suggestion to bring it up with a clinician.
-5. Close on Dashboard biomarker carousel scrolling past TSH, LDL, HbA1c cards.
-
-**Voiceover:**
-- "TSH doesn't mean anything on its own — it's a signal, and this shows you the range, not just the number."
-- "High, low, in range — it's all labeled, in plain English, next to your own history."
-- "It doesn't diagnose anything. It just gives you the vocabulary to ask your doctor a sharper question."
-
-**On-screen captions:** "educational, not diagnostic" / "ask your doctor" (paired with disclaimer text at bottom third)
-
-**CTA:** "Duet this with your own confusing lab result. Waitlist link in bio."
-
-**Pillar:** lab literacy
-
----
-
-### 3. "What Your LDL Number Actually Means" — *Pillar: lab literacy*
-
-**Hook (0:00–0:02, on-screen text):** "What your LDL number actually means (no fear-mongering)."
-
-**Shot list:**
-1. Screen recording opens directly on LabDetailView for LDL Cholesterol.
-2. Show the reference-range band on the history chart — narrate what "under 100" represents as a commonly used reference point, not a verdict.
-3. Scroll to the plain-language "about" and "what a high result means" text.
-4. Cut to Health Review: the derived lipid finding (total-to-HDL ratio) — show how the app connects two lab values into one plain-English insight.
-5. End on the disclaimer line at the bottom of the Review screen.
-
-**Voiceover:**
-- "LDL gets called 'bad cholesterol,' which isn't wrong, but it's not the whole story either."
-- "This shows you the reference range, your own trend, and what a high or low result typically means — plainly, no worst-case spiral."
-- "It also does the math your eye skips — total cholesterol over HDL — because two numbers together tell you more than either alone."
-- "Still not a diagnosis. Just the numbers, explained, so the appointment isn't the first time you're thinking about them."
-
-**On-screen captions:** "educational only" / "bring this to your doctor"
-
-**CTA:** "Full breakdown of LDL, TSH, HbA1c, and Vitamin D — waitlist link in bio."
-
-**Pillar:** lab literacy
-
----
-
-### 4. "I Scanned Five Years of Labs" — *Pillar: lab literacy*
-
-**Hook (0:00–0:02, on-screen text):** "I scanned five years of lab PDFs. Found a trend my doctor never mentioned."
+**Hook (0:00–0:02, on-screen text):** "New doctor. First question: 'Do you have any recent labs?' I had five years of them, right there."
 
 **Shot list:**
 1. Screen recording: Reports list, several years of entries scrolling past.
 2. Tap into Trends tab, select a single marker, switch the time filter from 3M to All.
 3. The chart re-renders across the full history — period average line, min/max markers, trend direction visible.
 4. Cut to the Health Review's trend finding: "improving / worsening / stable," generated from the linear regression over that same history.
-5. Close on the same marker's card in the biomarker carousel, sparkline echoing the long view.
+5. Cut to the Tests Due card for the same marker's test type: shows when it's next commonly due, based on the last logged draw.
+6. Close on a phone-camera reenactment: handing the phone to a new provider at check-in instead of saying "let me check my email."
 
 **Voiceover:**
-- "One lab result is a data point. Five years of them is a pattern."
-- "I'd been keeping these as PDFs in email — nobody, including me, was looking at them side by side."
-- "The app lines them up and does the trend math — improving, worsening, or stable — so a slow drift shows up before it's a crisis."
-- "It's still just describing my own data back to me. But nobody had done that before."
+- "New doctor's office, same first question every time: 'do you have any recent labs?'"
+- "I used to say 'I think so, let me check my email.' Now I just hand them the phone."
+- "Five years of draws, side by side — so a slow drift shows up before it's a crisis instead of getting re-tested to find out."
+- "And it tells me which of those tests I'm actually due to repeat, so the next draw isn't a guess either."
 
-**On-screen captions:** "your data, your trend" / "on-device"
+**On-screen captions:** "your data, your trend" / "on-device" / "nothing re-ordered from scratch"
 
 **CTA:** "If you've got old lab PDFs sitting in email, this is for you. Waitlist link in bio."
 
-**Pillar:** lab literacy
+**Pillar:** money & timing
 
 ---
 
-### 5. "Sign-Up Screen Speedrun, Health App Edition" — *Pillar: privacy*
+### 3. "Sign-Up Screen Speedrun, Health App Edition" — *Pillar: privacy*
 
 **Hook (0:00–0:02, on-screen text):** "Sign-up screen speedrun: health app edition."
 
@@ -156,7 +129,7 @@ or voiceover-only cold open. Runtime budget: ~2s hook, ~24s body, ~4s CTA.
 
 ---
 
-### 6. "Rating My Health App's Privacy Policy" — *Pillar: privacy*
+### 4. "Rating My Health App's Privacy Policy" — *Pillar: privacy*
 
 **Hook (0:00–0:02, on-screen text):** "Rating my health app's privacy policy vs. the top 5 trackers."
 
@@ -181,7 +154,7 @@ or voiceover-only cold open. Runtime budget: ~2s hook, ~24s body, ~4s CTA.
 
 ---
 
-### 7. "AI That Only Sees a Summary" — *Pillar: privacy*
+### 5. "AI That Only Sees a Summary" — *Pillar: privacy*
 
 **Hook (0:00–0:02, on-screen text):** "I asked AI to explain my cholesterol. It never saw my files."
 
@@ -193,12 +166,12 @@ or voiceover-only cold open. Runtime budget: ~2s hook, ~24s body, ~4s CTA.
 5. Return to app: Ask-about-your-report chat, showing a follow-up question answered in-context.
 
 **Voiceover:**
-- "This is the one AI feature in the app — an on-device engine already computed the score and the findings; the AI just explains them in plain language."
+- "This is the paid AI feature — an on-device engine already computed the score and the findings; the AI just explains them in plain language."
 - "It only ever sees the review summary — never my attached PDFs, never the on-device database."
 - "Every AI response is labeled, so it's always clear what the rule-based engine found versus what the model explained."
-- "One report's free for life. After that it's part of premium — because someone has to pay for the model calls, and it isn't your data."
+- "One scan and one report are free for life, so you can see it before you pay. After that it's part of Premium — because someone has to pay for the model calls, and it isn't your data."
 
-**On-screen captions:** "review summary only" / "no attachments sent" / "labeled every time"
+**On-screen captions:** "review summary only" / "no attachments sent" / "one free trial"
 
 **CTA:** "Waitlist link in bio — your first AI report is free."
 
@@ -206,7 +179,82 @@ or voiceover-only cold open. Runtime budget: ~2s hook, ~24s body, ~4s CTA.
 
 ---
 
-### 8. "Typing a Sentence Instead of Filling a Form" — *Pillar: product magic*
+### 6. "The Scan" — *Pillar: lab literacy*
+
+**Hook (0:00–0:02, on-screen text):** "I got my labs back. 30 numbers. Zero explanations."
+
+**Shot list:**
+1. Cold open, phone camera: a crumpled lab-draw printout on a kitchen table.
+2. Cut to screen recording: open a report in Gemocode, tap "Scan for Lab Values."
+3. Vision OCR runs over the photographed page (show the brief on-device scanning state).
+4. Confirmation sheet appears: recognized values line up against the catalog, each with a status pill (green/yellow/red).
+5. Tap into one flagged value (e.g., LDL) → LabDetailView opens: history chart with the reference-range band, plain-language "what high means" text.
+6. Quick cut: Dashboard biomarker carousel showing the same marker's mini sparkline, next to the Tests Due card showing when the next lipid panel is commonly due.
+
+**Voiceover:**
+- "Thirty numbers, and my doctor had eight minutes to explain them."
+- "So I photographed the page instead."
+- "It reads the values on-device, matches them to a catalog, and shows me what's actually out of range — the photo never leaves my phone to do it."
+- "My first scan was free. After that it's part of Premium — but by then I already knew it was worth it."
+
+**On-screen captions:** "on-device OCR" / "no upload" / "first scan free"
+
+**CTA (0:26–0:30):** "Waitlist link in bio." *(Launch-week variant: "Free on the App Store — link in bio.")*
+
+**Pillar:** lab literacy
+
+---
+
+### 7. "POV: You Finally Understand Your Thyroid Panel" — *Pillar: lab literacy*
+
+**Hook (0:00–0:02, on-screen text):** "POV: you finally understand your thyroid panel."
+
+**Shot list:**
+1. Nurse-tok-style direct-to-camera open, no app yet: "If you've ever stared at 'TSH: 6.2' and had no idea if that's bad—"
+2. Cut to screen recording: LabDetailView for TSH — current value, status pill, the "what this test measures" text, and the plain-language high/low explanation.
+3. Scroll to the history chart — several draws over time, reference band overlaid.
+4. Cut to the Health Review screen: the same marker appears as a Finding, grouped by severity, with a suggestion to bring it up with a clinician.
+5. Close on Dashboard biomarker carousel scrolling past TSH, LDL, HbA1c cards.
+
+**Voiceover:**
+- "TSH doesn't mean anything on its own — it's a signal, and this shows you the range, not just the number."
+- "High, low, in range — it's all labeled, in plain English, next to your own history."
+- "It doesn't diagnose anything. It just gives you the vocabulary to ask your doctor a sharper question."
+
+**On-screen captions:** "educational, not diagnostic" / "ask your doctor" (paired with disclaimer text at bottom third)
+
+**CTA:** "Duet this with your own confusing lab result. Waitlist link in bio."
+
+**Pillar:** lab literacy
+
+---
+
+### 8. "What Your LDL Number Actually Means" — *Pillar: lab literacy*
+
+**Hook (0:00–0:02, on-screen text):** "What your LDL number actually means (no fear-mongering)."
+
+**Shot list:**
+1. Screen recording opens directly on LabDetailView for LDL Cholesterol.
+2. Show the reference-range band on the history chart — narrate what "under 100" represents as a commonly used reference point, not a verdict.
+3. Scroll to the plain-language "about" and "what a high result means" text.
+4. Cut to Health Review: the derived lipid finding (total-to-HDL ratio) — show how the app connects two lab values into one plain-English insight.
+5. End on the disclaimer line at the bottom of the Review screen.
+
+**Voiceover:**
+- "LDL gets called 'bad cholesterol,' which isn't wrong, but it's not the whole story either."
+- "This shows you the reference range, your own trend, and what a high or low result typically means — plainly, no worst-case spiral."
+- "It also does the math your eye skips — total cholesterol over HDL — because two numbers together tell you more than either alone."
+- "Still not a diagnosis. Just the numbers, explained, so the appointment isn't the first time you're thinking about them."
+
+**On-screen captions:** "educational only" / "bring this to your doctor"
+
+**CTA:** "Full breakdown of LDL, TSH, HbA1c, and Vitamin D — waitlist link in bio."
+
+**Pillar:** lab literacy
+
+---
+
+### 9. "Typing a Sentence Instead of Filling a Form" — *Pillar: product magic*
 
 **Hook (0:00–0:02, on-screen text):** "I typed one sentence instead of filling out a form."
 
@@ -220,10 +268,10 @@ or voiceover-only cold open. Runtime budget: ~2s hook, ~24s body, ~4s CTA.
 
 **Voiceover:**
 - "No dropdowns, no five-field form — just what I'd actually say out loud."
-- "It parses it on-device and shows me a live preview before anything saves, so I can catch a typo."
-- "Works for vitals, meds, symptoms, appointments — one sentence, structured data."
+- "This parses right on the phone — free, no AI, works in airplane mode. I see a live preview before anything saves, so I can catch a typo."
+- "Works for vitals, meds, symptoms, appointments — one line, structured data. Premium adds an AI button for the messy version: a whole sentence with three things in it, filed all at once."
 
-**On-screen captions:** "on-device parsing" / "confirm before it saves"
+**On-screen captions:** "Quick Add — free, parsed on-device" / "confirm before it saves"
 
 **CTA:** "Waitlist link in bio."
 
@@ -231,7 +279,7 @@ or voiceover-only cold open. Runtime budget: ~2s hook, ~24s body, ~4s CTA.
 
 ---
 
-### 9. "The 90-Day Report My Doctor Would Charge For" — *Pillar: product magic*
+### 10. "The 90-Day Report My Doctor Would Charge For" — *Pillar: product magic*
 
 **Hook (0:00–0:02, on-screen text):** "Every 90 days my phone gives me a recap my doctor would charge a copay for."
 
@@ -244,9 +292,9 @@ or voiceover-only cold open. Runtime budget: ~2s hook, ~24s body, ~4s CTA.
 **Voiceover:**
 - "It's not a diagnosis — it's just my own data, organized, every quarter."
 - "Score trend, what actually changed, and a running list of questions worth asking at my next appointment."
-- "Entirely computed on the device, from records I already logged. I can share it as plain text if I want to bring it to an appointment."
+- "Entirely computed on the device, from records I already logged, free, no account. I can share it as plain text if I want to bring it to an appointment."
 
-**On-screen captions:** "computed on-device" / "your data, organized"
+**On-screen captions:** "computed on-device" / "free, no account"
 
 **CTA:** "Waitlist link in bio."
 
@@ -254,19 +302,19 @@ or voiceover-only cold open. Runtime budget: ~2s hook, ~24s body, ~4s CTA.
 
 ---
 
-### 10. "The Dashboard Row I Check First" — *Pillar: product magic*
+### 11. "The Dashboard Row I Check First" — *Pillar: product magic*
 
 **Hook (0:00–0:02, on-screen text):** "This is the first thing I check every morning."
 
 **Shot list:**
 1. Screen recording: Dashboard opens directly (no login screen — reinforce cold open speed).
-2. Horizontal scroll through the biomarker carousel — each card: marker name, latest value, status pill, mini sparkline.
+2. Horizontal scroll through the biomarker carousel — each card: marker name, latest value, status pill, mini sparkline — next to the Tests Due card.
 3. Tap one card through to LabDetailView for the full chart.
 4. Back out, show the home-screen widget (small size) on a simulated home screen: score ring, headline, recent vitals, and the locked-state redacted view side by side.
 5. Tap the widget (screen recording of the deep link) → opens straight to the Health Review.
 
 **Voiceover:**
-- "One row, every marker I track, status at a glance — tap through for the full history any time."
+- "One row, every marker I track, status at a glance — and right next to it, what's due and what isn't."
 - "The widget mirrors it on my home screen, and it redacts the numbers automatically when my phone's locked."
 - "No refreshing, no server round-trip — it's all already on the device."
 
@@ -278,7 +326,7 @@ or voiceover-only cold open. Runtime budget: ~2s hook, ~24s body, ~4s CTA.
 
 ---
 
-**Pillar tally:** lab literacy × 4 (scripts 1–4), privacy × 3 (scripts 5–7), product magic × 3 (scripts 8–10).
+**Pillar tally:** money & timing × 2 (scripts 1–2), privacy × 3 (scripts 3–5), lab literacy × 3 (scripts 6–8), product magic × 3 (scripts 9–11).
 
 ---
 
@@ -295,23 +343,23 @@ want it in a comment, not the post).
 
 **Suggested flair:** Discussion / Vent-Support (per sub norms — check current flair list before posting)
 
-**Title:** I got tired of re-Googling my TSH every three months, so I built a thing to stop myself. Feedback welcome (I'm the dev, full disclosure).
+**Title:** I got tired of re-Googling my TSH every three months, so I built a thing to stop myself (and stop getting re-tested early). Feedback welcome (I'm the dev, full disclosure).
 
 **Body:**
 
 > Standard disclosure up front: I'm a solo developer and I built the app I'm about to describe. I'm not here to sell anything — genuinely looking for feedback from people who live this, and happy to just talk labs if that's more useful to you than my app is.
 >
-> Diagnosed hypothyroid a few years back, and my pattern was: get labs, get a portal notification, open a PDF with 30 rows on it, remember that TSH is the one that matters, forget what my number was three draws ago, re-Google "TSH 4.8 meaning," get a mix of WebMD and forum panic, and show up to my endo appointment having learned nothing except how to worry.
+> Diagnosed hypothyroid a few years back, and my pattern was: get labs, get a portal notification, open a PDF with 30 rows on it, remember that TSH is the one that matters, forget what my number was three draws ago, re-Google "TSH 4.8 meaning," get a mix of WebMD and forum panic, and show up to my endo appointment having learned nothing except how to worry. The other half of the pattern: I genuinely couldn't remember when my last panel was, so I either let it slide past when it should've been redrawn, or a new provider ordered it again "just to be safe" when I'd had it eight weeks earlier.
 >
-> What actually helped was a plain spreadsheet where I logged TSH, free T4, and free T3 every draw so I could see the *direction*, not just the number. But keeping that spreadsheet current was its own chore, and it didn't explain anything — I still had to look up what a rising trend with normal T4 usually means.
+> What actually helped was a plain spreadsheet where I logged TSH, free T4, and free T3 every draw so I could see the *direction*, not just the number. But keeping that spreadsheet current was its own chore, it didn't explain anything, and it definitely didn't tell me when I was due again.
 >
-> So I built an iOS app that does the parts I was doing by hand: photograph the lab report page, it reads the values off the page (on-device, nothing uploaded), matches them against a reference range, and shows history as a chart instead of a list. It's not diagnostic — it doesn't tell me anything my doctor wouldn't — it just means I walk into the appointment already knowing my TSH trend over the last year instead of re-deriving it from memory.
+> So I built an iOS app that does the parts I was doing by hand: photograph the lab report page, it reads the values off the page (on-device, nothing uploaded), matches them against a reference range, shows history as a chart instead of a list, and — the part I actually use most — tracks when each test was last drawn and shows when it's commonly due again, so I stop either forgetting or over-testing. It's not diagnostic — it doesn't tell me anything my doctor wouldn't, and it's always explicit that a doctor might advise a different interval than the commonly recommended one — it just means I walk into the appointment already knowing my TSH trend and my retest timing instead of re-deriving both from memory.
 >
 > Two questions for anyone still reading:
-> 1. What do you currently do to track your panels between draws? Spreadsheet, app, nothing, the portal's own graph?
+> 1. What do you currently do to track your panels between draws? Spreadsheet, app, nothing, the portal's own graph? And do you ever actually know when you're "due" versus just waiting for the office to tell you?
 > 2. If you've used a symptom tracker for hypothyroid stuff (fatigue, weight, temperature sensitivity) alongside your labs, did tracking both together ever actually change a conversation with your doctor, or did it just generate more data to sit on?
 >
-> Not trying to get anyone to download anything — mostly want to know if "trend over time, in plain language, private" is actually the gap, or if I'm solving a problem that was only ever mine. If it's useful to see what I built, I'll drop a link in the comments rather than clutter the post.
+> Not trying to get anyone to download anything — mostly want to know if "know your trend, know your timing, private" is actually the gap, or if I'm solving a problem that was only ever mine. If it's useful to see what I built, I'll drop a link in the comments rather than clutter the post.
 
 ---
 
@@ -325,40 +373,44 @@ want it in a comment, not the post).
 
 > Disclosure: I'm the developer. Posting because this sub is exactly the audience that will tell me if I got the privacy model wrong, and I'd rather hear it now than after launch.
 >
-> The app (Gemocode, iOS 17+) tracks medical records — labs, vitals, meds, symptoms, appointments. Everything is stored on-device via SwiftData; there's no account, no sign-in, and no backend for the core app. A local numeric passcode (salted SHA-256, iOS Keychain, device-only, never synced) plus optional Face ID/Touch ID gates the app itself — that credential never leaves the device either. Backups are AES-GCM-encrypted JSON files the user exports and controls; nothing auto-uploads. Lab-value OCR runs on-device via Apple's Vision framework — a photographed lab report never leaves the phone to be read.
+> The app (Gemocode, iOS 17+) tracks medical records — labs, vitals, meds, symptoms, appointments — and computes when each type of blood test is commonly due again based on your own logged history. Everything is stored on-device via SwiftData; there's no account, no sign-in, and no backend for the core app. A local numeric passcode (salted SHA-256, iOS Keychain, device-only, never synced) plus optional Face ID/Touch ID gates the app itself — that credential never leaves the device either. Backups are AES-GCM-encrypted JSON files the user exports and controls; nothing auto-uploads. The retest-schedule computation and the health score are both plain rule-based logic running entirely on-device — no network call involved.
 >
-> The one deliberate exception is an optional AI explanation layer, and I want to describe exactly what it does rather than assert "it's private, trust me":
+> The one deliberate exception is an optional AI layer (report scanning/OCR, the AI-narrated report, chat about your results, and AI-assisted natural-language entry), and I want to describe exactly what it does rather than assert "it's private, trust me":
 >
-> - It's opt-in. With no relay/API key configured, the app makes zero network calls, full stop.
+> - It's opt-in and it's the paid tier. With no relay/API key configured, or if you've used your one free lifetime scan-and-report trial and haven't subscribed, the app makes zero network calls for anything beyond that trial.
 > - When enabled, the client sends only pre-computed, structured data to a Cloudflare Workers relay I run: either the rule-based review's summary (score + findings + lab values, no free text from documents), a compact chat context (for follow-up questions about that same review), or a single user-typed sentence (for the natural-language quick-entry feature). It never sends attachments, photographed documents, or the on-device database.
 > - The relay holds the Anthropic API key as a Cloudflare secret (`wrangler secret put`) — it's never in the repo, never in the client binary, never in a log. The relay's own logging is metadata-only (hashed device id, token counts, latency, status) by construction, not by "we chose not to log the field this time."
 > - Every AI response is verified against the input before display (the app checks that cited numbers and finding IDs actually appear in what was sent) and every refusal (`stop_reason == "refusal"` from the Anthropic API) is surfaced rather than silently swallowed.
 >
-> Business model, since it's relevant to the incentive structure: every tracking feature is free forever, no account required. AI is the paid tier ($19.99/mo) with one free lifetime report as a trial — so the AI relay is metered and the free local feature set was never designed as a funnel to a data-selling model, because there's no data collection to sell in the first place.
+> Business model, since it's relevant to the incentive structure: tracking, the health score, trends, and the retest-schedule card are free forever, no account required. Lab scanning and every other AI feature are the paid tier ($19.99/mo), with one free lifetime scan-and-report as a trial — so the AI relay is metered and the free local feature set was never designed as a funnel to a data-selling model, because there's no data collection to sell in the first place.
 >
-> Where I'd genuinely like scrutiny: is "sends only a computed summary, never raw documents" a distinction that matters to this audience, or does any outbound call to a third-party model erase the local-first story for you regardless of payload shape? And is there anything about the on-device-only OCR + Keychain-only credential design that you'd still flag as a gap? Happy to link the repo/README in a comment if that's useful context rather than promotion.
+> Where I'd genuinely like scrutiny: is "sends only a computed summary, never raw documents" a distinction that matters to this audience, or does any outbound call to a third-party model erase the local-first story for you regardless of payload shape? And is there anything about the on-device-only retest math + Keychain-only credential design that you'd still flag as a gap? Happy to link the repo/README in a comment if that's useful context rather than promotion.
 
 ---
 
-### B3. r/QuantifiedSelf — the quarterly review ritual + biomarker trends
+### B3. r/QuantifiedSelf — the retest cadence + quarterly review ritual
 
 **Suggested flair:** Self-Experimentation / Tools (check current flair list)
 
-**Title:** A 90-day recap of my own labs and vitals, computed on-device — sharing the ritual, not just the app (disclosure: I built it)
+**Title:** I made my phone tell me when I'm actually due for my next blood panel, instead of guessing — sharing the logic, not just the app (disclosure: I built it)
 
 **Body:**
 
-> Disclosure: I'm the developer of the app in the screenshots below. Posting because this community cares about the *ritual* more than the tool, and I'd like to know if the ritual holds up.
+> Disclosure: I'm the developer of the app in the screenshots below. Posting because this community cares about the *system* more than the tool, and I'd like to know if the logic holds up.
 >
-> Background: I track blood pressure, resting heart rate, weight, glucose, and sleep daily-ish, plus lab panels a few times a year, in an app I built for myself and then turned into a real product. The part I actually want feedback on isn't the daily logging — it's what I ended up building on top of it: every 90 days, the app assembles a recap entirely from what's already been logged — score trajectory over the quarter, which vitals and labs moved and in which direction (deliberately conservative: it only labels a metric "improved" or "worsened" when the direction is medically unambiguous, everything else is just "changed"), streak/goal wins, and a running list of questions worth bringing to a doctor. All computed on-device, exportable as plain text.
+> Background: I track blood pressure, resting heart rate, weight, glucose, and sleep daily-ish, plus lab panels a few times a year, in an app I built for myself and then turned into a real product. Two things I ended up building on top of the daily logging, and I want feedback on both:
 >
-> What I like about forcing a quarterly cadence instead of a daily dashboard: daily vitals are noisy enough that a single day tells you almost nothing, but a 90-day window is long enough to separate a real trend from a bad night's sleep or a fluke reading. It's the same instinct as looking at a moving average instead of the raw series.
+> First, a "Tests due" card: for each test type I've logged, it remembers the last draw date and shows when it's commonly due again, using widely published recommended intervals (e.g., a lipid panel roughly every 4–6 months for someone on statins, a thyroid panel roughly every 6–12 months once stable) — always labeled "commonly recommended, your doctor may advise differently," never a hard rule. It exists because I kept either forgetting a panel for a year or getting a new provider to re-order one I'd had six weeks earlier.
 >
-> What I'm unsure about: is 90 days the right window for most people's QS practice, or is that specific to lab-panel cadence (insurance-covered panels tend to land every 3–6 months, which is really why I picked it)? For people tracking things that move faster (HRV, mood, sleep architecture), does a quarterly recap feel too slow to be useful, and would you want a monthly or weekly layer underneath it?
+> Second, a 90-day recap: every quarter, the app assembles what changed from what's already logged — score trajectory, which vitals and labs moved and in which direction (deliberately conservative: it only labels a metric "improved" or "worsened" when the direction is medically unambiguous, everything else is just "changed"), streak/goal wins, and a running list of doctor questions. All computed on-device, exportable as plain text.
 >
-> Also curious whether anyone here has a self-built version of this — a script, a Notion template, an Exist.io view — that does something similar, and what cadence you landed on through trial and error rather than picking 90 days because a doctor's office happens to work that way.
+> What I like about the two systems together: daily vitals are noisy enough that a single day tells you almost nothing, a 90-day window is long enough to separate a real trend from a bad night's sleep, and the retest-cadence layer underneath both means I'm not accidentally re-testing something I already know the answer to just because I lost track of when I last checked.
 >
-> Happy to share the app itself in a comment for anyone who wants to see the actual recap screen, but the thing I actually want to talk about is the cadence question.
+> What I'm unsure about: are the "commonly recommended" intervals I'm using close enough to what people actually see from their own doctors, or does this vary enough by provider/insurer that a single default interval per test type is the wrong model? And for people tracking things that move faster (HRV, mood, sleep architecture), does a quarterly recap feel too slow, and would you want a monthly or weekly layer underneath the retest-timing layer too?
+>
+> Also curious whether anyone here has a self-built version of this — a script, a Notion template, an Exist.io view — that tracks "when am I due again" specifically, separate from the general trend-tracking most QS tools already do.
+>
+> Happy to share the app itself in a comment for anyone who wants to see the actual Tests Due card, but the thing I actually want to talk about is whether the interval logic is right.
 
 ---
 
@@ -366,7 +418,7 @@ want it in a comment, not the post).
 
 **Name:** Gemocode
 
-**Tagline (54 chars):** Scan your labs. See trends. Nothing leaves your phone.
+**Tagline (54 chars):** Know when you're due for your next blood test. Or not.
 
 **Description:**
 
@@ -374,25 +426,27 @@ want it in a comment, not the post).
 > lab results, vitals, medications, symptoms, and appointments — entirely
 > on-device. No account, no sign-up, no cloud storage.
 >
-> Photograph a lab report and on-device OCR (Apple's Vision framework) reads
-> the values and matches them against a built-in reference catalog, so a
-> page of 30 numbers becomes a chart with a status pill on each one. A
-> rule-based analysis engine (not a black box, not a diagnosis) turns your
-> reports, vitals, meds, symptoms, and appointments into a 0–100 health
-> score and plain-language findings — BP categories, BMI, lipid ratios,
-> trend direction, medication-interaction flags — every one of them carrying
-> an "ask your doctor" nudge, never a verdict.
+> The part people actually message me about: a "Tests due" card that
+> remembers when each type of blood test was last drawn and shows when
+> it's commonly due again, so you skip the duplicate panel and never miss
+> the overdue one — always labeled "commonly recommended, your doctor may
+> advise differently," never a hard rule. Walk into any appointment with
+> your full history already in your pocket, instead of a new provider
+> re-ordering something you already have.
 >
-> Every tracking feature — reports, OCR, the score, trends, backups — is
-> free forever. The one optional paid layer is an AI explanation feature:
-> Claude narrates your already-computed review in plain language, and you
-> get one report free for life before it's $19.99/mo. The AI only ever sees
-> a summary of your review, never your documents or your on-device
-> database, and it runs through a metered relay so you never need your own
-> API key.
+> Tracking, the health score, trends, the Tests Due card, and the
+> Quarterly Review are free forever, no account needed. The paid layer is
+> lab scanning and AI: photograph a report and on-device OCR (Apple's
+> Vision framework) reads the values and matches them against a built-in
+> reference catalog, Claude narrates your already-computed review in plain
+> language, you can chat about your results, and AI-assisted entry turns a
+> typed sentence into a structured record. You get one scan-and-report free
+> for life before it's $19.99/mo — a single out-of-pocket lab panel can
+> easily cost more than that first month, which is part of why the free
+> trial exists.
 >
-> Built solo, for the people who get a lab PDF twice a year and have no idea
-> what to do with it besides Google the scary parts.
+> Built solo, for the people who get a lab PDF twice a year and have no
+> idea when they're actually supposed to get the next one.
 
 **First comment from the maker:**
 
@@ -401,46 +455,47 @@ want it in a comment, not the post).
 >
 > I kept getting lab results back as PDFs — thirty-ish numbers, no context,
 > a doctor's appointment three weeks later with eight minutes to go over
-> them. I'd Google each flagged value individually and land somewhere
-> between WebMD and a forum thread, which is a bad way to learn about your
-> own body. What I actually wanted was: read the PDF for me, show me the
-> trend instead of just the latest draw, and explain what a range means
-> without either sugar-coating it or scaring me.
+> them — and separately, I kept either forgetting when I was due for the
+> next panel or having a new provider re-order one I'd had six weeks
+> earlier because nobody had the history. What I actually wanted was: read
+> the PDF for me, show me the trend instead of just the latest draw, and
+> tell me when I'm actually due again instead of guessing.
 >
 > The local-first part wasn't a marketing decision, it was the actual
 > requirement — this is blood work and medication data, and I didn't want
 > to be the reason it ended up somewhere I couldn't account for. So there's
-> no account. Everything lives in SwiftData on your device. The OCR runs
-> on-device. Backups are encrypted files you control. If you never touch
-> the AI feature, the app makes zero network calls, period.
+> no account. Everything lives in SwiftData on your device. The retest-due
+> math and the health score are both plain on-device logic — no network
+> call involved. Backups are encrypted files you control. If you never
+> touch the paid AI features, the app makes zero network calls, period.
 >
-> The one place I made an exception is the AI layer, because "explain this
-> in plain English" is genuinely a better experience with a language model
-> than with more rule-based text templates. But I didn't want to build a
+> The paid layer is the AI stuff: scanning a lab report, the AI-narrated
+> report, chat about your results, and AI-assisted entry. I didn't want a
 > health app that phones home by default, so it's opt-in, it only sends a
 > computed summary (never your documents), and it runs through a relay I
-> pay for — which is also why it isn't free: one report free for life so
-> you can see if it's worth it, then $19.99/mo. Every tracking feature you'd
-> actually use daily stays free forever regardless.
+> pay for — which is also why it isn't free: one scan-and-report free for
+> life so you can see if it's worth it, then $19.99/mo. Tracking, the
+> score, trends, and the Tests Due card stay free forever regardless.
 >
-> I'd love feedback on two things specifically: (1) does the "your first AI
-> report is free, then it's paid, but tracking never is" model feel fair,
-> and (2) if you've got old lab PDFs sitting in your email right now, does
-> the scan-and-decode moment actually work the way I think it does? Happy
-> to answer anything about the architecture, the OCR accuracy, or the
-> business model — genuinely here all day.
+> I'd love feedback on two things specifically: (1) does the "one free
+> scan-and-report, then paid, but tracking and timing never are" model feel
+> fair, and (2) does the "when are you actually due" card solve a real
+> problem for you, or is timing something your provider already handles
+> well enough that this is solving nothing? Happy to answer anything about
+> the architecture, the OCR accuracy, or the business model — genuinely
+> here all day.
 
 **Gallery image captions:**
 
-1. "Photograph a lab report — on-device OCR matches each value to a reference range and flags what's out of it."
+1. "The Tests Due card: what's overdue, what isn't — so you never pay for a duplicate or miss the real one."
 2. "No sign-up screen. The Dashboard is the first thing you see, and it works in airplane mode."
-3. "Every 90 days, a recap of what changed — computed on-device, shareable as plain text for your next appointment."
+3. "Photograph a lab report — on-device OCR matches each value to a reference range and flags what's out of it. (Premium, one scan free.)"
 
 ---
 
 ## D. Show HN draft
 
-**Title (79 chars):** Show HN: Gemocode – on-device lab OCR, AI relay that never exposes the API key
+**Title (79 chars):** Show HN: Gemocode – tracks when you're due for a blood test, all on-device
 
 **Body:**
 
@@ -449,6 +504,16 @@ want it in a comment, not the post).
 > own frameworks: SwiftUI, SwiftData for persistence, Swift Charts, Vision
 > for OCR, LocalAuthentication for the app lock. No third-party
 > dependencies, no SPM packages beyond what Apple ships.
+>
+> **The part I actually want feedback on:** a "Tests due" feature that
+> tracks, per test type, when it was last drawn and computes when it's
+> commonly due again, using published recommended intervals as defaults —
+> always surfaced as "commonly recommended, your doctor may advise
+> differently," never a hard schedule. It's plain deterministic logic
+> (same `now`-as-parameter pattern as the scoring engine below, no ML, no
+> network call) — the interesting part is less the code and more the
+> product bet: that "know when you're due, and know when you're not" is a
+> bigger unlock than another dashboard of numbers.
 >
 > **The local-first part:** everything lives in SwiftData on-device. There's
 > no account and no backend for the core app — the login system is a
@@ -465,36 +530,39 @@ want it in a comment, not the post).
 > at all — it takes a fixed `now` parameter instead of calling `Date()`
 > internally, specifically so it stays unit-testable and reproducible.
 >
-> **Where the architecture gets more interesting (to me, anyway):** the one
-> network-touching feature is an optional AI explanation layer, and I
-> wanted the API key custody story to be airtight, not just "trust me."
-> The Anthropic API key never ships in the client. It lives only as a
-> Cloudflare Workers secret (`wrangler secret put`), read only by the
-> deployed Worker at request time. The iOS app authenticates with a
-> device-UUID-for-JWT exchange, then calls a single relay endpoint
-> (`POST /v1/ai/generate`) with one of three request shapes: the
-> already-computed review summary (for the structured report), a compact
-> chat context (for follow-up questions about that same review), or a
-> single user-typed sentence (for a natural-language quick-entry feature).
-> It never sends attachments, photographed documents, or anything from the
-> on-device database — the relay's request validator explicitly rejects
-> unknown fields and base64-blob-shaped strings, so an accidental attachment
-> field fails the request rather than silently uploading. The relay's own
-> logging is metadata-only (hashed device id, token count, latency, model,
-> status) by construction — there's no code path that logs request or
-> response content.
+> **Where the architecture gets more interesting (to me, anyway):** the
+> network-touching features are an optional AI layer — lab scanning's OCR
+> confirmation flow doesn't need network, but the AI-narrated report, chat,
+> and AI-assisted entry do — and I wanted the API key custody story to be
+> airtight, not just "trust me." The Anthropic API key never ships in the
+> client. It lives only as a Cloudflare Workers secret (`wrangler secret
+> put`), read only by the deployed Worker at request time. The iOS app
+> authenticates with a device-UUID-for-JWT exchange, then calls a single
+> relay endpoint (`POST /v1/ai/generate`) with one of three request shapes:
+> the already-computed review summary (for the structured report), a
+> compact chat context (for follow-up questions about that same review), or
+> a single user-typed sentence (for the natural-language quick-entry
+> feature). It never sends attachments, photographed documents, or anything
+> from the on-device database — the relay's request validator explicitly
+> rejects unknown fields and base64-blob-shaped strings, so an accidental
+> attachment field fails the request rather than silently uploading. The
+> relay's own logging is metadata-only (hashed device id, token count,
+> latency, model, status) by construction — there's no code path that logs
+> request or response content.
 >
 > On the model side, every AI response is checked before it's shown: the
 > app verifies numbers and finding IDs the model cites actually appear in
 > what was sent, and checks `stop_reason == "refusal"` before treating any
 > output as usable.
 >
-> **Business model:** every tracking feature (OCR scanning, the score,
-> trends, backups, reminders) is free forever, no account needed. The
-> optional AI layer is $19.99/month, with exactly one free lifetime report
-> per device so people can judge it before paying. The relay is metered
-> (per-user and global daily token caps) precisely because I'm paying for
-> the underlying API usage myself and the free tier has to stay solvent.
+> **Business model:** tracking (vitals, meds, symptoms, goals, the health
+> score, trends, the Tests Due card, backups, reminders) is free forever,
+> no account needed. Lab scanning and every AI feature (the narrated
+> report, chat, AI-assisted entry) are $19.99/month, with exactly one free
+> lifetime scan-and-report per device so people can judge it before paying.
+> The relay is metered (per-user and global daily token caps) precisely
+> because I'm paying for the underlying API usage myself and the free tier
+> has to stay solvent.
 >
 > Repo isn't public yet (see below on why), but the architecture doc and
 > full README are what this post is drawn from, and I'm happy to paste any
@@ -513,8 +581,13 @@ want it in a comment, not the post).
 >   computed review summary, a compact chat context derived from that same
 >   review, or a single typed sentence for quick-entry — never the
 >   attached lab photos/PDFs, never the SwiftData store, never Medical ID
->   fields (name, DOB, blood type, allergies). If you never open the AI
->   features, the app makes no network calls at all.
+>   fields (name, DOB, blood type, allergies). If you never open the paid
+>   AI features, the app makes no network calls at all.
+> - **How were the "commonly recommended" retest intervals chosen?** From
+>   widely published general guidance per test type, used only as a
+>   default the app surfaces — it's explicitly not a substitute for a
+>   clinician's own recommendation, and the UI says so every time the
+>   interval is shown, not just in a settings footnote.
 > - **Why iOS only?** Solo developer, finite hours, and iOS gave me
 >   SwiftData, Vision OCR, and the Keychain as first-party building blocks
 >   with no third-party dependency risk. An Android or web version would
@@ -529,52 +602,52 @@ want it in a comment, not the post).
 >   response is labeled so it's never confused with the on-device engine's
 >   output.
 > - **What stops someone from just minting new device IDs to get infinite
->   free reports?** Nothing yet — that's a known, documented gap (the
+>   free scans?** Nothing yet — that's a known, documented gap (the
 >   relay's App Attest integration isn't wired up). It's on the pre-GA
 >   checklist before the relay takes real production traffic, not
 >   something I'm pretending is solved.
 >
-> Feedback on the relay design, the OCR/synonym-matching approach, or the
-> "summary only, never raw documents" AI boundary all genuinely welcome —
-> this is exactly the audience I built the architecture to survive
-> scrutiny from.
+> Feedback on the relay design, the retest-interval defaults, the
+> OCR/synonym-matching approach, or the "summary only, never raw documents"
+> AI boundary all genuinely welcome — this is exactly the audience I built
+> the architecture to survive scrutiny from.
 
 ---
 
 ## E. X launch thread (build-in-public voice)
 
 **Tweet 1/10**
-Shipping day. Gemocode is live — an iOS app that turns the lab PDFs you already get from insurance-covered blood work into trends and plain-English explanations. No account. Nothing leaves your phone unless you turn on AI yourself.
+Shipping day. Gemocode is live — an iOS app that tracks every blood test you've had and tells you when you're commonly due for the next one, so you skip the duplicate and never miss the overdue one. No account. Nothing leaves your phone unless you turn on AI yourself.
 🧵
 
 **Tweet 2/10**
-Backstory: I kept getting labs back as a 30-row PDF with zero context, then Googling each flagged value and landing somewhere between WebMD and a forum spiral. The doctor's follow-up was 3 weeks later and 8 minutes long. I wanted the boring part — reading the PDF — automated.
+Backstory: I kept either forgetting when I was due for a panel, or a new provider re-ordered one I'd had six weeks earlier because nobody had the history. Add the classic problem too — a 30-row PDF, zero context, an 8-minute appointment 3 weeks later. I wanted both fixed.
 
 **Tweet 3/10**
-[Screenshot placeholder: crumpled lab printout next to the in-app scan flow]
-So: photograph the report, on-device Vision OCR reads it, matches against a built-in catalog of 40+ tests, shows each value with a status pill. The photo never leaves the phone to do this.
+[Screenshot placeholder: Dashboard "Tests due" card, one row overdue in red, one row "not due for 11 weeks" in green]
+So: a Tests Due card, computed on-device from your own logged draws against commonly recommended intervals. Always labeled "your doctor may advise differently" — it's a nudge, not a prescription.
 
 **Tweet 4/10**
+[Screenshot placeholder: crumpled lab printout next to the in-app scan flow]
+Lab scanning: photograph the report, on-device Vision OCR reads it, matches against a built-in catalog of 40+ tests, shows each value with a status pill. The photo never leaves the phone to do this. It's a paid feature — your first scan is free for life.
+
+**Tweet 5/10**
 [Screenshot placeholder: LabDetailView history chart with reference-range band]
 Tap any value and you get its full history against the reference range, plus plain language on what high/low typically means. Educational, not diagnostic — every screen says so, because it's true, not because legal made me add it.
 
-**Tweet 5/10**
+**Tweet 6/10**
 [Screenshot placeholder: no-login cold open, Dashboard on first launch]
 There's no sign-up screen. No account exists to create. Data lives on-device in SwiftData; the app lock is a passcode hashed into the Keychain. It works in airplane mode because it was never talking to a server.
 
-**Tweet 6/10**
-[Screenshot placeholder: Quick Add typing "bp 128/82" with live preview]
-My favorite shipped feature: type one sentence — "bp 128/82," "aspirin 100mg twice daily" — and it becomes a structured record with a live preview before you confirm. Parsed on-device.
-
 **Tweet 7/10**
-The one AI feature is opt-in: Claude narrates your already-computed health review in plain language. It only ever sees the review summary — never your documents, never the database — routed through a Cloudflare relay I run so the API key never touches the app itself.
+The AI layer (report narration, chat, AI-assisted entry) is opt-in and paid: it only ever sees the review summary — never your documents, never the database — routed through a Cloudflare relay I run so the API key never touches the app itself.
 
 **Tweet 8/10**
 [Screenshot placeholder: AI report screen with the "Generated by Claude — informational only, not medical advice" footer visible]
-One AI report free for life so you can judge it yourself. After that it's $19.99/mo. Every tracking feature — OCR scanning, the score, trends, backups — stays free forever, no account, no catch.
+One scan-and-report free for life so you can judge it yourself. After that it's $19.99/mo. Tracking, the health score, trends, and the Tests Due card stay free forever, no account, no catch — a single out-of-pocket lab panel alone can cost more than a month of Premium.
 
 **Tweet 9/10**
 Numbers so far: pre-launch, zero revenue, solo build. Today's the actual test. Show HN and Product Hunt posts are up (links below), and I'll be replying to everything for the next 72 hours.
 
 **Tweet 10/10**
-The ask: if you've got old lab PDFs sitting in your email, try scanning one and tell me if the decoded values actually match what's on the page — that's the one thing I most want stress-tested by people who aren't me. iOS only for now. Link below.
+The ask: if you've got old lab PDFs sitting in your email, try scanning one and tell me if the decoded values actually match what's on the page — and tell me if the "commonly recommended" retest interval it shows matches what your own doctor's actually told you. iOS only for now. Link below.
