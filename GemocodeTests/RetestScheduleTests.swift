@@ -254,4 +254,50 @@ final class RetestScheduleTests: XCTestCase {
         XCTAssertEqual(dueOrSoon.count, 2)
         XCTAssertTrue(dueOrSoon.allSatisfy { $0.status != .upcoming })
     }
+
+    // MARK: - nextUpcoming convenience
+
+    func testNextUpcomingReturnsSoonestUpcomingItem() throws {
+        // triglycerides: last tested 11 months ago -> due in 1 month.
+        let soonerLast = try XCTUnwrap(Calendar.current.date(byAdding: .month, value: -11, to: fixedNow))
+        // vitaminD: last tested 8 months ago -> due in 4 months.
+        let laterLast = try XCTUnwrap(Calendar.current.date(byAdding: .month, value: -8, to: fixedNow))
+
+        let report = MedicalReport(title: "Panel", category: .labReport, date: fixedNow)
+        context.insert(report)
+        report.labResults.append(LabResult(catalogID: "triglycerides", value: 100, unit: "mg/dL", date: soonerLast))
+        report.labResults.append(LabResult(catalogID: "vitaminD", value: 30, unit: "ng/mL", date: laterLast))
+        try context.save()
+
+        let next = try XCTUnwrap(RetestSchedule.nextUpcoming(reports: [report], now: fixedNow))
+        XCTAssertEqual(next.id, "triglycerides")
+        XCTAssertEqual(next.status, .upcoming)
+    }
+
+    func testNextUpcomingIsNilWhenNoUpcomingItemsExist() {
+        XCTAssertNil(RetestSchedule.nextUpcoming(reports: [], now: fixedNow))
+    }
+
+    func testNextUpcomingIgnoresOverdueAndDueSoonItems() throws {
+        // Overdue by a wide margin — an earlier (more urgent) dueDate than
+        // any upcoming item, so a naive "soonest dueDate overall" pick would
+        // wrongly choose this one instead of filtering by status first.
+        let overdueLast = try XCTUnwrap(Calendar.current.date(byAdding: .month, value: -20, to: fixedNow))
+        // Due soon: due in 10 days.
+        let dueSoonDueDate = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 10, to: fixedNow))
+        let dueSoonLast = try XCTUnwrap(Calendar.current.date(byAdding: .month, value: -12, to: dueSoonDueDate))
+        // Upcoming: due in 3 months.
+        let upcomingLast = try XCTUnwrap(Calendar.current.date(byAdding: .month, value: -9, to: fixedNow))
+
+        let report = MedicalReport(title: "Panel", category: .labReport, date: fixedNow)
+        context.insert(report)
+        report.labResults.append(LabResult(catalogID: "ldlCholesterol", value: 120, unit: "mg/dL", date: overdueLast))
+        report.labResults.append(LabResult(catalogID: "hdlCholesterol", value: 55, unit: "mg/dL", date: dueSoonLast))
+        report.labResults.append(LabResult(catalogID: "triglycerides", value: 100, unit: "mg/dL", date: upcomingLast))
+        try context.save()
+
+        let next = try XCTUnwrap(RetestSchedule.nextUpcoming(reports: [report], now: fixedNow))
+        XCTAssertEqual(next.id, "triglycerides")
+        XCTAssertEqual(next.status, .upcoming)
+    }
 }

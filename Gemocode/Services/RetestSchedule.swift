@@ -185,6 +185,16 @@ enum RetestSchedule {
         items(reports: reports, now: now, calendar: calendar).filter { $0.status != .upcoming }
     }
 
+    /// Convenience over `items(reports:now:)`: the single `.upcoming` item
+    /// with the soonest `dueDate` — what a "you're caught up, next up is…"
+    /// dashboard state should surface. `nil` when there's no upcoming item
+    /// (no tracked tests at all, or everything is overdue/due soon).
+    static func nextUpcoming(reports: [MedicalReport], now: Date, calendar: Calendar = .current) -> RetestItem? {
+        items(reports: reports, now: now, calendar: calendar)
+            .filter { $0.status == .upcoming }
+            .min { $0.dueDate < $1.dueDate }
+    }
+
     // MARK: - Private helpers
 
     /// Classifies a due date against `now` using whole calendar days (via

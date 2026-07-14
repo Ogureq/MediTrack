@@ -30,7 +30,23 @@ struct DashboardView: View {
     /// `RetestSchedule.dueOrSoon`. Cached the same way as `earliestDataDate`
     /// below — it flattens every report's lab results, which is wasted work
     /// to redo on every render — and rebuilt via `.task(id: retestSignature)`.
+    ///
+    /// Together with `nextUpcomingRetestItem` and `hasAnyLabResults`
+    /// (rebuilt in the same task), this drives `retestCard`'s three states:
+    /// due/due-soon items, "caught up" with a next test to name, or a
+    /// scan-first prompt when there's no lab data yet.
     @State private var retestItems: [RetestItem] = []
+
+    /// The soonest `.upcoming` retest item, per `RetestSchedule.nextUpcoming`
+    /// — named in the "You're caught up" card when `retestItems` is empty.
+    @State private var nextUpcomingRetestItem: RetestItem?
+
+    /// Whether any saved report has at least one lab result, regardless of
+    /// whether it's catalog-tracked. Distinguishes "no lab data yet" (the
+    /// scan-first hero card) from "lab data exists but nothing is due" or
+    /// "lab data exists but none of it is catalog-tracked" (the latter shows
+    /// no retest card at all — there's nothing true to say yet).
+    @State private var hasAnyLabResults = false
 
     private var review: HealthReview {
         AnalysisEngine.generateReview(
@@ -168,10 +184,10 @@ struct DashboardView: View {
                     quickAddButton
                     if review.hasData {
                         scoreCard(review: review)
+                        retestCard
                         remindersCard
                         quarterlyReviewCard
                         scoreHistoryCard
-                        retestCard
                         BiomarkerCarouselSection()
                         alertsSection(review: review)
                         appointmentCard
@@ -213,6 +229,8 @@ struct DashboardView: View {
         }
         .task(id: retestSignature) {
             retestItems = RetestSchedule.dueOrSoon(reports: reports, now: .now)
+            nextUpcomingRetestItem = RetestSchedule.nextUpcoming(reports: reports, now: .now)
+            hasAnyLabResults = reports.contains { !$0.labResults.isEmpty }
         }
     }
 
@@ -454,38 +472,149 @@ struct DashboardView: View {
         }
     }
 
-    /// "Tests Due" card: lab series overdue or due soon for a re-test per
-    /// `RetestSchedule`, only shown when `retestItems` is non-empty. Capped
-    /// at 4 rows with an "and N more" caption for the rest, and always
-    /// paired with `RetestSchedule.disclaimer` — these are commonly
-    /// recommended cadences, not a personalized or clinical schedule.
+    /// The app's core story — "know when you're due, never lose a result,
+    /// skip duplicate tests" — rendered as one of three mutually exclusive
+    /// states, in priority order:
+    ///
+    /// 1. `retestItems` non-empty → the "Tests Due" card (existing rows/
+    ///    pills/cap/disclaimer), now with a "See All" link into the full
+    ///    `RetestScheduleView`.
+    /// 2. Otherwise, `nextUpcomingRetestItem` set → a compact "You're caught
+    ///    up" card naming the soonest upcoming test.
+    /// 3. Otherwise, `hasAnyLabResults` false → a scan-first hero card.
+    ///
+    /// If none apply (lab results exist but none are catalog-tracked, or
+    /// none of the tracked ones have a known interval), nothing renders —
+    /// there's nothing true to say yet.
     @ViewBuilder
     private var retestCard: some View {
         if !retestItems.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
+            dueOrSoonRetestCard
+        } else if let next = nextUpcomingRetestItem {
+            caughtUpRetestCard(next: next)
+        } else if !hasAnyLabResults {
+            scanFirstHeroCard
+        }
+    }
+
+    /// State 1: lab series overdue or due soon for a re-test per
+    /// `RetestSchedule`. Capped at 4 rows with an "and N more" caption for
+    /// the rest, and always paired with `RetestSchedule.disclaimer` — these
+    /// are commonly recommended cadences, not a personalized or clinical
+    /// schedule.
+    private var dueOrSoonRetestCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
                 Text("Tests Due")
                     .font(.headline)
-                VStack(spacing: 10) {
-                    ForEach(Array(retestItems.prefix(4).enumerated()), id: \.element.id) { index, item in
-                        if index > 0 {
-                            Divider()
-                        }
-                        RetestRow(item: item)
-                    }
-                    if retestItems.count > 4 {
-                        Text("and \(retestItems.count - 4) more")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                Spacer()
+                NavigationLink {
+                    RetestScheduleView()
+                } label: {
+                    Text("See All")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.accentColor)
                 }
-                .padding(12)
-                .glassCard(cornerRadius: 16)
-                Text(RetestSchedule.disclaimer)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                .buttonStyle(.plain)
+                .accessibilityLabel("See all tests due")
             }
+            VStack(spacing: 10) {
+                ForEach(Array(retestItems.prefix(4).enumerated()), id: \.element.id) { index, item in
+                    if index > 0 {
+                        Divider()
+                    }
+                    RetestRow(item: item)
+                }
+                if retestItems.count > 4 {
+                    Text("and \(retestItems.count - 4) more")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(12)
+            .glassCard(cornerRadius: 16)
+            Text(RetestSchedule.disclaimer)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
+    }
+
+    /// State 2: nothing due right now, but at least one catalog-tracked test
+    /// has a known upcoming due date — names the soonest one so the "skip
+    /// duplicate tests" story stays visible even when there's nothing urgent.
+    private func caughtUpRetestCard(next: RetestItem) -> some View {
+        NavigationLink {
+            RetestScheduleView()
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.green)
+                    .frame(width: 40, height: 40)
+                    .background(.ultraThinMaterial, in: Circle())
+                    .overlay(Circle().strokeBorder(Color.green.opacity(0.4), lineWidth: 1))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("You're caught up")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Next: \(next.displayName) \(relativeDueText(next.dueDate))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+            .padding(12)
+            .glassCard(cornerRadius: 16)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("You're caught up. Next: \(next.displayName) \(relativeDueText(next.dueDate))")
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// State 3: no lab results saved yet — leads straight into the same
+    /// report-scanning sheet the toolbar's "Add Report" action and the
+    /// dashboard's own empty state use (`AddReportView()` routes to
+    /// `ScanReportView` when there's no report to edit).
+    private var scanFirstHeroCard: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "doc.text.viewfinder")
+                .font(.system(size: 32, weight: .semibold))
+                .foregroundStyle(Glass.accentGradient)
+                .accessibilityHidden(true)
+            VStack(spacing: 4) {
+                Text("Scan your first lab report")
+                    .font(.headline)
+                Text("Gemocode remembers every value and tells you when each test is due again — so you never repeat a test you didn't need.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            Button {
+                showingAddReport = true
+            } label: {
+                Label("Scan a Report", systemImage: "sparkles")
+            }
+            .buttonStyle(GlassProminentButtonStyle())
+            .accessibilityHint("Opens the report scanner.")
+        }
+        .frame(maxWidth: .infinity)
+        .padding(20)
+        .glassCard()
+    }
+
+    /// "in 4 months"-style relative phrasing for the caught-up card's next
+    /// due date. Presentation-only — like `greeting`, reads the wall clock
+    /// directly rather than taking `now` as a parameter, since it's UI text,
+    /// not analysis.
+    private func relativeDueText(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return formatter.localizedString(for: date, relativeTo: .now)
     }
 
     @ViewBuilder
