@@ -96,21 +96,36 @@ struct AppointmentRow: View {
     let appointment: Appointment
     let isUpcoming: Bool
 
+    /// Rotating date-chip tints — cycles deterministically per appointment so
+    /// the list reads as a set of distinct cards. The color carries no
+    /// semantic meaning (unlike vitals, where tint encodes reading type).
+    private static let tintPalette: [Color] = [
+        Color(red: 0x5E / 255, green: 0x5C / 255, blue: 0xE6 / 255), // indigo
+        Color(red: 0x40 / 255, green: 0xC8 / 255, blue: 0xE0 / 255), // teal
+        Color(red: 0x0A / 255, green: 0x84 / 255, blue: 0xFF / 255), // blue
+        Color(red: 0xBF / 255, green: 0x5A / 255, blue: 0xF2 / 255), // purple
+    ]
+
+    private var tint: Color {
+        Self.tintPalette[stableIndex(appointment.reminderID, count: Self.tintPalette.count)]
+    }
+
     var body: some View {
-        HStack(spacing: 12) {
-            VStack(spacing: 0) {
-                Text(appointment.date.formatted(.dateTime.month(.abbreviated)))
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
+        HStack(spacing: 13) {
+            VStack(spacing: 2) {
                 Text(appointment.date.formatted(.dateTime.day()))
-                    .font(.title3.bold())
-                    .foregroundStyle(isUpcoming ? Color.accentColor : .secondary)
+                    .font(.title3.weight(.heavy))
+                    .foregroundStyle(tint)
+                Text(appointment.date.formatted(.dateTime.month(.abbreviated)))
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(tint)
+                    .textCase(.uppercase)
             }
-            .frame(width: 44, height: 44)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .frame(width: 48, height: 52)
+            .background(tint.opacity(0.16), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Glass.bevelStroke, lineWidth: 1)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(tint.opacity(0.32), lineWidth: 1)
             )
             .accessibilityHidden(true)
 
@@ -125,19 +140,40 @@ struct AppointmentRow: View {
                             .accessibilityLabel("Reminder on")
                     }
                 }
-                Text(appointment.date.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                if !appointment.doctor.isEmpty || !appointment.location.isEmpty {
-                    Text([appointment.doctor, appointment.location].filter { !$0.isEmpty }.joined(separator: " · "))
+                if !appointment.doctor.isEmpty {
+                    Text(appointment.doctor)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if !appointment.location.isEmpty {
+                    Text(appointment.location)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
             }
+
+            Spacer(minLength: 8)
+
+            Text(appointment.date.formatted(date: .omitted, time: .shortened))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)
+        .opacity(isUpcoming ? 1 : 0.55)
         .accessibilityElement(children: .combine)
     }
+}
+
+/// Deterministic (non-randomized) index into a fixed-size palette. Swift's
+/// `String.hashValue` uses a per-process random seed, so it would make the
+/// assigned tint drift between app launches for the same appointment — this
+/// stays stable for the life of the record.
+private func stableIndex(_ text: String, count: Int) -> Int {
+    var hash = 5381
+    for scalar in text.unicodeScalars {
+        hash = ((hash << 5) &+ hash) &+ Int(scalar.value)
+    }
+    return abs(hash) % count
 }
 
 struct AddAppointmentSheet: View {

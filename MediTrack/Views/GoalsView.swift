@@ -29,7 +29,7 @@ struct GoalsView: View {
                     if !activeGoals.isEmpty {
                         Section("Active") {
                             ForEach(activeGoals) { goal in
-                                GoalRow(goal: goal, latest: latestValue(for: goal.type))
+                                GoalProgressRow(goal: goal, latest: latestValue(for: goal.type))
                                     .contextMenu {
                                         Button {
                                             goal.isActive = false
@@ -48,7 +48,7 @@ struct GoalsView: View {
                     if !completedGoals.isEmpty {
                         Section("Completed") {
                             ForEach(completedGoals) { goal in
-                                GoalRow(goal: goal, latest: latestValue(for: goal.type))
+                                GoalProgressRow(goal: goal, latest: latestValue(for: goal.type))
                             }
                             .onDelete { offsets in
                                 delete(offsets, from: completedGoals)
@@ -132,6 +132,110 @@ struct GoalRow: View {
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
     }
+}
+
+/// Full-card variant of a goal row used only by the dedicated Goals screen's
+/// list. `GoalRow` above stays byte-identical because `DashboardView` embeds
+/// it directly inside its own compact "Goals" summary card.
+private struct GoalProgressRow: View {
+    let goal: HealthGoal
+    let latest: Double?
+
+    /// Rotating two-color gradient pairs for the progress bar — cycles
+    /// deterministically per goal and carries no semantic meaning.
+    private static let gradientPairs: [(Color, Color)] = [
+        (Color(red: 0x40 / 255, green: 0xC8 / 255, blue: 0xE0 / 255), Color(red: 0x7E / 255, green: 0xE8 / 255, blue: 0xB0 / 255)), // teal → mint
+        (Color(red: 0xA8 / 255, green: 0x96 / 255, blue: 0xFF / 255), Color(red: 0x78 / 255, green: 0xBE / 255, blue: 0xFF / 255)), // purple → blue
+        (Color(red: 0xFF / 255, green: 0xB2 / 255, blue: 0x66 / 255), Color(red: 0xFF / 255, green: 0xD6 / 255, blue: 0x66 / 255)), // orange → yellow
+    ]
+
+    private var progress: Double? { goal.progress(latest: latest) }
+    private var achieved: Bool { goal.isAchieved(latest: latest) }
+
+    /// Stable per-goal gradient pair — keyed on fields that don't change
+    /// after creation, so a goal keeps the same colors across app launches.
+    private var pair: (Color, Color) {
+        let key = "\(goal.typeRaw)|\(goal.createdAt.timeIntervalSince1970)"
+        return Self.gradientPairs[stableIndex(key, count: Self.gradientPairs.count)]
+    }
+
+    private var barColors: [Color] { achieved ? [.green, .mint] : [pair.0, pair.1] }
+    private var glowColor: Color { achieved ? Color.green.opacity(0.4) : pair.0.opacity(0.4) }
+
+    private var progressLine: String {
+        let unit = Units.label(for: goal.type)
+        switch (goal.startValue, latest) {
+        case let (start?, latest?):
+            return "\(Units.display(start, for: goal.type).compactFormatted) → \(Units.display(latest, for: goal.type).compactFormatted) \(unit)"
+        case let (nil, latest?):
+            return "Currently \(Units.display(latest, for: goal.type).compactFormatted) \(unit)"
+        case let (start?, nil):
+            return "Started at \(Units.display(start, for: goal.type).compactFormatted) \(unit)"
+        case (nil, nil):
+            return "No readings yet"
+        }
+    }
+
+    private var dueText: String {
+        if let targetDate = goal.targetDate {
+            return "Target: \(targetDate.formatted(.dateTime.month(.abbreviated).year()))"
+        }
+        return "Ongoing"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(goal.type.displayName, systemImage: goal.type.systemImage)
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                if achieved {
+                    StatusPill(text: "Achieved", color: .green)
+                } else if let progress {
+                    Text("\(Int((progress * 100).rounded()))%")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(pair.0)
+                }
+            }
+
+            if let progress {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.primary.opacity(0.08))
+                        Capsule()
+                            .fill(LinearGradient(colors: barColors, startPoint: .leading, endPoint: .trailing))
+                            .frame(width: geo.size.width * progress)
+                            .shadow(color: glowColor, radius: 6, x: 0, y: 0)
+                    }
+                }
+                .frame(height: 8)
+                .accessibilityHidden(true)
+            }
+
+            HStack {
+                Text(progressLine)
+                Spacer(minLength: 8)
+                Text(dueText)
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Deterministic (non-randomized) index into a fixed-size palette. Swift's
+/// `String.hashValue` uses a per-process random seed, so it would make the
+/// assigned gradient drift between app launches for the same goal — this
+/// stays stable for the life of the record.
+private func stableIndex(_ text: String, count: Int) -> Int {
+    var hash = 5381
+    for scalar in text.unicodeScalars {
+        hash = ((hash << 5) &+ hash) &+ Int(scalar.value)
+    }
+    return abs(hash) % count
 }
 
 struct AddGoalSheet: View {
