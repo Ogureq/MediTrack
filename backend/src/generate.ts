@@ -5,9 +5,9 @@
 // sends `{"kind", "input"}` and gets back `{"text", "refused"}`.
 //
 // Prompts are ported from the client's current BYO-key services:
-//   - "report" -> MediTrack/Services/AISummaryService.swift (src/relay.ts)
-//   - "chat"   -> MediTrack/Services/AIChatService.swift (this file)
-//   - "extract"-> MediTrack/Services/QuickAddAIService.swift (this file)
+//   - "report" -> Gemocode/Services/AISummaryService.swift (src/relay.ts)
+//   - "chat"   -> Gemocode/Services/AIChatService.swift (this file)
+//   - "extract"-> Gemocode/Services/QuickAddAIService.swift (this file)
 // adapted only where the server-relay shape requires it (plain prose instead
 // of a nested JSON envelope for "report"; a date-only `today` instead of a
 // full ISO 8601 timestamp for "extract" — see each builder below).
@@ -116,13 +116,13 @@ export function validateChatInput(input: unknown): ValidationResult<ChatInput> {
 
 /**
  * Faithful port of `AIChatService.systemPrompt(context:)`
- * (MediTrack/Services/AIChatService.swift) — same persona, same six hard
+ * (Gemocode/Services/AIChatService.swift) — same persona, same six hard
  * rules, same "Context:" block. Unchanged in meaning; only the language
  * ("`the context block below`") stays literal since it still refers to the
  * embedded `Context:` section that follows.
  */
 export function buildChatSystemPrompt(context: string): string {
-  return `You are an educational health companion inside MediTrack, a personal health-tracking \
+  return `You are an educational health companion inside Gemocode, a personal health-tracking \
 app. The user is asking about the health review summarized in the context block below. \
 You did not compute any of this data and must not recompute, re-derive, or contradict it.
 
@@ -184,7 +184,7 @@ export function validateExtractInput(input: unknown): ValidationResult<ExtractIn
 
 /**
  * Ported from `QuickAddAIService.systemPrompt(now:)`
- * (MediTrack/Services/QuickAddAIService.swift). Adapted: the Swift version
+ * (Gemocode/Services/QuickAddAIService.swift). Adapted: the Swift version
  * embeds a full ISO 8601 UTC timestamp so the on-device call can resolve
  * relative dates ("tomorrow") the same way `QuickAddParser` does; the fixed
  * wire contract only sends a date-only `today` (`YYYY-MM-DD`), so the prompt
@@ -195,7 +195,7 @@ export function validateExtractInput(input: unknown): ValidationResult<ExtractIn
  */
 export function buildExtractSystemPrompt(today: string): string {
   return `You convert a single free-text health-tracking line into ONE structured JSON \
-object for MediTrack, a personal health-tracking app. This is educational data \
+object for Gemocode, a personal health-tracking app. This is educational data \
 entry only, not medical advice — do not add commentary, diagnoses, or \
 recommendations. Today's date (YYYY-MM-DD) is ${today} — use it to \
 resolve relative dates such as "tomorrow" or "next friday". Never invent a \

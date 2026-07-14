@@ -1,7 +1,7 @@
-# meditrack-relay
+# gemocode-relay
 
-The AI relay for MediTrack (Cloudflare Workers). It fronts the **owner's**
-Anthropic API key so premium subscribers can use MediTrack's AI features
+The AI relay for Gemocode (Cloudflare Workers). It fronts the **owner's**
+Anthropic API key so premium subscribers can use Gemocode's AI features
 without bringing their own key: the iOS app sends already-computed,
 structured data (the rule-based review, a compact chat context, or a single
 user-typed Quick Add line — never attachments, never raw documents, never
@@ -10,7 +10,7 @@ Anthropic Messages API server-side and returns the answer as a single JSON
 response. It persists nothing but a metadata-only daily token ledger and a
 per-device "free report used" flag.
 
-**Business model:** every local MediTrack feature is free; AI is premium
+**Business model:** every local Gemocode feature is free; AI is premium
 (**$19.99/month**, which is what funds the owner-paid Anthropic usage this
 relay performs) — with exactly **one free lifetime AI report** per device as
 a trial. Enforcement ships behind the `ENFORCE_PREMIUM` flag (default
@@ -219,7 +219,7 @@ There is no Cloudflare account tied to this repo. To actually ship it:
    eventually be an automated post-deploy CI step, not a manual check).
 
 Then point the iOS client at the deployed Worker (the app's relay base URL
-setting — see `MediTrack/Services/AITransport.swift`).
+setting — see `Gemocode/Services/AITransport.swift`).
 
 ## Known simplifications (read before extending)
 

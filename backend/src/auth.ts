@@ -72,7 +72,7 @@ function sha256Hex(input: string): Promise<string> {
  * §1.2 ("Anthropic-facing logs never carry an Apple identifier").
  */
 export function deriveUserId(deviceId: string): Promise<string> {
-  return sha256Hex(`meditrack-relay:anon:${deviceId}`);
+  return sha256Hex(`gemocode-relay:anon:${deviceId}`);
 }
 
 export async function issueTokenPair(opts: {
@@ -300,7 +300,7 @@ export async function verifyAnonymousToken(secret: string, token: string, now?: 
 // optional `appTransaction` (a base64-encoded, Apple-signed JWS) and is
 // *supposed* to verify it against Apple's App Store Server API
 // (https://developer.apple.com/documentation/appstoreserverapi) to decide
-// whether the device has an active MediTrack Premium subscription. Until
+// whether the device has an active Gemocode Premium subscription. Until
 // that verification is implemented, this function does NOT parse or trust
 // the value at all — it always returns `false`, regardless of
 // `ENFORCE_PREMIUM`.

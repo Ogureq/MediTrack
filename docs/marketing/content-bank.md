@@ -1,6 +1,6 @@
 > **PRICING CHANGE NOTICE (Jul 2026):** Lab report scanning is now a Premium feature (owner decision). Any line below describing scanning/OCR as free must be revised before publishing. Free tier = vitals/meds/symptoms/goals tracking + score/trends + one AI report.
 
-# MediTrack Content Bank
+# Gemocode Content Bank
 
 Launch content executing the strategy in `docs/MARKETING.md`. Sourced from
 actual shipped features in `README.md` and the "educational, not diagnostic"
@@ -39,7 +39,7 @@ or voiceover-only cold open. Runtime budget: ~2s hook, ~24s body, ~4s CTA.
 
 **Shot list:**
 1. Cold open, phone camera: a crumpled lab-draw printout on a kitchen table.
-2. Cut to screen recording: open a report in MediTrack, tap "Scan for Lab Values."
+2. Cut to screen recording: open a report in Gemocode, tap "Scan for Lab Values."
 3. Vision OCR runs over the photographed page (show the brief on-device scanning state).
 4. Confirmation sheet appears: recognized values line up against the catalog, each with a status pill (green/yellow/red).
 5. Tap into one flagged value (e.g., LDL) → LabDetailView opens: history chart with the reference-range band, plain-language "what high means" text.
@@ -139,7 +139,7 @@ or voiceover-only cold open. Runtime budget: ~2s hook, ~24s body, ~4s CTA.
 
 **Shot list:**
 1. Fast-cut montage (screen recordings, sped up, publicly available competitor sign-up flows — generic framing, no disparaging claims): email field, password field, "verify your email," terms-of-service scroll, a permissions wall — three different apps, ~2 seconds each.
-2. Hard cut: MediTrack cold-launched from a fresh install, straight to the onboarding quiz, no email or password field anywhere.
+2. Hard cut: Gemocode cold-launched from a fresh install, straight to the onboarding quiz, no email or password field anywhere.
 3. Show completing onboarding into the Dashboard within seconds.
 4. Toggle Airplane Mode on-screen, then continue using the app normally — add a vital, open a report — to visually demonstrate no network dependency.
 
@@ -162,7 +162,7 @@ or voiceover-only cold open. Runtime budget: ~2s hook, ~24s body, ~4s CTA.
 
 **Shot list:**
 1. Creator-collab format: host on camera holding a phone, scrolling a generic privacy-policy PDF, reacting (no disparaging claims about named competitors — describe the category, not specific brands, unless pre-cleared).
-2. Cut to MediTrack's in-app "Privacy & Your Data" explainer screen — scroll through it in full.
+2. Cut to Gemocode's in-app "Privacy & Your Data" explainer screen — scroll through it in full.
 3. Screen recording: Profile → Login & Security, showing the local passcode setup and Face ID toggle.
 4. Screen recording: Profile → Data → Export Backup, showing the passphrase prompt before the encrypted file is written.
 5. Return to host on camera for the verdict.
@@ -325,7 +325,7 @@ want it in a comment, not the post).
 
 > Disclosure: I'm the developer. Posting because this sub is exactly the audience that will tell me if I got the privacy model wrong, and I'd rather hear it now than after launch.
 >
-> The app (MediTrack, iOS 17+) tracks medical records — labs, vitals, meds, symptoms, appointments. Everything is stored on-device via SwiftData; there's no account, no sign-in, and no backend for the core app. A local numeric passcode (salted SHA-256, iOS Keychain, device-only, never synced) plus optional Face ID/Touch ID gates the app itself — that credential never leaves the device either. Backups are AES-GCM-encrypted JSON files the user exports and controls; nothing auto-uploads. Lab-value OCR runs on-device via Apple's Vision framework — a photographed lab report never leaves the phone to be read.
+> The app (Gemocode, iOS 17+) tracks medical records — labs, vitals, meds, symptoms, appointments. Everything is stored on-device via SwiftData; there's no account, no sign-in, and no backend for the core app. A local numeric passcode (salted SHA-256, iOS Keychain, device-only, never synced) plus optional Face ID/Touch ID gates the app itself — that credential never leaves the device either. Backups are AES-GCM-encrypted JSON files the user exports and controls; nothing auto-uploads. Lab-value OCR runs on-device via Apple's Vision framework — a photographed lab report never leaves the phone to be read.
 >
 > The one deliberate exception is an optional AI explanation layer, and I want to describe exactly what it does rather than assert "it's private, trust me":
 >
@@ -364,13 +364,13 @@ want it in a comment, not the post).
 
 ## C. Product Hunt listing draft
 
-**Name:** MediTrack
+**Name:** Gemocode
 
 **Tagline (54 chars):** Scan your labs. See trends. Nothing leaves your phone.
 
 **Description:**
 
-> MediTrack is a local-first iOS app for tracking your own medical records —
+> Gemocode is a local-first iOS app for tracking your own medical records —
 > lab results, vitals, medications, symptoms, and appointments — entirely
 > on-device. No account, no sign-up, no cloud storage.
 >
@@ -396,7 +396,7 @@ want it in a comment, not the post).
 
 **First comment from the maker:**
 
-> Hey Product Hunt — I'm the solo developer behind MediTrack. Quick story on
+> Hey Product Hunt — I'm the solo developer behind Gemocode. Quick story on
 > why it exists and why it's built the way it is.
 >
 > I kept getting lab results back as PDFs — thirty-ish numbers, no context,
@@ -440,11 +440,11 @@ want it in a comment, not the post).
 
 ## D. Show HN draft
 
-**Title (79 chars):** Show HN: MediTrack – on-device lab OCR, AI relay that never exposes the API key
+**Title (79 chars):** Show HN: Gemocode – on-device lab OCR, AI relay that never exposes the API key
 
 **Body:**
 
-> MediTrack is an iOS 17+ app for tracking personal medical records — labs,
+> Gemocode is an iOS 17+ app for tracking personal medical records — labs,
 > vitals, medications, symptoms, appointments — built entirely on Apple's
 > own frameworks: SwiftUI, SwiftData for persistence, Swift Charts, Vision
 > for OCR, LocalAuthentication for the app lock. No third-party
@@ -544,7 +544,7 @@ want it in a comment, not the post).
 ## E. X launch thread (build-in-public voice)
 
 **Tweet 1/10**
-Shipping day. MediTrack is live — an iOS app that turns the lab PDFs you already get from insurance-covered blood work into trends and plain-English explanations. No account. Nothing leaves your phone unless you turn on AI yourself.
+Shipping day. Gemocode is live — an iOS app that turns the lab PDFs you already get from insurance-covered blood work into trends and plain-English explanations. No account. Nothing leaves your phone unless you turn on AI yourself.
 🧵
 
 **Tweet 2/10**

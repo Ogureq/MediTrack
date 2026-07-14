@@ -1,11 +1,11 @@
-# MediTrack Development Plan
+# Gemocode Development Plan
 
-This document records the phased plan executed to build MediTrack, a privacy-first, on-device iOS health-tracking app.
+This document records the phased plan executed to build Gemocode, a privacy-first, on-device iOS health-tracking app.
 
 ## Phase 1 — Project Scaffolding
 
 - [x] Create Xcode 16 project targeting iOS 17.0+, Swift 5.9, SwiftUI lifecycle
-- [x] Configure file-system-synchronized groups (`MediTrack/Models`, `MediTrack/Services`, `MediTrack/Views`)
+- [x] Configure file-system-synchronized groups (`Gemocode/Models`, `Gemocode/Services`, `Gemocode/Views`)
 - [x] Set bundle identifier, deployment target, and app icon placeholder
 - [x] Confirm zero third-party dependencies (no SPM packages, no CocoaPods)
 - [x] Initialize git repository and `.gitignore` for Xcode/Swift projects
@@ -59,7 +59,7 @@ This document records the phased plan executed to build MediTrack, a privacy-fir
 
 - [x] Write `README.md` — features, architecture, privacy, requirements, roadmap, medical disclaimer
 - [x] Write `docs/PLAN.md` (this document)
-- [x] Verify build from a clean checkout via `MediTrack.xcodeproj`
+- [x] Verify build from a clean checkout via `Gemocode.xcodeproj`
 - [x] Final review of privacy claims and disclaimer language before repository goes live
 
 ## Phase 7 — Glassmorphic UI Refresh
@@ -124,7 +124,7 @@ This document records the phased plan executed to build MediTrack, a privacy-fir
 
 - [x] Medication interaction warnings — a curated, educational checker (~20 drug classes, 20 well-established interaction rules) that flags risky combinations among active medications, surfaced in the Medications screen and Health Review findings. Educational only, not exhaustive — users are prompted to confirm with a pharmacist.
 - [x] Passcode & biometric login finalization — comprehensive on-device authentication (salted SHA-256 in Keychain, Face ID / Touch ID, Remember me toggle) hardening the app's security posture against unauthorized access
-- [x] XCTest unit-test suite — tests covering the analysis engine, services, and data models, implemented in `MediTrackTests/` with comprehensive coverage of critical paths
+- [x] XCTest unit-test suite — tests covering the analysis engine, services, and data models, implemented in `GemocodeTests/` with comprehensive coverage of critical paths
 - [x] GitHub Actions CI — automated testing workflow (.github/workflows/ci.yml) running `xcodebuild test` on macOS for every push, ensuring all tests pass before merge
 
 ## Phase 15 — Widgets & Deeper Health Integration
@@ -162,7 +162,7 @@ This document records the phased plan executed to build MediTrack, a privacy-fir
 
 - [x] Quarterly Review ritual — every 90 days the Dashboard invites a deterministic recap of the quarter (`Services/QuarterlyReview.swift`, `Views/QuarterlyReviewView.swift`): score trajectory, vital/lab changes with conservative direction semantics (only medically unambiguous metrics judged; weight neutral), streak and goal wins, and doctor questions from worsened items only; plain-text share, 19 fixed-date unit tests, no AI or network
 - [x] Biomarker carousel — horizontally scrolling Dashboard cards, one per lab test with results (`Views/BiomarkerCarousel.swift`): latest value, sex-specific status pill via the existing catalog classification, mini sparkline, tap-through to the lab detail screen; grouping logic unit-tested
-- [x] AI usage readout — free users see "X of 3 free AI reports used" under the MediTrack Premium row in Profile
+- [x] AI usage readout — free users see "X of 3 free AI reports used" under the Gemocode Premium row in Profile
 
 ## Phase 20 — Roadmap P3 Wave 1: Documents & Lifetime
 

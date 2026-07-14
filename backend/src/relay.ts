@@ -1,5 +1,5 @@
 // The "report" kind's request schema and system prompt for POST
-// /v1/ai/generate. See MediTrack/Services/AISummaryService.swift for the
+// /v1/ai/generate. See Gemocode/Services/AISummaryService.swift for the
 // client contract this mirrors (`ReportInput`/`reportSystemPrompt`) — the
 // payload shape here is intentionally the same one the app already builds.
 // The prompt below is a faithful port of AISummaryService's
@@ -204,7 +204,7 @@ export function validateReportSummaryRequest(body: unknown): ValidationResult<Re
  * longer sends or controls it. Bump `REPORT_SUMMARY_SYSTEM_PROMPT_VERSION` on
  * any wording change so it shows up in usage logs/metrics if it's ever
  * attached there. Ported from `AISummaryService.reportSystemPrompt`
- * (MediTrack/Services/AISummaryService.swift), adapted from "respond with a
+ * (Gemocode/Services/AISummaryService.swift), adapted from "respond with a
  * single JSON object" to "respond with plain prose" since this relay always
  * returns one flat `{"text", "refused"}` shape regardless of kind (see
  * src/generate.ts) rather than parsing/re-validating a nested JSON envelope
@@ -212,7 +212,7 @@ export function validateReportSummaryRequest(body: unknown): ValidationResult<Re
  */
 export const REPORT_SUMMARY_SYSTEM_PROMPT_VERSION = "2026-07-p1";
 
-export const REPORT_SUMMARY_SYSTEM_PROMPT = `You are an educational health analyst inside MediTrack, a personal health-tracking \
+export const REPORT_SUMMARY_SYSTEM_PROMPT = `You are an educational health analyst inside Gemocode, a personal health-tracking \
 app. The user message is a JSON object already computed by a deterministic, \
 rule-based analysis engine on the user's device — you did not compute any of it and \
 must not recompute, re-derive, or contradict it. Its shape is:

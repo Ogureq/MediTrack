@@ -1,4 +1,4 @@
-# MediTrack Upgrade Roadmap
+# Gemocode Upgrade Roadmap
 
 Produced by a six-role product team review (product, UX, backend, AI, security, growth) of the
 existing codebase. Each role's full report follows the executive synthesis. Every recommendation
@@ -6,7 +6,7 @@ carries an effort tag (S/M/L) and a phase (P1 = 0–6 weeks, P2 = 6–16 weeks, 
 
 ## Executive synthesis
 
-MediTrack today is a complete, CI-verified, local-first iOS tracker whose differentiator is
+Gemocode today is a complete, CI-verified, local-first iOS tracker whose differentiator is
 architectural: a deterministic, unit-tested analysis engine computes every number and severity,
 and the AI layer only narrates. The upgrade direction — serving AI to all users from an
 owner-held Anthropic key — is a pivot to a thin backend, and the whole team converged on the
@@ -87,7 +87,7 @@ the P1 report redesign.
 
 # Part 1 — Product management: audit & prioritization
 
-# MediTrack — Product Audit & Roadmap for the AI/Backend Pivot
+# Gemocode — Product Audit & Roadmap for the AI/Backend Pivot
 
 **Prepared by:** PM review (analysis only, no repo changes)
 **Date:** 2026-07-12
@@ -100,7 +100,7 @@ the P1 report redesign.
 Spot-checked against the actual code, not just the brief:
 
 - `docs/PLAN.md` confirms 15 shipped phases; feature set matches the brief exactly.
-- `MediTrackTests/` has **92 `func test` cases across 10 files** — matches the claimed count, and it's real coverage (engine, edge cases, catalog, scanning, interactions, models, units, backup, widget bridge, app lock).
+- `GemocodeTests/` has **92 `func test` cases across 10 files** — matches the claimed count, and it's real coverage (engine, edge cases, catalog, scanning, interactions, models, units, backup, widget bridge, app lock).
 - `Services/AISummaryService.swift`: BYOK is real — key lives in `UserDefaults` under `anthropicAPIKey`, and critically, **only `review.shareText` (the already-computed, deterministic summary) is sent to Anthropic — never raw documents, attachments, or the database.** The system prompt explicitly forbids diagnosis/treatment suggestions and mandates a "discuss with your clinician" close. This is a real architectural decision, not incidental.
 - README already states the intent: *"The analysis engine is rule-based and deterministic — no cloud AI is involved. It is designed so that an LLM-powered summarizer could be added later behind the same `HealthReview` interface without disturbing the rest of the app."* — the current architecture was **built to anticipate exactly this pivot**, which de-risks it more than a typical "bolt AI onto a static app" migration.
 - `Models/Models.swift`: `Medication` has no supplement/OTC distinction (just name/dosage/frequency/purpose), `HealthProfile` has only DOB/sex/height/blood type/allergies/conditions as free text — **no lifestyle, goals, or quiz-shaped fields exist today.** Onboarding (`OnboardingView.swift`) is a static 4-page tutorial ending in a disclaimer acknowledgement; it collects zero data.
@@ -134,11 +134,11 @@ Everything below is built on this ground truth, not just the brief.
 
 ## 2. Competitive positioning
 
-**Against Function Health / Docus-style "understand my blood work" products:** those products are fundamentally *lab-ordering + interpretation* businesses — the interpretation is a wrapper around getting you to buy more panels, and your data lives on their servers by default because ordering labs requires an account and a lab relationship. MediTrack doesn't sell labs; it ingests whatever the user already has (a photo of a paper report from any doctor, insurer-covered panel, or hospital portal). That's a **lower-friction, lower-COGS, broader-applicability** position — no lab-partner logistics, no test-menu maintenance, works with the 100% of users who already have reports sitting in a drawer or a Health app export. This is worth stating explicitly in marketing: "we don't sell you tests, we make sense of the ones you already paid for."
+**Against Function Health / Docus-style "understand my blood work" products:** those products are fundamentally *lab-ordering + interpretation* businesses — the interpretation is a wrapper around getting you to buy more panels, and your data lives on their servers by default because ordering labs requires an account and a lab relationship. Gemocode doesn't sell labs; it ingests whatever the user already has (a photo of a paper report from any doctor, insurer-covered panel, or hospital portal). That's a **lower-friction, lower-COGS, broader-applicability** position — no lab-partner logistics, no test-menu maintenance, works with the 100% of users who already have reports sitting in a drawer or a Health app export. This is worth stating explicitly in marketing: "we don't sell you tests, we make sense of the ones you already paid for."
 
-**Against generic AI-chat-with-your-PDF apps (ChatGPT/Claude used ad hoc, or thin wrapper apps):** those have no grounding. The LLM is trusted to both *recall* what a normal ALT or LDL range is *and* to reason over it correctly, with no deterministic check and no persistent structured history. MediTrack inverts this: the 46-test reference catalog and rule engine compute the numbers; the LLM's job is reduced to *paraphrasing already-correct output into a warmer tone*. That is a materially safer architecture for a category where a wrong "normal range" recall is a real harm, and it's not something a thin AI-chat wrapper can retrofit without rebuilding a reference-range catalog and trend engine from scratch — which is exactly what already exists here (865-line `LabCatalog.swift` with sex-specific ranges, 15 catalog tests). **This "AI you can audit" vs. "AI you have to trust" framing is the single best differentiation angle available and should be foregrounded in both product messaging and the technical design of every new AI feature** (see §4, item AI-1 and the chat guardrail note).
+**Against generic AI-chat-with-your-PDF apps (ChatGPT/Claude used ad hoc, or thin wrapper apps):** those have no grounding. The LLM is trusted to both *recall* what a normal ALT or LDL range is *and* to reason over it correctly, with no deterministic check and no persistent structured history. Gemocode inverts this: the 46-test reference catalog and rule engine compute the numbers; the LLM's job is reduced to *paraphrasing already-correct output into a warmer tone*. That is a materially safer architecture for a category where a wrong "normal range" recall is a real harm, and it's not something a thin AI-chat wrapper can retrofit without rebuilding a reference-range catalog and trend engine from scratch — which is exactly what already exists here (865-line `LabCatalog.swift` with sex-specific ranges, 15 catalog tests). **This "AI you can audit" vs. "AI you have to trust" framing is the single best differentiation angle available and should be foregrounded in both product messaging and the technical design of every new AI feature** (see §4, item AI-1 and the chat guardrail note).
 
-**Against Apple Health itself:** Health is a passive data lake — no reference ranges, no scoring, no OCR of paper reports, no interaction checking, no doctor-shareable output. MediTrack is correctly positioned as an *interpretation and action layer on top of* HealthKit (it already reads and writes to it), not a competitor to it. Keep that co-existence story; do not let the pivot tempt a rebuild of vitals tracking that duplicates what Health already does well.
+**Against Apple Health itself:** Health is a passive data lake — no reference ranges, no scoring, no OCR of paper reports, no interaction checking, no doctor-shareable output. Gemocode is correctly positioned as an *interpretation and action layer on top of* HealthKit (it already reads and writes to it), not a competitor to it. Keep that co-existence story; do not let the pivot tempt a rebuild of vitals tracking that duplicates what Health already does well.
 
 **Net assessment:** the on-device-deterministic-engine-plus-optional-AI-narrator hybrid is genuinely unusual and defensible — copying it requires building a tested reference-range catalog and rule engine, not just calling an LLM API, which is a multi-month engineering investment competitors building "AI wrapper" products won't have made. The pivot's risk is **diluting this exact differentiator** by moving toward "yet another AI-chat health app" if the new features (AI chat especially) are built as generic LLM-over-raw-data rather than LLM-over-vetted-structured-output. Preserve the pattern.
 
@@ -229,9 +229,9 @@ None of this invalidates the pivot — the deterministic-engine-plus-AI-narrator
 
 # Part 2 — UX/UI: onboarding quiz, Today dashboard, premium polish
 
-# MediTrack — Premium UX Upgrade: Onboarding Quiz, "Today" Dashboard, Reminders, AI Chat
+# Gemocode — Premium UX Upgrade: Onboarding Quiz, "Today" Dashboard, Reminders, AI Chat
 
-Prepared as a design spec grounded in the current codebase (`MediTrack/Views/DashboardView.swift`, `OnboardingView.swift`, `ReviewScreen.swift`, `TrendsView.swift`, `Support/Theme.swift`, `Support/UIHelpers.swift`, `Models/Models.swift`, `Views/ContentView.swift`, `Services/NotificationService.swift`, `Services/AISummaryService.swift`, `Services/MedicationInteractions.swift`, `Services/BackupService.swift`, `docs/PLAN.md`). No repo files were modified — analysis and specs only.
+Prepared as a design spec grounded in the current codebase (`Gemocode/Views/DashboardView.swift`, `OnboardingView.swift`, `ReviewScreen.swift`, `TrendsView.swift`, `Support/Theme.swift`, `Support/UIHelpers.swift`, `Models/Models.swift`, `Views/ContentView.swift`, `Services/NotificationService.swift`, `Services/AISummaryService.swift`, `Services/MedicationInteractions.swift`, `Services/BackupService.swift`, `docs/PLAN.md`). No repo files were modified — analysis and specs only.
 
 Effort: **S** (<1 wk eng), **M** (1–3 wks), **L** (3+ wks). Phase: **P1** (0–6 wks), **P2** (6–16 wks), **P3** (later).
 
@@ -269,7 +269,7 @@ Effort: **S** (<1 wk eng), **M** (1–3 wks), **L** (3+ wks). Phase: **P1** (0�
 
 > "ends on a personalized preview, not a signup wall"
 
-MediTrack has no accounts, ever (CLAUDE.md: "no backend, no API layer, no accounts"). There is structurally no signup wall to avoid — this isn't a constraint to design around, it's a genuine competitive advantage over every quiz-then-paywall wellness app. Lean into it explicitly: the CTA at the end of the quiz should say something like **"Everything above stays on this device — let's go"**, turning the privacy stance itself into part of the reward, not a footnote.
+Gemocode has no accounts, ever (CLAUDE.md: "no backend, no API layer, no accounts"). There is structurally no signup wall to avoid — this isn't a constraint to design around, it's a genuine competitive advantage over every quiz-then-paywall wellness app. Lean into it explicitly: the CTA at the end of the quiz should say something like **"Everything above stays on this device — let's go"**, turning the privacy stance itself into part of the reward, not a footnote.
 
 ### Structure (replaces + extends the current 4-page `OnboardingView`)
 
@@ -289,18 +289,18 @@ Total user-facing steps: **2 intro + 6 quiz + 1 preview = 9 screens**, but only 
 
 ### The activation moment (step "→")
 
-Instead of dropping the user into an empty Dashboard, run `AnalysisEngine.generateReview(...)` immediately against whatever was just entered (even partial: weight+height alone yields a BMI finding; sleep alone yields a sleep finding) and show a **preview card built from the exact same `ScoreRing` + `glassCard()` the real Dashboard uses** — no new component, just the real one rendered one screen early. Underneath, a short recap: "Your reminders are set: Vitamin D, Magnesium, Hydration" and a single prominent `GlassProminentButtonStyle()` button: **"Enter MediTrack"**. This is the "wow" moment the brief asks for, and it costs almost nothing extra to build because it's assembled entirely from existing pieces. **Effort M, P1.**
+Instead of dropping the user into an empty Dashboard, run `AnalysisEngine.generateReview(...)` immediately against whatever was just entered (even partial: weight+height alone yields a BMI finding; sleep alone yields a sleep finding) and show a **preview card built from the exact same `ScoreRing` + `glassCard()` the real Dashboard uses** — no new component, just the real one rendered one screen early. Underneath, a short recap: "Your reminders are set: Vitamin D, Magnesium, Hydration" and a single prominent `GlassProminentButtonStyle()` button: **"Enter Gemocode"**. This is the "wow" moment the brief asks for, and it costs almost nothing extra to build because it's assembled entirely from existing pieces. **Effort M, P1.**
 
 ### Data model changes (spec, not implemented)
 
-Per CLAUDE.md's model-registration checklist, every new field/model touches four places: `Schema` in `MediTrackApp.swift`, `SampleData.eraseAllData`, `BackupService` (fields **optional**, matching the existing `goals: [BackupGoal]? = []` backward-compat pattern), and in-memory `ModelContainer` lists in tests.
+Per CLAUDE.md's model-registration checklist, every new field/model touches four places: `Schema` in `GemocodeApp.swift`, `SampleData.eraseAllData`, `BackupService` (fields **optional**, matching the existing `goals: [BackupGoal]? = []` backward-compat pattern), and in-memory `ModelContainer` lists in tests.
 
 - `HealthProfile` gains: `activityLevelRaw: String`, `dietPatternRaw: String`, `primaryGoalsRaw: String`, `concernsRaw: String` — all defaulted, all optional in `BackupProfile`. No new `@Model`, so no `Schema` change needed for this part.
 - New `Reminder` + `ReminderCompletion` `@Model`s — full checklist item, see §4.
 
 ### Challenge: don't auto-create numeric goals from quiz answers
 
-If step 5 ("lose weight") directly creates a `HealthGoal(targetValue: currentWeight * 0.95, ...)`, MediTrack would be inventing a clinical target with no basis — this is exactly the kind of prescriptive behavior the app's "educational, not diagnostic" stance exists to avoid, and it's a bad guess besides (5% is arbitrary). Instead: store the **intent tag** only, and surface a one-tap prompt card on the Dashboard/Goals screen — *"Set a weight goal → tap to configure"* — that deep-links into the existing, already-well-designed `AddGoalSheet` (`GoalsView.swift:136`) with the vital type pre-selected. The user supplies the actual number. **This is a case where the owner's implied "auto-personalize everything" instinct actively hurts UX/trust — propose the lighter-touch version.**
+If step 5 ("lose weight") directly creates a `HealthGoal(targetValue: currentWeight * 0.95, ...)`, Gemocode would be inventing a clinical target with no basis — this is exactly the kind of prescriptive behavior the app's "educational, not diagnostic" stance exists to avoid, and it's a bad guess besides (5% is arbitrary). Instead: store the **intent tag** only, and surface a one-tap prompt card on the Dashboard/Goals screen — *"Set a weight goal → tap to configure"* — that deep-links into the existing, already-well-designed `AddGoalSheet` (`GoalsView.swift:136`) with the vital type pre-selected. The user supplies the actual number. **This is a case where the owner's implied "auto-personalize everything" instinct actively hurts UX/trust — propose the lighter-touch version.**
 
 ---
 
@@ -378,7 +378,7 @@ Reuse-vs-new decision: **do not** bolt supplements onto `Medication`. Medication
 
 - **New `Reminder` `@Model`**: `title`, `category` (supplement/hydration/habit/custom), `scheduleTime`, `isAISuggested: Bool`, `sourceLabKey: String?` (traceability — which biomarker triggered a suggestion), `createdAt`, `isArchived`, `reminderID` (mirrors `Medication.reminderID` for `NotificationService`).
 - **New `ReminderCompletion` `@Model`**: `reminderID`, `date`, `completedAt` — a pure log, mirroring the existing `ScoreSnapshot` "at most one per day" pattern (`ScoreSnapshot`, `ReviewScreen.recordSnapshot`). Streaks are just a query over this table, not a stored counter.
-- Both register in `Schema` (`MediTrackApp.swift`), `SampleData.eraseAllData`, `BackupService` (new optional `reminders: [BackupReminder]? = []` / `reminderCompletions: [...]? = []`, following the exact `goals: [BackupGoal]? = []` precedent already in `BackupService.swift:19`), and test `ModelContainer` lists.
+- Both register in `Schema` (`GemocodeApp.swift`), `SampleData.eraseAllData`, `BackupService` (new optional `reminders: [BackupReminder]? = []` / `reminderCompletions: [...]? = []`, following the exact `goals: [BackupGoal]? = []` precedent already in `BackupService.swift:19`), and test `ModelContainer` lists.
 - Notification scheduling reuses `NotificationService.scheduleDailyReminder` — recommend generalizing its `(medicationName:dosage:)` parameters to `(title:body:)` so both `Medication` and `Reminder` share one code path instead of duplicating the scheduling logic (engineering note, not a UX requirement).
 
 ### Creation flow
@@ -430,7 +430,7 @@ Never prescriptive. Match the tone already established in `Finding.recommendatio
 
 **Challenge: celebratory motion (confetti, etc.) must be scoped to wellness-only triggers** — score crossing into a better bracket, a reminder streak milestone. Never trigger celebratory animation adjacent to a *critical* finding context (e.g., don't let a streak-complete confetti fire on the same screen as a new critical lab flag) — would read as tone-deaf in a medical-adjacent app.
 
-**Challenge: reject a custom illustrated icon pack.** CLAUDE.md is explicit about "zero third-party dependencies," and MediTrack's icon language today is 100% SF Symbols. A bespoke icon set adds asset-pipeline overhead and drifts from that constraint for a cosmetic gain. SF Symbols already support hierarchical/multicolor rendering modes that can add richness (e.g., `flame.fill` in `.hierarchical` for streaks) without breaking the dependency-free posture.
+**Challenge: reject a custom illustrated icon pack.** CLAUDE.md is explicit about "zero third-party dependencies," and Gemocode's icon language today is 100% SF Symbols. A bespoke icon set adds asset-pipeline overhead and drifts from that constraint for a cosmetic gain. SF Symbols already support hierarchical/multicolor rendering modes that can add richness (e.g., `flame.fill` in `.hierarchical` for streaks) without breaking the dependency-free posture.
 
 ---
 
@@ -468,17 +468,17 @@ The brief says "AI chat about your reports." Taken literally, that risks piping 
 
 **P2 (6–16 wks)**: full Health Timeline screen, biomarker carousel, Today's Actions nudges, weekly dot-streak detail, score/streak micro-celebration (scoped), widget reminder deep-link, AI chat (entry point, streaming, citation chips, attachment-consent flow, local persistence).
 
-**P3 (later)**: dashboard card customization/reordering, any IA consolidation of the 5-tab/More structure (flagged as a real option — e.g. merging Trends into Review under a segmented control to free a tab slot — but deferred: it touches the `meditrack://review` / `meditrack://trends` widget deep-link routes in `ContentView.onOpenURL` and shouldn't be bundled with the reminders/quiz launch).
+**P3 (later)**: dashboard card customization/reordering, any IA consolidation of the 5-tab/More structure (flagged as a real option — e.g. merging Trends into Review under a segmented control to free a tab slot — but deferred: it touches the `gemocode://review` / `gemocode://trends` widget deep-link routes in `ContentView.onOpenURL` and shouldn't be bundled with the reminders/quiz launch).
 
 ---
 
 # Part 3 — AI engineering: the Health Analyst pipeline
 
-# MediTrack AI Roadmap — "AI Health Analyst" Pipeline Design
+# Gemocode AI Roadmap — "AI Health Analyst" Pipeline Design
 
 **Author:** AI engineering analysis (design-only, no repo files modified)
-**Scope:** Owner's new AI direction for MediTrack (iOS 17+, local-first, SwiftUI + SwiftData)
-**Grounding:** `MediTrack/Services/AISummaryService.swift`, `MediTrack/Services/AnalysisEngine.swift`, `MediTrack/Models/LabCatalog.swift`, `MediTrack/Models/Models.swift`
+**Scope:** Owner's new AI direction for Gemocode (iOS 17+, local-first, SwiftUI + SwiftData)
+**Grounding:** `Gemocode/Services/AISummaryService.swift`, `Gemocode/Services/AnalysisEngine.swift`, `Gemocode/Models/LabCatalog.swift`, `Gemocode/Models/Models.swift`
 
 ---
 
@@ -567,7 +567,7 @@ Notes that matter for the guards in §1.3:
 
 Persona and hard rails (draft, to be refined with legal/clinical review before shipping — flag this explicitly to the owner):
 
-> You are the user's personal AI health analyst inside MediTrack, a local-first health tracker. You will receive a JSON object containing the user's profile, biomarker values, vital signs, medications, and a set of findings **already computed by a deterministic clinical rules engine** — you did not compute these, and you must not recompute, re-derive, or contradict them.
+> You are the user's personal AI health analyst inside Gemocode, a local-first health tracker. You will receive a JSON object containing the user's profile, biomarker values, vital signs, medications, and a set of findings **already computed by a deterministic clinical rules engine** — you did not compute these, and you must not recompute, re-derive, or contradict them.
 >
 > Hard rules:
 > 1. **Never diagnose.** Do not state or imply the user has a specific condition. Describe values relative to reference ranges only ("above the typical range for X"), never as "this means you have Y."
@@ -805,14 +805,14 @@ No health content in logs, matching the app's local-first ethos even as a backen
 
 # Part 4 — Backend: the AI relay, auth, metering, scale
 
-# MediTrack AI Proxy Backend — Architecture & Roadmap
+# Gemocode AI Proxy Backend — Architecture & Roadmap
 
-**Author context:** Backend/platform design for pivoting MediTrack's AI layer from
+**Author context:** Backend/platform design for pivoting Gemocode's AI layer from
 BYO-key/on-device-only to an owner-funded, server-relayed model, while preserving
 the app's local-first health-data guarantee. Analysis only — no repo files were
 modified. Two files were read to ground this design in the actual client
-implementation: `MediTrack/Services/AISummaryService.swift` and
-`MediTrack/Models/Models.swift`.
+implementation: `Gemocode/Services/AISummaryService.swift` and
+`Gemocode/Models/Models.swift`.
 
 **What the current code already does right** (worth knowing before proposing
 changes): `AISummaryService.summarize(_:)` does **not** send the raw SwiftData
@@ -833,7 +833,7 @@ unchanged into the proxy design.
 
 ```
 ┌─────────────┐   HTTPS + JWT    ┌────────────────────┐   HTTPS + owner's    ┌──────────────┐
-│  MediTrack   │ ───────────────▶│  Stateless AI relay │ ───────────────────▶│  Anthropic    │
+│  Gemocode   │ ───────────────▶│  Stateless AI relay │ ───────────────────▶│  Anthropic    │
 │  iOS client  │◀─── SSE stream ─│  (Cloudflare Worker) │◀── SSE stream ──────│  Messages API │
 └─────────────┘                  └─────────┬──────────┘                      └──────────────┘
                                             │
@@ -898,7 +898,7 @@ Why not the alternatives as primary:
   not a request/response function.
 - **Supabase Edge Functions** (Deno-based) are close in spirit to Workers but
   couple you to Supabase's Postgres + Auth stack more tightly than this app
-  needs — MediTrack's auth is Sign in with Apple + an anonymous device path,
+  needs — Gemocode's auth is Sign in with Apple + an anonymous device path,
   not Supabase Auth's password/OAuth flows, so the main draw (bundled auth)
   doesn't apply. Workers + a standalone Postgres keeps the pieces
   independently swappable.
@@ -1006,7 +1006,7 @@ of partial/empty text, which the client renders via the same
 ### 1.4 P2: usage dashboard, tiered quotas, prompt-injection-resistant shaping
 
 - **Tiered quotas via StoreKit 2 Server Notifications V2** (not RevenueCat —
-  see §6 for why). MediTrack is iOS-only today; App Store Server Notifications
+  see §6 for why). Gemocode is iOS-only today; App Store Server Notifications
   give subscription state changes (renewal, cancellation, refund) pushed to a
   webhook (`POST /v1/webhooks/appstore`), which the backend uses to update the
   `entitlements` table (§5). RevenueCat becomes worth the added dependency
@@ -1462,7 +1462,7 @@ addition that would slow P1 down for no P1-relevant benefit:
   network hops for no benefit at this scale.
 - **No RevenueCat for P1/P2.** StoreKit 2 Server Notifications V2 fully cover
   a single-platform (iOS-only) subscription model. RevenueCat earns its
-  dependency only if MediTrack expands to Android/web and needs
+  dependency only if Gemocode expands to Android/web and needs
   cross-platform entitlement reconciliation — document it as the documented
   fallback, don't build against it speculatively.
 - **No vector DB / RAG pipeline for chat.** The "chat about your reports"
@@ -1540,9 +1540,9 @@ addition that would slow P1 down for no P1-relevant benefit:
 
 # Part 5 — Security & privacy
 
-# MediTrack — Security & Privacy Section, Upgrade Roadmap
+# Gemocode — Security & Privacy Section, Upgrade Roadmap
 
-**Scope:** current-state findings against the local-first app as it exists today (spot-checked `Services/AppLock.swift`, `KeychainStore.swift`, `AISummaryService.swift`, `WidgetBridge.swift`, `BackupService.swift`, `MediTrack.entitlements`, `MediTrackWidgets.entitlements`, `project.pbxproj`), plus the security/privacy architecture needed for the owner's new direction: backend AI proxy on the owner's Anthropic key, accounts, AI chat over blood work, and an onboarding quiz collecting sensitive lifestyle data.
+**Scope:** current-state findings against the local-first app as it exists today (spot-checked `Services/AppLock.swift`, `KeychainStore.swift`, `AISummaryService.swift`, `WidgetBridge.swift`, `BackupService.swift`, `Gemocode.entitlements`, `GemocodeWidgets.entitlements`, `project.pbxproj`), plus the security/privacy architecture needed for the owner's new direction: backend AI proxy on the owner's Anthropic key, accounts, AI chat over blood work, and an onboarding quiz collecting sensitive lifestyle data.
 
 Every item is tagged **Severity/Priority**, **Effort** (S/M/L), **Phase** (P1 = 0–6wks, P2, P3).
 
@@ -1556,7 +1556,7 @@ Every item is tagged **Severity/Priority**, **Effort** (S/M/L), **Phase** (P1 = 
 **This becomes moot once the backend proxy ships** (§2) — the client stops holding an Anthropic key entirely once Direct-to-Anthropic calls are replaced by proxy calls. Fix it anyway in the interim because the proxy migration is P2, and this is a one-file P1 fix.
 
 **Fix spec:**
-- Add `KeychainStore` methods for a generic secret (the existing enum already has `set/get/delete` keyed by `service` = `"com.ogureq.meditrack.lock"`; add a second service or account key, e.g. account `"anthropic.apikey"`, same `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`).
+- Add `KeychainStore` methods for a generic secret (the existing enum already has `set/get/delete` keyed by `service` = `"com.ogureq.gemocode.lock"`; add a second service or account key, e.g. account `"anthropic.apikey"`, same `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`).
 - Replace the two `@AppStorage(AISummaryService.apiKeyDefaultsKey)` bindings with a small `ObservableObject` wrapper (`@Published var apiKey: String?` backed by Keychain get/set) since `@AppStorage` doesn't bind to Keychain directly — SwiftUI needs a manual publisher.
 - Migration step: on first launch after upgrade, read the old UserDefaults value if present, write it to Keychain, delete the UserDefaults key (`UserDefaults.standard.removeObject`).
 - Add to `AppLockTests`-style pattern: skip Keychain-touching tests when unavailable (CI has no Keychain, per CLAUDE.md).
@@ -1590,9 +1590,9 @@ Every item is tagged **Severity/Priority**, **Effort** (S/M/L), **Phase** (P1 = 
 **Severity:** Medium (assessed/defend) · **Effort:** S (nudge + privacy screen copy) · **Phase:** P1
 
 ### 1.4 — LOW-MEDIUM — Widget snapshot exposure surface
-`WidgetBridge.update` (`Services/WidgetBridge.swift:37`) writes `WidgetSnapshot` (score, headline, ISO8601 timestamp, up to a few `WidgetVital` name/value/icon triples) to `UserDefaults(suiteName: "group.com.ogureq.meditrack")`, key `widget.snapshot` — and `WidgetKit` renders it on the home/lock screen. This is a deliberate, bounded disclosure (a numeric health score + a short headline + vital names/values), but:
+`WidgetBridge.update` (`Services/WidgetBridge.swift:37`) writes `WidgetSnapshot` (score, headline, ISO8601 timestamp, up to a few `WidgetVital` name/value/icon triples) to `UserDefaults(suiteName: "group.com.ogureq.gemocode")`, key `widget.snapshot` — and `WidgetKit` renders it on the home/lock screen. This is a deliberate, bounded disclosure (a numeric health score + a short headline + vital names/values), but:
 - It is **not gated by app-lock at all** — if the user has app-lock enabled specifically to keep the passcode/biometric wall up, the widget on the home screen (and, depending on widget family, the **lock screen**) still shows score + headline + vitals to anyone who glances at the phone. This is a scope mismatch: the user's threat model when they turn on app-lock ("don't show my health data to someone who picks up my phone") is not fully honored by the widget.
-- The app-group container (`group.com.ogureq.meditrack`, both `MediTrack.entitlements` and `MediTrackWidgets.entitlements` declare it) is shared, unencrypted `UserDefaults` storage — any other app signed with the same team/app-group (none exist today, but worth noting for the account-layer era if a companion app is ever added) could read it.
+- The app-group container (`group.com.ogureq.gemocode`, both `Gemocode.entitlements` and `GemocodeWidgets.entitlements` declare it) is shared, unencrypted `UserDefaults` storage — any other app signed with the same team/app-group (none exist today, but worth noting for the account-layer era if a companion app is ever added) could read it.
 
 **Fix spec:**
 - Add a "Show on Lock Screen / Home Screen widget" privacy toggle (default matches current behavior, but make it explicit) and/or a "hide values, show only 'Tap to view'" redacted widget state when app-lock is enabled — mirrors how Messages/Mail redact previews when the phone is locked.
@@ -1694,7 +1694,7 @@ Keep chat context **client-held**. The client maintains the running conversation
 ## 4. Compliance & platform reality check
 
 ### 4.1 HIPAA — does not apply, say so plainly
-MediTrack is a direct-to-consumer app with no "covered entity" (no health plan, no healthcare clearinghouse, no healthcare provider transmitting on the app's behalf) and no "business associate" relationship — HIPAA's applicability turns on that entity relationship, not on the sensitivity of the data itself. **This remains true after the backend proxy ships**, as long as the owner doesn't enter into a data-sharing arrangement with an actual covered entity (e.g., don't pipe data to/from a clinic's EHR on their behalf). State this plainly in user-facing materials to avoid both over-promising ("HIPAA-compliant!" — a claim with no legal grounding here) and under-selling the real privacy posture the app does have.
+Gemocode is a direct-to-consumer app with no "covered entity" (no health plan, no healthcare clearinghouse, no healthcare provider transmitting on the app's behalf) and no "business associate" relationship — HIPAA's applicability turns on that entity relationship, not on the sensitivity of the data itself. **This remains true after the backend proxy ships**, as long as the owner doesn't enter into a data-sharing arrangement with an actual covered entity (e.g., don't pipe data to/from a clinic's EHR on their behalf). State this plainly in user-facing materials to avoid both over-promising ("HIPAA-compliant!" — a claim with no legal grounding here) and under-selling the real privacy posture the app does have.
 
 ### 4.2 GDPR / UK-GDPR — applies if distributed in the EU/UK, and it's special-category data
 Health data (Art. 9 GDPR "special category data") triggers a higher bar than ordinary personal data the moment an EU/UK user installs the app (distribution, not company location, is what matters for extraterritorial reach under Art. 3).
@@ -1707,7 +1707,7 @@ Health data (Art. 9 GDPR "special category data") triggers a higher bar than ord
 
 ### 4.3 App Store Review Guideline 5.1.3 (health data)
 - No use of health data for advertising/marketing purposes, and no third-party sharing of health data — the current app already complies (no ads, no analytics, no third parties at all). The new proxy backend must preserve this: Anthropic is a data *processor* acting on the app's instructions under its own usage policies, not a data *purchaser* — do not add any other third-party data recipient (ad networks, analytics SDKs, data brokers) without re-reviewing 5.1.3 exposure.
-- HealthKit-sourced data specifically has extra 5.1.3 restrictions (already using HealthKit read/write per `MediTrack.entitlements` and `HealthKitService.swift`) — confirm the App Store Connect health-data disclosure questionnaire is answered accurately when the account/backend features ship, since "does your app transmit health data off-device" flips from No to Yes.
+- HealthKit-sourced data specifically has extra 5.1.3 restrictions (already using HealthKit read/write per `Gemocode.entitlements` and `HealthKitService.swift`) — confirm the App Store Connect health-data disclosure questionnaire is answered accurately when the account/backend features ship, since "does your app transmit health data off-device" flips from No to Yes.
 - Account deletion requirement (Guideline 5.1.1(v)) intersects here too — see §5.
 
 **Severity:** High (App Store rejection risk if guideline drifts) · **Effort:** S (review checklist item) · **Phase:** P2 (re-certify before submitting the version that adds accounts/backend)
@@ -1775,7 +1775,7 @@ This app's local-first architecture is a genuine differentiator versus every clo
 
 # Part 6 — Growth: monetization, retention, distribution
 
-# MediTrack — Growth Strategy
+# Gemocode — Growth Strategy
 
 **Scope:** Positioning, monetization, retention, growth surfaces, activation funnel, and a kill/counter list for an existing, shipped, privacy-first local iOS health tracker. Analysis only — no repo files changed.
 
@@ -1783,7 +1783,7 @@ This app's local-first architecture is a genuine differentiator versus every clo
 - Zero network calls except opt-in AI summary (`AISummaryService.swift`), which sends *review text only*, bring-your-own key stored in `UserDefaults["anthropicAPIKey"]`, checks `stop_reason == "refusal"`.
 - No analytics, no accounts, no backend today — `docs/PLAN.md` runs through Phase 15; README explicitly states "No network calls by default, no analytics, no account or sign-in."
 - `AnalysisEngine.HealthReview.disclaimer` and `MedicationInteractions.disclaimer` are structurally embedded in every review/PDF export — the "educational, not diagnostic" stance is load-bearing in the code, not just marketing copy.
-- Widget (`WidgetBridge.swift` / `HealthScoreWidget.swift`), app-group `group.com.ogureq.meditrack`, key `widget.snapshot`, deep-links `meditrack://review` and `meditrack://trends` — already a daily-touchpoint asset, currently underused for growth.
+- Widget (`WidgetBridge.swift` / `HealthScoreWidget.swift`), app-group `group.com.ogureq.gemocode`, key `widget.snapshot`, deep-links `gemocode://review` and `gemocode://trends` — already a daily-touchpoint asset, currently underused for growth.
 - 46-test lab reference catalog + on-device Vision OCR (`LabScanService.swift`) + synonym matcher (`LabSynonyms.swift`) is the hardest-to-replicate technical asset in the app.
 
 ---
@@ -1799,20 +1799,20 @@ Alternate frames to test in ASO/App Store copy:
 
 ### Competitive map
 
-| Competitor category | Example shape | What they do well | Where MediTrack wins |
+| Competitor category | Example shape | What they do well | Where Gemocode wins |
 |---|---|---|---|
 | AI-chat health wrappers (generic ChatGPT-wrapper apps) | Upload a PDF, chat with a general LLM about it | Flexible, conversational | No deterministic score, no structured catalog, health data routinely sent to a general-purpose model with no medical-specific validation; positioning is "chat," not "understand" |
-| Lab-analysis subscription services (e.g. consumer lab-interpretation SaaS) | Upload labs, get a report, usually cloud-processed, subscription-gated from day one | Polished report design, some are physician-reviewed | Data leaves device on *every* use, not just AI features; no free rule-based tier — MediTrack's local engine is free forever and works with zero uploads |
-| Apple Health / Apple Health app | Native aggregation of HK data, no interpretation | Ubiquitous, free, deep OS integration | Apple deliberately avoids interpretation/diagnosis-adjacent scoring; MediTrack is complementary (imports from HealthKit) not competitive — pitch as "what Apple Health won't tell you" |
+| Lab-analysis subscription services (e.g. consumer lab-interpretation SaaS) | Upload labs, get a report, usually cloud-processed, subscription-gated from day one | Polished report design, some are physician-reviewed | Data leaves device on *every* use, not just AI features; no free rule-based tier — Gemocode's local engine is free forever and works with zero uploads |
+| Apple Health / Apple Health app | Native aggregation of HK data, no interpretation | Ubiquitous, free, deep OS integration | Apple deliberately avoids interpretation/diagnosis-adjacent scoring; Gemocode is complementary (imports from HealthKit) not competitive — pitch as "what Apple Health won't tell you" |
 | General health trackers (weight/symptom loggers) | Broad but shallow | Habit loops, wide feature set | No lab-specific domain modeling (reference ranges, sex-specific ranges, drug interactions) |
 
 ### What's actually defensible
-1. **Architecture as trust signal, not just claim.** Every competitor "says" privacy; MediTrack's is verifiable by the fact that the rule-based score and 46-test catalog work fully offline with zero account — this is a product truth, not a marketing claim, and it's expensive for cloud-native competitors to retrofit (their business model depends on server-side processing).
-2. **Deterministic score as the moat, AI as a feature on top.** Because the 0–100 score and severity findings come from `AnalysisEngine` (pure functions, ACC/AHA BP categories, lipid ratios, regression trends, curated drug-interaction rules) rather than an LLM, the core value proposition survives even if AI costs make the AI tier get capped or removed. Competitors built AI-native have no fallback if unit economics get worse — MediTrack does.
+1. **Architecture as trust signal, not just claim.** Every competitor "says" privacy; Gemocode's is verifiable by the fact that the rule-based score and 46-test catalog work fully offline with zero account — this is a product truth, not a marketing claim, and it's expensive for cloud-native competitors to retrofit (their business model depends on server-side processing).
+2. **Deterministic score as the moat, AI as a feature on top.** Because the 0–100 score and severity findings come from `AnalysisEngine` (pure functions, ACC/AHA BP categories, lipid ratios, regression trends, curated drug-interaction rules) rather than an LLM, the core value proposition survives even if AI costs make the AI tier get capped or removed. Competitors built AI-native have no fallback if unit economics get worse — Gemocode does.
 3. **Domain depth**: sex-specific reference ranges, drug-interaction rules, lipid-ratio derivations, OCR synonym matching tuned to real lab report formats. This is unglamorous, slow-to-build catalog work that's hard to copy quickly and doesn't show up in a demo screenshot — but it is why the OCR scan actually works on real report photos.
-4. **Regulatory headroom.** Staying explicitly "educational, not diagnostic" keeps MediTrack out of FDA/CE medical-device regulatory scope. This is a *feature* for positioning ("we're not a black box giving you a diagnosis") and a business-continuity requirement — do not let AI-report copy or in-app language drift toward "diagnosis" or "risk prediction," which is the fastest way to trigger regulatory reclassification and also the fastest way to erode the trust wedge.
+4. **Regulatory headroom.** Staying explicitly "educational, not diagnostic" keeps Gemocode out of FDA/CE medical-device regulatory scope. This is a *feature* for positioning ("we're not a black box giving you a diagnosis") and a business-continuity requirement — do not let AI-report copy or in-app language drift toward "diagnosis" or "risk prediction," which is the fastest way to trigger regulatory reclassification and also the fastest way to erode the trust wedge.
 
-**Non-negotiable in all growth copy**: never claim "diagnose," "predict your risk of X," or imply clinical-grade certainty. The wedge *is* the disclaimer discipline — competitors chasing engagement will over-claim, and that's the trust gap MediTrack occupies.
+**Non-negotiable in all growth copy**: never claim "diagnose," "predict your risk of X," or imply clinical-grade certainty. The wedge *is* the disclaimer discipline — competitors chasing engagement will over-claim, and that's the trust gap Gemocode occupies.
 
 ---
 
@@ -1830,7 +1830,7 @@ AI inference (owner-key Anthropic API, per the backend track) is a real marginal
 - HealthKit import/write-back, PDF export, backup/restore, passcode/FaceID, widget
 - **3 AI report summaries lifetime** (not monthly — see below) as a taste, clearly labeled "3 of 3 free AI reports remaining"
 
-**Premium — "MediTrack Plus":**
+**Premium — "Gemocode Plus":**
 - Unlimited AI health-analyst reports (the planned historical-comparison + timeline feature)
 - AI chat about your reports (planned)
 - Priority/faster AI generation if inference queuing is ever needed
@@ -1851,7 +1851,7 @@ AI inference (owner-key Anthropic API, per the backend track) is a real marginal
 ### Lifetime purchase — evaluate honestly
 **Verdict: bad fit for the AI features, reasonable for local-only features.**
 - A true lifetime-unlimited-AI purchase is a liability: Anthropic API costs are ongoing and per-use; a $99 lifetime buyer who chats daily for five years costs far more in inference than they paid. This is the single most common way indie/wellness apps blow up their own unit economics.
-- **Alternative to propose**: **"MediTrack Local Lifetime" — a one-time purchase (e.g., $29.99–$39.99) that unlocks any *local-only* premium features that emerge (e.g., unlimited goals, advanced trend exports, extra widget configurations, custom lab catalog entries) but explicitly does NOT include AI reports/chat**, which stay subscription-only regardless of lifetime status. Market it honestly: "Own the local features forever. AI reports are metered separately because each one costs us real money to generate — that's the tradeoff for privacy-first AI you can trust." This honesty is itself consistent with the trust positioning and pre-empts the inevitable App Store review complaints about a lifetime tier that later excludes new AI features.
+- **Alternative to propose**: **"Gemocode Local Lifetime" — a one-time purchase (e.g., $29.99–$39.99) that unlocks any *local-only* premium features that emerge (e.g., unlimited goals, advanced trend exports, extra widget configurations, custom lab catalog entries) but explicitly does NOT include AI reports/chat**, which stay subscription-only regardless of lifetime status. Market it honestly: "Own the local features forever. AI reports are metered separately because each one costs us real money to generate — that's the tradeoff for privacy-first AI you can trust." This honesty is itself consistent with the trust positioning and pre-empts the inevitable App Store review complaints about a lifetime tier that later excludes new AI features.
 - Effort: **S** (mostly App Store Connect config + paywall copy), Phase: **P2** (after the subscription tier is validated — don't split the offer surface before Premium has product-market fit) — impact: incremental revenue from privacy purists who refuse subscriptions, low volume but reinforces brand trust.
 
 ### What NOT to do
@@ -1940,7 +1940,7 @@ Specific owner-idea patterns that would hurt growth or trust in this category, e
 | **AI features that drift into diagnostic or risk-prediction language** ("your risk of diabetes is X%", "this indicates you may have...") | Crosses from educational into diagnostic/medical-device-adjacent territory, which risks regulatory reclassification (FDA SaMD scrutiny) and directly contradicts the CLAUDE.md-level non-negotiable stance; also a real harm risk if users act on a false-confidence AI claim from a general-purpose LLM. | Keep AI output framed as "here's what these numbers typically mean" with the existing disclaimer pattern (`HealthReview.disclaimer`, `MedicationInteractions.disclaimer`) mechanically attached to every AI report and chat response, same as it's attached to the rule-based review and PDF export today. |
 | **Engagement-maximizing streak/guilt mechanics** ("Don't break your streak!" push copy, red badge pressure) borrowed wholesale from generic habit apps | A health-anxiety-adjacent audience (people tracking blood work, symptoms, medications) is more vulnerable to guilt-driven engagement patterns than a generic fitness-app audience; aggressive streak pressure risks real user harm and reads as manipulative given the trust positioning. | Frame habit loops (§3, item 4) around supportive framing ("Welcome back — here's what's new" rather than "You lost your streak"), and make streak mechanics fully optional/dismissible. |
 | **Metering or throttling the drug-interaction checker** (e.g., "premium gets more thorough interaction checking") | Interaction warnings are safety-adjacent; creating a two-tier safety feature (better warnings for paying users) is both an ethical problem and a reputational one — "app hides drug interaction warnings behind a paywall" is a guaranteed negative-press headline in this category. | `MedicationInteractions` stays fully free and identical across tiers, no exceptions, regardless of future catalog expansion. |
-| **Growth-hacking via default-on data sharing toggles** (e.g., pre-checked "help us improve MediTrack by sharing anonymized health trends" during onboarding) | Dark-pattern opt-in during onboarding is exactly the move that erodes trust fastest and is increasingly an App Store review/regulatory target (App Tracking Transparency precedent shows Apple scrutinizes exactly this pattern). | Any data-sharing toggle (including the recommended aggregate analytics in §5) must be off by default, or scoped to non-health behavioral events only with explicit, un-pre-checked opt-in and a one-tap disclosure of exactly what's sent. |
+| **Growth-hacking via default-on data sharing toggles** (e.g., pre-checked "help us improve Gemocode by sharing anonymized health trends" during onboarding) | Dark-pattern opt-in during onboarding is exactly the move that erodes trust fastest and is increasingly an App Store review/regulatory target (App Tracking Transparency precedent shows Apple scrutinizes exactly this pattern). | Any data-sharing toggle (including the recommended aggregate analytics in §5) must be off by default, or scoped to non-health behavioral events only with explicit, un-pre-checked opt-in and a one-tap disclosure of exactly what's sent. |
 
 ---
 
@@ -1951,7 +1951,7 @@ Specific owner-idea patterns that would hurt growth or trust in this category, e
 | 3 lifetime free AI reports + metered paywall | 2 | S | P1 | Revenue — primary monetization mechanism |
 | Paywall after AI preview (not before) | 2 | S | P1 | Conversion rate, trust preservation |
 | 7-day trial on annual only | 2 | S | P1 | LTV, conversion mix toward annual |
-| "MediTrack Local Lifetime" (local-only) | 2 | S | P2 | Incremental revenue, brand reinforcement |
+| "Gemocode Local Lifetime" (local-only) | 2 | S | P2 | Incremental revenue, brand reinforcement |
 | Score-change notifications | 3 | M | P1 | Retention — high, reuses existing infra |
 | Re-test cadence loop (90-day nudge) | 3 | M | P1 | Retention — high, drives repeat scans |
 | Widget upgrade (streak/med-due) | 3 | S | P1 | Retention — daily touchpoint amplification |

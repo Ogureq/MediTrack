@@ -1,4 +1,4 @@
-# MediTrack Creator Outreach Kit
+# Gemocode Creator Outreach Kit
 
 Supports Engine A in `docs/MARKETING.md` (creator-led short video, the Cal AI
 playbook adapted to chronic-illness/nurse-educator/longevity niches). Every
@@ -16,13 +16,13 @@ Keep it short. Reference something specific from their actual content —
 never send this without filling in the bracketed line from a real video of
 theirs first.
 
-> Hi [name] — I'm [your name], solo builder of MediTrack, a private lab/health
+> Hi [name] — I'm [your name], solo builder of Gemocode, a private lab/health
 > tracker for iOS (no account, everything stored on your phone). Really liked
 > your video on [specific video topic/title, e.g. "decoding your thyroid panel
 > after a Hashimoto's diagnosis"] — the part about [specific detail they said]
 > is exactly the gap I built this to close.
 >
-> MediTrack scans a photographed lab report on-device and turns it into
+> Gemocode scans a photographed lab report on-device and turns it into
 > trends + plain-English explanations, free, no login. I'd love to send you
 > early access and, if it's a fit, pay a flat fee for one video showing the
 > scan-a-lab-report moment (your call on format/style — happy to share a demo
@@ -30,7 +30,7 @@ theirs first.
 >
 > Terms up front, no surprises: flat fee for the first video (open to
 > discussing based on your typical rates), plus a referral code your
-> audience can redeem for free MediTrack Premium months, and a code for you
+> audience can redeem for free Gemocode Premium months, and a code for you
 > too. If it performs, I'd like to keep working together monthly — the bar
 > I'm using to decide is roughly a $5 CPM or better, so future videos'
 > renewal depends on how the first one actually does, not a guess. Every
@@ -47,7 +47,7 @@ theirs first.
 
 > Hey [name] — following up in case this got buried (no worries if it's just
 > not a fit). Quick recap: flat fee + referral code for one video showing
-> MediTrack's lab-scan feature, #ad-disclosed, no exclusivity. Happy to send
+> Gemocode's lab-scan feature, #ad-disclosed, no exclusivity. Happy to send
 > a demo clip or answer anything before you decide. If now's not the right
 > time, totally fine — feel free to keep this for later, and either way
 > thanks for considering it.
@@ -92,7 +92,7 @@ Standing rules regardless of band:
 
 ### What to show
 - **The scan demo, front and center.** Photographing a real (or realistic
-  sample) lab report, MediTrack reading the values on-device, and the
+  sample) lab report, Gemocode reading the values on-device, and the
   status-pill result appearing. This is the single most demoable moment in
   the app — lead with it, don't bury it at the end.
 - Their own authentic framing of *why* this mattered to them (a real lab

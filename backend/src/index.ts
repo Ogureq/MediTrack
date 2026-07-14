@@ -156,7 +156,7 @@ router.post("/v1/ai/generate", async ({ request, env }: RouteContext<Env>) => {
       return errorResponse(
         402,
         "premium_required",
-        "AI chat and quick-add extraction require an active MediTrack Premium subscription."
+        "AI chat and quick-add extraction require an active Gemocode Premium subscription."
       );
     }
     if (await hasUsedFreeReport(env.QUOTA_KV, claims.sub)) {

@@ -10,10 +10,10 @@ saturated "health tracker" head term.
 ## Name (30 chars max)
 
 ```
-MediTrack: Lab & Health Diary
+Gemocode: Lab & Health Diary
 ```
 (29 chars. The name field is the strongest ASO signal — "Lab" must appear here;
-"MediTrack" alone wastes the field.)
+"Gemocode" alone wastes the field.)
 
 ## Subtitle (30 chars max)
 
@@ -35,7 +35,7 @@ terms (thyroid, cholesterol) capture the ICP's searches.)
 ## Promotional text (170 chars max, editable without review)
 
 ```
-New: type one sentence — "bp 128/82 after breakfast" — and MediTrack files it. Scan any lab PDF and see every value decoded. Free, no account, all on your iPhone.
+New: type one sentence — "bp 128/82 after breakfast" — and Gemocode files it. Scan any lab PDF and see every value decoded. Free, no account, all on your iPhone.
 ```
 
 ## Description
@@ -43,7 +43,7 @@ New: type one sentence — "bp 128/82 after breakfast" — and MediTrack files i
 ```
 Your labs, decoded — on your phone, not our servers.
 
-MediTrack turns the lab PDFs you already have into trends you can actually
+Gemocode turns the lab PDFs you already have into trends you can actually
 read: scan any lab report and on-device text recognition finds the values,
 matches them against 46 common tests with reference ranges, and shows you
 where you stand — with history charts, plain-English explanations of what
@@ -73,10 +73,10 @@ Let AI narrate your review in plain language: what's working, what's worth
 watching, and questions for your next appointment. Only a text summary of
 your review is ever sent — never your documents, photos, or database — and
 every number in the answer is verified against your actual data before you
-see it. Your first AI report is free. MediTrack Premium unlocks unlimited
+see it. Your first AI report is free. Gemocode Premium unlocks unlimited
 reports, chat about your results, and AI-assisted entry.
 
-MediTrack is educational, not medical advice. It never diagnoses, and it
+Gemocode is educational, not medical advice. It never diagnoses, and it
 will always point you to your doctor or pharmacist for decisions.
 
 Track everything. Understand more. Share nothing.
@@ -87,7 +87,7 @@ Track everything. Understand more. Share nothing.
 ```
 Hello! First release: scan lab PDFs, track vitals and meds, get your health
 score, and keep every byte on your own iPhone. Found a lab format we don't
-parse? Tell us — we read everything: meditrack.feedback@<domain>
+parse? Tell us — we read everything: gemocode.feedback@<domain>
 ```
 
 ## Screenshot plan (6, in order — captions overlaid in-app style)

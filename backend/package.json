@@ -1,8 +1,8 @@
 {
-  "name": "meditrack-relay",
+  "name": "gemocode-relay",
   "version": "0.1.0",
   "private": true,
-  "description": "Stateless AI relay for MediTrack (Cloudflare Workers). P1 scaffold — not deployed. See README.md for owner actions required before this goes live.",
+  "description": "Stateless AI relay for Gemocode (Cloudflare Workers). P1 scaffold — not deployed. See README.md for owner actions required before this goes live.",
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",

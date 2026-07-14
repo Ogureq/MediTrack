@@ -36,4 +36,4 @@ jobs:
           echo "device=$DEVICE" >> "$GITHUB_OUTPUT"
 
       - name: Run tests
-        run: xcodebuild test -project MediTrack.xcodeproj -scheme MediTrack -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.device }}" CODE_SIGNING_ALLOWED=NO
+        run: xcodebuild test -project Gemocode.xcodeproj -scheme Gemocode -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.device }}" CODE_SIGNING_ALLOWED=NO

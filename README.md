@@ -1,4 +1,4 @@
-# MediTrack
+# Gemocode
 
 A privacy-first native iOS app that keeps all your medical data on-device and generates a detailed, rule-based health review.
 
@@ -43,9 +43,9 @@ A privacy-first native iOS app that keeps all your medical data on-device and ge
 - **Modern add sheets** — All six add/edit sheets use scrollable glass-card layouts with one-tap suggestion chips (common frequencies, dosage units, symptom names, quick dates, time presets), icon pickers for vital types, and an "Add details" disclosure that keeps rarely-used fields out of the way.
 - **Re-test and score-change notifications** — Optional push notifications alert you when it's time to revisit a lab test (e.g., 90 days after your last result), and when your overall health score changes meaningfully, helping you stay aware of health trends and follow up on important tests.
 - **Unit preferences** — kg/lb, °C/°F, and mg/dL / mmol/L pickers in Profile; vitals are stored in metric and converted at display and entry across tiles, charts, trends, and review text.
-- **AI Health Analyst (optional)** — Bring your own Anthropic API key to have Claude generate a structured report that narrates the health review findings with plain-language insights and verified citations to your data. The analysis engine computes all numbers and findings; the AI provides educational context and narrative structure. Falls back to the rule-based review if AI is unavailable. Strictly opt-in: only the review text is sent (never documents or the database), and without AI configured the app is fully offline. Your first AI report is free for life; MediTrack Premium unlocks unlimited reports.
+- **AI Health Analyst (optional)** — Bring your own Anthropic API key to have Claude generate a structured report that narrates the health review findings with plain-language insights and verified citations to your data. The analysis engine computes all numbers and findings; the AI provides educational context and narrative structure. Falls back to the rule-based review if AI is unavailable. Strictly opt-in: only the review text is sent (never documents or the database), and without AI configured the app is fully offline. Your first AI report is free for life; Gemocode Premium unlocks unlimited reports.
 - **Ask about your report (optional)** — An AI chat on the Health Review for follow-up questions about your score and findings. Answers are constrained to your current review, keep an educational tone with doctor/pharmacist nudges, and never diagnose. The conversation lives only on your device and only the review summary is sent — never documents or the database.
-- **MediTrack Premium** — $19.99/month (or yearly) unlocks lab report scanning (photograph any report — values extracted and organized automatically, on-device) plus everything AI: unlimited AI health reports, chat about your results, and AI-assisted natural-language entry, powered by a metered relay so you never need your own API key. One AI report is included free as a trial. Tracking vitals, medications, symptoms, appointments, and goals — with the health score, interactions, trends, and backups — stays free.
+- **Gemocode Premium** — $19.99/month (or yearly) unlocks lab report scanning (photograph any report — values extracted and organized automatically, on-device) plus everything AI: unlimited AI health reports, chat about your results, and AI-assisted natural-language entry, powered by a metered relay so you never need your own API key. One AI report is included free as a trial. Tracking vitals, medications, symptoms, appointments, and goals — with the health score, interactions, trends, and backups — stays free.
 - **Full editing** — Reports, medications, and appointments can all be edited after creation; reminder notifications are rescheduled automatically when times change.
 - **Sample data & data management** — A Data section on the Profile screen offers "Load Sample Data" (a realistic 14-month demo history — 5 reports, 27 lab results, 28 vitals, 3 medications — created only alongside a new, non-destructive demo profile) and "Erase All Data" with a confirmation prompt.
 - **Backup & restore** — Profile → Data also offers "Export Backup", which writes a single passphrase-encrypted JSON file (AES-GCM) containing everything — profile, reports with lab results and attachments, vitals, medications, symptoms, appointments, and score history — and "Restore from Backup", which replaces all app data with a confirmation prompt (reminders must be re-enabled afterward). Backups remain entirely on-device under your control. Implemented in `Services/BackupService.swift` using a versioned Codable payload.
@@ -53,7 +53,7 @@ A privacy-first native iOS app that keeps all your medical data on-device and ge
 
 ## Design
 
-MediTrack uses a glassmorphic design system built entirely with native SwiftUI materials — no third-party UI libraries. Frosted ultra-thin-material cards carry beveled edge strokes, with light catching the top-left edge and shade falling along the bottom-right, giving each surface a sense of depth. Lists and forms are presented as floating glass chip rows, while health findings and alerts appear as tinted glass cards colored by severity. Every screen sits over an ambient gradient backdrop of blurred teal, blue, and purple orbs that adapts automatically to light and dark mode. The Dashboard's health score is shown in a glowing gradient ring, and primary actions use glass gradient buttons throughout. The system is implemented as a set of reusable modifiers and styles in `MediTrack/Support/Theme.swift` (`glassCard`, `tintedGlassCard`, `ambientScreen`, `GlassRowBackground`, and glass button styles). The app icon carries the same identity forward: a teal-to-blue gradient with a white medical cross and pulse line. Type is set in a rounded system design throughout for a softer, friendlier feel. The Dashboard's health-score ring animates into place on appear with numeric content transitions, Trends charts support touch scrubbing with a frosted-glass value tooltip, and key actions such as saves are confirmed with haptic feedback.
+Gemocode uses a glassmorphic design system built entirely with native SwiftUI materials — no third-party UI libraries. Frosted ultra-thin-material cards carry beveled edge strokes, with light catching the top-left edge and shade falling along the bottom-right, giving each surface a sense of depth. Lists and forms are presented as floating glass chip rows, while health findings and alerts appear as tinted glass cards colored by severity. Every screen sits over an ambient gradient backdrop of blurred teal, blue, and purple orbs that adapts automatically to light and dark mode. The Dashboard's health score is shown in a glowing gradient ring, and primary actions use glass gradient buttons throughout. The system is implemented as a set of reusable modifiers and styles in `Gemocode/Support/Theme.swift` (`glassCard`, `tintedGlassCard`, `ambientScreen`, `GlassRowBackground`, and glass button styles). The app icon carries the same identity forward: a teal-to-blue gradient with a white medical cross and pulse line. Type is set in a rounded system design throughout for a softer, friendlier feel. The Dashboard's health-score ring animates into place on appear with numeric content transitions, Trends charts support touch scrubbing with a frosted-glass value tooltip, and key actions such as saves are confirmed with haptic feedback.
 
 ## Screenshots
 
@@ -72,8 +72,8 @@ _Screenshots coming soon._
 
 To build and run:
 
-1. Open `MediTrack.xcodeproj` in Xcode.
-2. Select the **MediTrack** scheme.
+1. Open `Gemocode.xcodeproj` in Xcode.
+2. Select the **Gemocode** scheme.
 3. Choose an iOS 17+ simulator or a connected device.
 4. Run (`Cmd+R`).
 
@@ -81,14 +81,14 @@ To build and run:
 
 ## Architecture
 
-MediTrack is a single-target SwiftUI app built entirely on Apple frameworks — SwiftUI for UI, SwiftData for persistence, Swift Charts for visualization, and LocalAuthentication for the optional app lock.
+Gemocode is a single-target SwiftUI app built entirely on Apple frameworks — SwiftUI for UI, SwiftData for persistence, Swift Charts for visualization, and LocalAuthentication for the optional app lock.
 
 | Folder | Contents |
 | --- | --- |
-| `MediTrack/Models/` | SwiftData `@Model` classes — `MedicalReport`, `LabResult`, `ReportAttachment`, `VitalSample`, `Medication`, `HealthProfile` — plus `LabCatalog.swift`, the static reference catalog of common lab tests and ranges, and `LabSynonyms.swift`, a dictionary of common report-form aliases used to match scanned text against the lab catalog. |
-| `MediTrack/Services/` | `AnalysisEngine.swift`, a set of pure functions that produce a `HealthReview` value from stored data; `AppLock.swift` and `KeychainStore.swift` for login/passcode/biometrics handling; `ReviewPDFExporter.swift` for rendering a Health Review as a formatted PDF; `NotificationService.swift` for scheduling and cancelling medication reminder notifications; `HealthKitService.swift` for importing vitals from Apple Health; `LabScanService.swift` for running on-device Vision OCR over report attachments to detect lab values; and `BackupService.swift` for exporting and restoring a full JSON backup of app data. |
-| `MediTrack/Views/` | `Dashboard`, `Reports` (list/detail/add), `Review`, `Trends`, `Vitals`, `Symptoms`, `Medications`, `Appointments`, `MedicalID`, `Profile`, `LabDetailView` (per-test detail with history chart), the onboarding flow, and the root `TabView`. |
-| `MediTrack/Support/` | `Theme.swift`, the glassmorphic design system (glass card and chip modifiers, ambient backgrounds, button styles), `UIHelpers.swift`, and `SampleData.swift` for seeding a demo history or erasing all app data. |
+| `Gemocode/Models/` | SwiftData `@Model` classes — `MedicalReport`, `LabResult`, `ReportAttachment`, `VitalSample`, `Medication`, `HealthProfile` — plus `LabCatalog.swift`, the static reference catalog of common lab tests and ranges, and `LabSynonyms.swift`, a dictionary of common report-form aliases used to match scanned text against the lab catalog. |
+| `Gemocode/Services/` | `AnalysisEngine.swift`, a set of pure functions that produce a `HealthReview` value from stored data; `AppLock.swift` and `KeychainStore.swift` for login/passcode/biometrics handling; `ReviewPDFExporter.swift` for rendering a Health Review as a formatted PDF; `NotificationService.swift` for scheduling and cancelling medication reminder notifications; `HealthKitService.swift` for importing vitals from Apple Health; `LabScanService.swift` for running on-device Vision OCR over report attachments to detect lab values; and `BackupService.swift` for exporting and restoring a full JSON backup of app data. |
+| `Gemocode/Views/` | `Dashboard`, `Reports` (list/detail/add), `Review`, `Trends`, `Vitals`, `Symptoms`, `Medications`, `Appointments`, `MedicalID`, `Profile`, `LabDetailView` (per-test detail with history chart), the onboarding flow, and the root `TabView`. |
+| `Gemocode/Support/` | `Theme.swift`, the glassmorphic design system (glass card and chip modifiers, ambient backgrounds, button styles), `UIHelpers.swift`, and `SampleData.swift` for seeding a demo history or erasing all app data. |
 
 The analysis engine is rule-based and deterministic — no cloud AI is involved. It is designed so that an LLM-powered summarizer could be added later behind the same `HealthReview` interface without disturbing the rest of the app.
 
@@ -103,7 +103,7 @@ The analysis engine is rule-based and deterministic — no cloud AI is involved.
 
 ## Testing & CI
 
-- Unit tests live in `MediTrackTests/` using XCTest and cover the analysis engine, services, and data models.
+- Unit tests live in `GemocodeTests/` using XCTest and cover the analysis engine, services, and data models.
 - GitHub Actions runs `xcodebuild test` on macOS for every push via `.github/workflows/ci.yml`, ensuring all tests pass before code is merged.
 
 ## Roadmap
@@ -116,6 +116,6 @@ See `docs/ROADMAP.md` for the detailed upgrade plan and future milestones beyond
 
 ## Medical Disclaimer
 
-**MediTrack is for informational and educational purposes only. It is not a medical device and does not provide medical advice.** The Detailed Health Review is generated by a deterministic, rule-based engine and does not diagnose, treat, cure, or prevent any disease or condition. It is not a substitute for professional medical judgment.
+**Gemocode is for informational and educational purposes only. It is not a medical device and does not provide medical advice.** The Detailed Health Review is generated by a deterministic, rule-based engine and does not diagnose, treat, cure, or prevent any disease or condition. It is not a substitute for professional medical judgment.
 
 Always consult a qualified healthcare professional regarding any questions you may have about a medical condition, lab result, medication, or vital sign reading. Never disregard professional medical advice or delay seeking it because of information from this app. If you believe you are experiencing a medical emergency, call your local emergency number immediately.

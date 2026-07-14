@@ -1,11 +1,11 @@
-# MediTrack AI relay — Cloudflare Worker configuration.
+# Gemocode AI relay — Cloudflare Worker configuration.
 #
 # This is a P1 scaffold (see docs/ROADMAP.md Part 4). It is NOT deployed and
 # carries zero deployment assumptions: no account-specific resource IDs, no
 # routes/zones, no secrets. See backend/README.md for the exact owner
 # actions required before `wrangler deploy` will work.
 
-name = "meditrack-relay"
+name = "gemocode-relay"
 main = "src/index.ts"
 
 # Bump this to a current date (YYYY-MM-DD, no later than the day you deploy)

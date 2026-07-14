@@ -1,8 +1,8 @@
 > **PRICING CHANGE NOTICE (Jul 2026):** Lab report scanning is now a Premium feature (owner decision). Any line below describing scanning/OCR as free must be revised before publishing. Free tier = vitals/meds/symptoms/goals tracking + score/trends + one AI report.
 
-# MediTrack Marketing Playbook
+# Gemocode Marketing Playbook
 
-Working document for taking MediTrack from zero users to a scalable business.
+Working document for taking Gemocode from zero users to a scalable business.
 Grounded in strategies proven by comparable apps (Cal AI, Bearable, Flo, Levels,
 Function Health, Finch) and adapted to this app's actual moats. Figures marked
 *(est.)* are estimates to be replaced with real cohort data.
@@ -49,7 +49,7 @@ results that took three weeks to arrive.
 
 ### Unique value proposition
 > **Your labs, decoded — on your phone, not our servers.**
-> MediTrack turns the lab PDFs you already have into trends, plain-English
+> Gemocode turns the lab PDFs you already have into trends, plain-English
 > explanations, and questions for your doctor. Every tracking feature is free
 > forever. No account. Your health data never leaves your iPhone.
 
@@ -72,7 +72,7 @@ results that took three weeks to arrive.
 Why it worked for Cal AI: an instantly demoable magic moment (photo → calories),
 high-volume micro-influencer outreach (hundreds contacted, ~150 on retainer
 posting ~4×/month), a ~$5 CPM price target, referral codes for creators, then
-Meta/Google paid on proven creatives. MediTrack's scan-a-lab-PDF → decoded
+Meta/Google paid on proven creatives. Gemocode's scan-a-lab-PDF → decoded
 trends moment is equally screen-recordable.
 Adaptation: recruit micro creators (5k–100k) in chronic-illness TikTok
 (#hashimotos, #pcos, #cholesterol), nurse-educator TikTok, and longevity
@@ -133,7 +133,7 @@ premium at the moment they try a second AI action.
    appear with status pills → tap LDL → range chart + plain-English meaning →
    "Free, and it never leaves my phone."
 2. **The privacy flex.** "Sign-up screen speedrun, health app edition." Show 3
-   competitor sign-up walls, then MediTrack opening straight to the dashboard.
+   competitor sign-up walls, then Gemocode opening straight to the dashboard.
    "No account. No cloud. Airplane-mode demo. Your labs are yours."
 3. **The quarterly review.** "Every 90 days my phone gives me a health recap
    my doctor would charge a copay for." Scroll trajectory → wins → doctor
@@ -227,7 +227,7 @@ score-change + 90-day retest notifications, widgets, redacted share card.
   friend gets +1 free AI report, referrer gets one too. COGS ≈ $0.10 *(est.)*
   per report; needs a relay-side redemption flag.
 - **Viral surface:** the redacted score card and quarterly recap ShareLink
-  already exist — add a subtle "Tracked with MediTrack" watermark.
+  already exist — add a subtle "Tracked with Gemocode" watermark.
 - **Community:** a "Lab Literacy Club" subreddit/Discord seeded from beta
   users; weekly "decode this (anonymized) panel" threads.
 - **Churn:** cancel-flow survey, pause-month option, annual plan at 2 months
