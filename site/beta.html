@@ -72,9 +72,10 @@
   });
 })();
 
-// Background: WebGL beam shader (64 rainbow columns rising on black),
-// from the design project's shader-lines component. Static single frame
-// when the visitor prefers reduced motion; plain black if WebGL is out.
+// Background: WebGL long-exposure light trails — layered soft vertical
+// streaks (thin gaussian cores + faint halos), mostly white/warm gold
+// with occasional cool blue or red, matching the design preview. Static
+// single frame under prefers-reduced-motion; plain black without WebGL.
 (function () {
   class ShaderLines extends HTMLElement {
     connectedCallback() {
@@ -87,27 +88,45 @@
       const vs = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
       const fs = 'precision highp float;\n' +
         'uniform float t;uniform vec2 r;\n' +
-        'vec3 hue(float h){return clamp(abs(mod(h*6.+vec3(0.,4.,2.),6.)-3.)-1.,0.,1.);}\n' +
         'float rnd(float n){return fract(sin(n*12.9898)*43758.5453);}\n' +
+        // One layer of soft vertical light trails: thin gaussian core +
+        // wide faint halo per column, smooth head/tail along y, most
+        // columns dim with a few bright — long-exposure look, no blocks.
+        'float trail(vec2 uv,float seed,float pitch){\n' +
+        '  float x=uv.x*r.x/pitch;\n' +
+        '  float ix=floor(x);\n' +
+        '  float px=(fract(x)-.5)*pitch;\n' +
+        '  float rn=rnd(ix+seed);\n' +
+        '  float speed=mix(.015,.1,rnd(ix+seed+7.));\n' +
+        '  float ph=fract(uv.y*mix(.5,1.1,rn)-t*speed-rn);\n' +
+        '  float len=mix(.2,.8,rnd(ix+seed+3.));\n' +
+        '  float body=smoothstep(1.-len,1.,1.-ph)*smoothstep(0.,.06,ph);\n' +
+        '  float core=exp(-px*px/2.2);\n' +
+        '  float halo=exp(-px*px/30.)*.32;\n' +
+        '  float bright=mix(.05,1.,pow(rnd(ix+seed+13.),3.));\n' +
+        '  return (core+halo)*body*bright;\n' +
+        '}\n' +
+        'vec3 tint(float h){\n' +
+        '  if(h<.5)return vec3(1.);\n' +
+        '  if(h<.8)return vec3(1.,.8,.52);\n' +
+        '  if(h<.93)return vec3(.68,.8,1.);\n' +
+        '  return vec3(1.,.38,.32);\n' +
+        '}\n' +
         'void main(){\n' +
         '  vec2 uv=gl_FragCoord.xy/r;\n' +
-        '  float cols=max(48.,r.x/18.);\n' +
-        '  float ix=floor(uv.x*cols);\n' +
-        '  float fx=fract(uv.x*cols);\n' +
-        '  float rn=rnd(ix);\n' +
-        '  float speed=mix(.04,.28,rnd(ix+7.));\n' +
-        '  float len=mix(.35,.95,rnd(ix+3.));\n' +
-        '  float ph=fract(uv.y*mix(.6,1.4,rn)-t*speed-rn);\n' +
-        '  float beam=pow(smoothstep(1.-len,1.,1.-ph),1.6);\n' +
-        '  float blocks=floor(mix(6.,22.,rnd(ix+11.)));\n' +
-        '  float step_=floor(ph*blocks)/blocks;\n' +
-        '  float mosaic=mix(.55,1.,rnd(ix*3.1+floor(step_*blocks)+floor(t*mix(.5,2.,rn))));\n' +
-        '  vec3 hueCol=hue(fract(ix/cols+.12*sin(t*.15)+.5*rnd(ix+5.)));\n' +
-        '  float colored=step(.78,rnd(ix+9.));\n' +
-        '  vec3 col=mix(mix(vec3(1.),hueCol,.16),hueCol,colored);\n' +
-        '  float edge=smoothstep(0.,.3,fx)*smoothstep(1.,.7,fx);\n' +
-        '  col*=beam*mosaic*edge*1.15;\n' +
-        '  col+=col*col*.4;\n' +
+        '  vec3 col=vec3(0.);\n' +
+        '  for(int i=0;i<3;i++){\n' +
+        '    float fi=float(i);\n' +
+        '    float seed=fi*57.3+3.;\n' +
+        '    float pitch=(i==0)?21.:(i==1)?37.:61.;\n' +
+        '    float gain=(i==0)?.5:(i==1)?.8:1.15;\n' +
+        '    float b=trail(uv,seed,pitch)*gain;\n' +
+        '    float ix=floor(uv.x*r.x/pitch);\n' +
+        '    float h=rnd(ix+seed+5.);\n' +
+        '    vec3 c=mix(vec3(1.),tint(h),(h<.8)?.6:.85);\n' +
+        '    col+=c*b;\n' +
+        '  }\n' +
+        '  col+=col*col*.35;\n' +
         '  gl_FragColor=vec4(col,1.);\n' +
         '}';
       const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s; };
