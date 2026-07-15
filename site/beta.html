@@ -17,8 +17,7 @@
   .content{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;text-align:center;padding:24px;max-width:760px}
   .badge{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;letter-spacing:1.6px;color:rgba(255,255,255,.85);text-transform:uppercase;padding:8px 16px;border-radius:999px;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);margin-bottom:28px;animation:fadeIn 1.2s ease both}
   .badge .dot{width:7px;height:7px;border-radius:50%;background:#fff;box-shadow:0 0 8px rgba(255,255,255,.8)}
-  h1{margin:0 0 20px;display:flex;justify-content:center;font-size:clamp(56px,11vw,104px);font-weight:800;letter-spacing:-.03em;line-height:1}
-  h1 span{display:inline-block;background:linear-gradient(180deg,#fff,rgba(255,255,255,.55));-webkit-background-clip:text;background-clip:text;color:transparent;animation:riseIn .9s cubic-bezier(.2,.8,.2,1) both}
+  h1{margin:0 0 20px;font-size:clamp(56px,11vw,104px);font-weight:800;letter-spacing:-.03em;line-height:1;background:linear-gradient(180deg,#fff,rgba(255,255,255,.55));-webkit-background-clip:text;background-clip:text;color:transparent;animation:riseIn .9s cubic-bezier(.2,.8,.2,1) both;animation-delay:.15s}
   .sub{margin:0 0 44px;font-size:clamp(16px,2.4vw,19px);line-height:1.6;color:rgba(235,235,245,.55);max-width:440px;text-wrap:pretty;animation:fadeIn 1.4s ease .5s both}
   .cta-wrap{animation:fadeIn 1.4s ease .8s both}
   .cta{display:inline-flex;align-items:center;gap:12px;padding:20px 36px;border-radius:20px;font-size:18px;font-weight:700;color:#000;cursor:pointer;background:rgba(255,255,255,.96);box-shadow:0 12px 32px rgba(255,255,255,.18),inset 0 1px 0 rgba(255,255,255,.8);transition:transform .3s,box-shadow .3s}
@@ -30,7 +29,7 @@
   @keyframes riseIn{from{transform:translateY(90px);opacity:0}to{transform:translateY(0);opacity:1}}
   @keyframes fadeIn{from{opacity:0}to{opacity:1}}
   @media (prefers-reduced-motion: reduce){
-    .badge,h1 span,.sub,.cta-wrap,.cta-sub{animation:none}
+    .badge,h1,.sub,.cta-wrap,.cta-sub{animation:none}
     .cta{transition:none}
   }
 </style>
@@ -41,7 +40,7 @@
   <a class="home" href="index.html">&larr; gemocode.app</a>
   <div class="content">
     <div class="badge"><span class="dot"></span> iOS Beta &middot; Now Open</div>
-    <h1 id="title" aria-label="Gemocode"></h1>
+    <h1>Gemocode</h1>
     <p class="sub">Your meds, vitals, and health score &mdash; one beautiful place. Be first to try Gemocode before it hits the App Store.</p>
     <div class="cta-wrap">
       <a class="cta" id="join" href="#">
@@ -54,18 +53,6 @@
 </div>
 
 <script>
-// Animated title: one span per letter, staggered rise-in.
-(function () {
-  var word = 'Gemocode';
-  var h1 = document.getElementById('title');
-  for (var i = 0; i < word.length; i++) {
-    var s = document.createElement('span');
-    s.textContent = word[i];
-    s.style.animationDelay = (0.15 + i * 0.05).toFixed(2) + 's';
-    h1.appendChild(s);
-  }
-})();
-
 // CTA: once a public TestFlight link exists, put it here and the button
 // goes straight to TestFlight. Until then it falls back to the same
 // invite-request email as the main site — no fake "you're on the list".
