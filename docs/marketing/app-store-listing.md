@@ -127,7 +127,7 @@ Hello! First release: track vitals, meds and symptoms, see your Tests Due
 schedule so you know when your next blood draw is (and when it isn't),
 get your health score, and keep every byte on your own iPhone. Your first
 lab scan and AI report are free. Found a lab format we don't parse? Tell
-us — we read everything: gemocode.feedback@<domain>
+us — we read everything: info@gemocode.com
 ```
 
 ## Screenshot plan (7, in order — captions overlaid in-app style)
@@ -142,7 +142,7 @@ us — we read everything: gemocode.feedback@<domain>
 4. Trends chart with healthy-range band. Caption: **"Every result, one
    history — years, not a single draw."**
 5. Quick Add mid-typing "bp 128/82" with live preview card.
-   Caption: **"Type a sentence. It files itself. (Premium)"**
+   Caption: **"Type a sentence. It files itself."**
 6. Quarterly Review recap. Caption: **"Every 90 days: what changed, what
    to ask your doctor."**
 7. **NEW.** AI report PDF export — gradient header, needs-attention box,
