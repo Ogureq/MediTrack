@@ -91,7 +91,7 @@
         'float rnd(float n){return fract(sin(n*12.9898)*43758.5453);}\n' +
         'void main(){\n' +
         '  vec2 uv=gl_FragCoord.xy/r;\n' +
-        '  float cols=64.;\n' +
+        '  float cols=max(48.,r.x/18.);\n' +
         '  float ix=floor(uv.x*cols);\n' +
         '  float fx=fract(uv.x*cols);\n' +
         '  float rn=rnd(ix);\n' +
@@ -102,8 +102,10 @@
         '  float blocks=floor(mix(6.,22.,rnd(ix+11.)));\n' +
         '  float step_=floor(ph*blocks)/blocks;\n' +
         '  float mosaic=mix(.55,1.,rnd(ix*3.1+floor(step_*blocks)+floor(t*mix(.5,2.,rn))));\n' +
-        '  vec3 col=hue(fract(ix/cols+.12*sin(t*.15)+.5*rnd(ix+5.)));\n' +
-        '  float edge=smoothstep(0.,.15,fx)*smoothstep(1.,.85,fx);\n' +
+        '  vec3 hueCol=hue(fract(ix/cols+.12*sin(t*.15)+.5*rnd(ix+5.)));\n' +
+        '  float colored=step(.78,rnd(ix+9.));\n' +
+        '  vec3 col=mix(mix(vec3(1.),hueCol,.16),hueCol,colored);\n' +
+        '  float edge=smoothstep(0.,.3,fx)*smoothstep(1.,.7,fx);\n' +
         '  col*=beam*mosaic*edge*1.15;\n' +
         '  col+=col*col*.4;\n' +
         '  gl_FragColor=vec4(col,1.);\n' +
