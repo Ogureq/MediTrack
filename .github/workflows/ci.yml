@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - '**'
+    # macOS runners bill at a 10x minute multiplier on private repos —
+    # don't spend them on commits that can't change the build.
+    paths-ignore:
+      - 'site/**'
+      - 'docs/**'
+      - '**.md'
   pull_request:
 
 jobs:
