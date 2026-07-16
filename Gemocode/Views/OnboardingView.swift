@@ -55,10 +55,15 @@ struct OnboardingView: View {
                     .padding(.horizontal, 24)
                     .padding(.top, 14)
 
-                ScrollView {
-                    stepContent
-                        .padding(.bottom, 24)
-                }
+                // Each step manages its own scrolling: `QuizStepScaffold` (used by
+                // every step but `preview`) puts the icon/title/content in a
+                // `ScrollView` with the Continue/Skip footer pinned below it via
+                // `.safeAreaInset`, and `previewStep` does the same itself. Wrapping
+                // *this* in another `ScrollView` would nest two vertical scroll
+                // views — the inner one's content can fail to lay out (rendering as
+                // an empty frame) and a pinned footer can't reserve its own height
+                // from a scroll view it isn't inside.
+                stepContent
             }
         }
         .animation(.easeInOut(duration: 0.25), value: step)
@@ -382,54 +387,68 @@ struct OnboardingView: View {
             primaryTitle: "Continue",
             onPrimary: { advance() }
         ) {
-            ScrollView {
-                Text(HealthReview.disclaimer)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.leading)
-                    .padding()
-            }
-            .frame(maxHeight: 160)
-            .glassCard(cornerRadius: 16)
+            // Previously this text sat inside its own `ScrollView` (capped at
+            // 160pt) nested inside the step's outer scroll view. A `ScrollView`
+            // nested inside another vertical `ScrollView` can fail to size its
+            // content on first layout — the card's glass background rendered,
+            // but the disclaimer text inside it did not, reading as a big empty
+            // box. The disclaimer is a short, fixed string that always fits
+            // comfortably, so it doesn't need to scroll on its own — showing it
+            // as a plain `Text` inside the card (which itself sits in the
+            // step's single scroll view) fixes the rendering and removes the
+            // redundant inner scroller.
+            Text(HealthReview.disclaimer)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+                .glassCard(cornerRadius: 16)
         }
     }
 
     private var previewStep: some View {
-        VStack(spacing: 24) {
-            Text("Your Starting Point")
-                .font(.title2.bold())
-                .padding(.top, 24)
+        // Unlike the other steps, `preview` doesn't route through
+        // `QuizStepScaffold`, so it owns its own scroll container — matching
+        // every other step now that the outer `OnboardingView` body no longer
+        // wraps `stepContent` in a `ScrollView` itself (see `body`).
+        ScrollView {
+            VStack(spacing: 24) {
+                Text("Your Starting Point")
+                    .font(.title2.bold())
+                    .padding(.top, 24)
 
-            QuizPreviewRing(percent: completenessPercent)
-                .frame(width: 130, height: 130)
+                QuizPreviewRing(percent: completenessPercent)
+                    .frame(width: 130, height: 130)
 
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(previewLines, id: \.self) { line in
-                    HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: "sparkle")
-                            .foregroundStyle(Glass.accentGradient)
-                            .accessibilityHidden(true)
-                        Text(line)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(previewLines, id: \.self) { line in
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: "sparkle")
+                                .foregroundStyle(Glass.accentGradient)
+                                .accessibilityHidden(true)
+                            Text(line)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
-            }
-            .padding(18)
-            .glassCard(cornerRadius: 16)
-            .padding(.horizontal, 24)
+                .padding(18)
+                .glassCard(cornerRadius: 16)
+                .padding(.horizontal, 24)
 
-            Spacer(minLength: 12)
+                Spacer(minLength: 12)
 
-            Button("Open Gemocode") {
-                completeQuiz()
+                Button("Open Gemocode") {
+                    completeQuiz()
+                }
+                .buttonStyle(GlassProminentButtonStyle())
+                .frame(maxWidth: 300)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 40)
             }
-            .buttonStyle(GlassProminentButtonStyle())
-            .frame(maxWidth: 300)
-            .padding(.horizontal, 24)
-            .padding(.bottom, 40)
+            .padding(.top, 12)
         }
-        .padding(.top, 12)
     }
 
     // MARK: Supplements helpers
@@ -582,35 +601,48 @@ private struct QuizStepScaffold<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        VStack(spacing: 22) {
-            ZStack {
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        Circle().strokeBorder(Glass.bevelStroke, lineWidth: 1)
-                    )
-                    .shadow(color: .black.opacity(0.14), radius: 10, x: 0, y: 5)
-                    .frame(width: 78, height: 78)
+        // Scrollable header + content, with Continue/Skip pinned in a
+        // `.safeAreaInset` footer below the scroll view rather than living
+        // inside it. `.safeAreaInset` automatically reserves bottom content
+        // inset equal to the footer's own height (plus the safe area), so
+        // every row of a wrapping chip layout (e.g. the Goals step's
+        // `FlowLayout`) can scroll fully into view above the footer instead
+        // of being cut off / drawn underneath it, while Continue/Skip stay
+        // fixed on screen as the content scrolls behind them.
+        ScrollView {
+            VStack(spacing: 22) {
+                ZStack {
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            Circle().strokeBorder(Glass.bevelStroke, lineWidth: 1)
+                        )
+                        .shadow(color: .black.opacity(0.14), radius: 10, x: 0, y: 5)
+                        .frame(width: 78, height: 78)
 
-                Image(systemName: systemImage)
-                    .font(.system(size: 34, weight: .semibold))
-                    .foregroundStyle(Glass.accentGradient)
+                    Image(systemName: systemImage)
+                        .font(.system(size: 34, weight: .semibold))
+                        .foregroundStyle(Glass.accentGradient)
+                }
+                .padding(.top, 20)
+
+                VStack(spacing: 6) {
+                    Text(title)
+                        .font(.title2.bold())
+                        .multilineTextAlignment(.center)
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.horizontal, 12)
+
+                content()
             }
-            .padding(.top, 20)
-
-            VStack(spacing: 6) {
-                Text(title)
-                    .font(.title2.bold())
-                    .multilineTextAlignment(.center)
-                Text(subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(.horizontal, 12)
-
-            content()
-
+            .padding(.horizontal, 24)
+            .padding(.bottom, 16)
+        }
+        .safeAreaInset(edge: .bottom) {
             VStack(spacing: 10) {
                 Button(primaryTitle, action: onPrimary)
                     .buttonStyle(GlassProminentButtonStyle())
@@ -620,10 +652,11 @@ private struct QuizStepScaffold<Content: View>: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .padding(.top, 8)
-            .padding(.bottom, 32)
+            .padding(.horizontal, 24)
+            .padding(.top, 12)
+            .padding(.bottom, 20)
+            .background(.ultraThinMaterial)
         }
-        .padding(.horizontal, 24)
     }
 }
 
@@ -698,7 +731,20 @@ private struct FlowLayout: Layout {
         }
         totalHeight += rowHeight
         totalWidth = max(totalWidth, rowWidth)
-        return CGSize(width: totalWidth, height: totalHeight)
+
+        // Report the full proposed width, not just the widest wrapped row.
+        // `placeSubviews(in:)` is called with `bounds` equal to whatever this
+        // method returns for the *same* proposal, and re-derives its own row
+        // wrapping from `bounds.maxX` — if that were narrower than `maxWidth`
+        // (e.g. the widest row hugged to less than the available width),
+        // placement would wrap more aggressively than this measurement pass
+        // did, needing more rows — and more height — than were reserved here.
+        // The result: trailing chips render past the bounds the parent
+        // allocated and overlap whatever follows (or each other, as rows
+        // disagree between the two passes). Keeping both passes' width basis
+        // identical keeps the measured height accurate.
+        let width = maxWidth.isFinite ? maxWidth : totalWidth
+        return CGSize(width: width, height: totalHeight)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {

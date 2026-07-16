@@ -52,14 +52,34 @@ struct ReviewScreen: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
+                        // Each card below (aside from the AI card, which owns its
+                        // own intentional "generating…" pulse animation) has its
+                        // implicit animation nulled out. Without this, an ambient
+                        // transaction already in flight when this screen first
+                        // appears (e.g. from the onboarding fullScreenCover
+                        // dismissing, or from `premiumStore`/`aiConfig` publishing
+                        // their asynchronously-loaded values moments after appear)
+                        // gets inherited by these section insertions and animates
+                        // them in from a stale/offset frame — which reads as the
+                        // score header sliding under the nav title and a finding
+                        // card momentarily double-drawn over the AI card below it.
+                        // Nulling it makes each card render directly in its final,
+                        // laid-out position with no animated insertion.
                         headerCard(review: review)
+                            .transaction { $0.animation = nil }
                         aiSummaryCard(review: review)
                         findingsGroup("Critical", severity: .critical, findings: review.criticalFindings)
+                            .transaction { $0.animation = nil }
                         findingsGroup("Needs Attention", severity: .attention, findings: review.attentionFindings)
+                            .transaction { $0.animation = nil }
                         findingsGroup("Informational", severity: .info, findings: review.infoFindings)
+                            .transaction { $0.animation = nil }
                         trendsCard(review: review)
+                            .transaction { $0.animation = nil }
                         labValuesCard(review: review)
+                            .transaction { $0.animation = nil }
                         disclaimerCard
+                            .transaction { $0.animation = nil }
                     }
                     .padding()
                 }
