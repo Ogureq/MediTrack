@@ -240,6 +240,10 @@ struct AddReminderSheet: View {
     ]
 
     @State private var showingDetails: Bool
+    /// Guards `save()` against a double tap firing two inserts before the
+    /// sheet has dismissed — checked and set at the top of `save()`, and
+    /// mirrored onto the Save button's `disabled` state.
+    @State private var isSaving = false
 
     private static let timePresets: [(label: String, hour: Int, minute: Int)] = [
         ("Morning 8:00", 8, 0), ("Noon", 12, 0), ("Evening 20:00", 20, 0),
@@ -353,7 +357,7 @@ struct AddReminderSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
-                        .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
                 }
             }
         }
@@ -387,6 +391,8 @@ struct AddReminderSheet: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
+        isSaving = true
         let reminder: Reminder
         if let existingReminder {
             reminder = existingReminder

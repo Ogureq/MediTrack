@@ -38,10 +38,20 @@ struct QuarterlyReviewView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     header
+                    // Each card below populates from `.empty` placeholder
+                    // content to the real recap via `.task(id: dataSignature)`
+                    // while this sheet is still presenting — nulling the
+                    // transaction keeps that population from inheriting an
+                    // ambient animation and animating in from a stale frame,
+                    // same reasoning as ReviewScreen's cards.
                     scoreTrajectoryCard
+                        .transaction { $0.animation = nil }
                     whatChangedSection
+                        .transaction { $0.animation = nil }
                     winsCard
+                        .transaction { $0.animation = nil }
                     doctorQuestionsCard
+                        .transaction { $0.animation = nil }
                     disclaimerCard
                     doneButton
                 }
@@ -144,6 +154,8 @@ struct QuarterlyReviewView: View {
         VStack(spacing: 2) {
             Text("\(value)")
                 .font(.title2.bold())
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(.secondary)

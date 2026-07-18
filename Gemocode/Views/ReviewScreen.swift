@@ -15,7 +15,6 @@ struct ReviewScreen: View {
 
     @State private var aiReport: AIHealthReport?
     @State private var isGeneratingSummary = false
-    @State private var isPulsing = false
     @State private var aiError: String?
     @State private var showingAIChat = false
     @State private var showingPaywall = false
@@ -52,22 +51,31 @@ struct ReviewScreen: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        // Each card below (aside from the AI card, which owns its
-                        // own intentional "generating…" pulse animation) has its
-                        // implicit animation nulled out. Without this, an ambient
-                        // transaction already in flight when this screen first
-                        // appears (e.g. from the onboarding fullScreenCover
-                        // dismissing, or from `premiumStore`/`aiConfig` publishing
-                        // their asynchronously-loaded values moments after appear)
+                        // Every card below has its implicit animation nulled
+                        // out. Without this, an ambient transaction already in
+                        // flight when this screen first appears (e.g. from the
+                        // onboarding fullScreenCover dismissing, or from
+                        // `premiumStore`/`aiConfig` publishing their
+                        // asynchronously-loaded values moments after appear)
                         // gets inherited by these section insertions and animates
                         // them in from a stale/offset frame — which reads as the
                         // score header sliding under the nav title and a finding
                         // card momentarily double-drawn over the AI card below it.
                         // Nulling it makes each card render directly in its final,
-                        // laid-out position with no animated insertion.
+                        // laid-out position with no animated insertion. The AI
+                        // card's own "generating…" pulse is unaffected because it
+                        // runs on a TimelineView (see `aiSummaryCard`) rather than
+                        // a transaction-borne `withAnimation`.
                         headerCard(review: review)
                             .transaction { $0.animation = nil }
+                        // Also nulled, like every other card here — the
+                        // generating-report pulse below is intentionally
+                        // rebuilt on a TimelineView so it animates every
+                        // frame regardless of this transaction, instead of
+                        // relying on an ambient/withAnimation transaction
+                        // this modifier would otherwise cancel.
                         aiSummaryCard(review: review)
+                            .transaction { $0.animation = nil }
                         findingsGroup("Critical", severity: .critical, findings: review.criticalFindings)
                             .transaction { $0.animation = nil }
                         findingsGroup("Needs Attention", severity: .attention, findings: review.attentionFindings)
@@ -205,16 +213,18 @@ struct ReviewScreen: View {
                     }
                 }
                 if isGeneratingSummary {
-                    Text("Generating your report…")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .opacity(isPulsing ? 1 : 0.6)
-                        .onAppear {
-                            withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
-                                isPulsing = true
-                            }
-                        }
-                        .onDisappear { isPulsing = false }
+                    // Driven by TimelineView rather than `withAnimation` +
+                    // `@State` so the pulse keeps animating every frame even
+                    // though `aiSummaryCard`'s call site nulls its enclosing
+                    // transaction (see the comment on that call site) — a
+                    // transaction-borne animation would otherwise be
+                    // cancelled the instant it started.
+                    TimelineView(.animation) { timeline in
+                        Text("Generating your report…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .opacity(0.6 + 0.4 * abs(sin(timeline.date.timeIntervalSinceReferenceDate * 2)))
+                    }
                 }
                 if let aiReport {
                     aiReportContent(aiReport)

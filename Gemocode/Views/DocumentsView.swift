@@ -173,6 +173,14 @@ struct DocumentsView: View {
     /// build itself never faults external-storage blobs.
     @State private var allItems: [DocumentItem] = []
 
+    /// False until the first `.task(id:)` pass has populated `allItems`.
+    /// Gates both empty states below so a brief, genuinely-empty cache on
+    /// first appearance renders a blank container instead of flashing
+    /// "No Documents" (or, since the search-results check is also derived
+    /// from the not-yet-populated cache, the "no search results" state)
+    /// every time this screen is opened even when documents exist.
+    @State private var hasLoaded = false
+
     private var availableCategories: [ReportCategory] {
         ReportCategory.allCases.filter { category in allItems.contains { $0.reportCategory == category } }
     }
@@ -187,7 +195,7 @@ struct DocumentsView: View {
 
     var body: some View {
         Group {
-            if allItems.isEmpty {
+            if hasLoaded && allItems.isEmpty {
                 ContentUnavailableView {
                     Label("No Documents", systemImage: "folder")
                 } description: {
@@ -197,7 +205,7 @@ struct DocumentsView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
                         categoryChips
-                        if filteredItems.isEmpty {
+                        if hasLoaded && filteredItems.isEmpty {
                             ContentUnavailableView.search(text: searchText)
                                 .padding(.top, 40)
                         } else {
@@ -215,6 +223,7 @@ struct DocumentsView: View {
         .navigationTitle("Documents")
         .task(id: reports.count) {
             allItems = DocumentLibrary.items(from: reports)
+            hasLoaded = true
         }
     }
 

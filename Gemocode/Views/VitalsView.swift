@@ -8,6 +8,11 @@ struct VitalsView: View {
 
     @State private var showingAdd = false
     @State private var cards: [VitalCardSummary] = []
+    /// False until the first `.task(id:)` pass has populated `cards`. Gates
+    /// the empty state so a brief, genuinely-empty `cards` array on first
+    /// appearance (before the cache is built) renders a blank grid instead
+    /// of flashing "No Vitals Logged" for a screen that actually has data.
+    @State private var hasLoaded = false
 
     let initialType: VitalType
 
@@ -17,7 +22,7 @@ struct VitalsView: View {
 
     var body: some View {
         Group {
-            if cards.isEmpty {
+            if hasLoaded && cards.isEmpty {
                 ContentUnavailableView {
                     Label("No Vitals Logged", systemImage: "waveform.path.ecg")
                 } description: {
@@ -58,6 +63,7 @@ struct VitalsView: View {
         }
         .task(id: vitals.count) {
             cards = Self.buildCards(from: vitals)
+            hasLoaded = true
         }
     }
 
@@ -408,6 +414,10 @@ struct AddVitalSheet: View {
     @State private var date = Date.now
     @State private var note = ""
     @State private var showingDetails = false
+    /// Guards `save()` against a double tap firing two inserts before the
+    /// sheet has dismissed — checked and set at the top of `save()`, and
+    /// mirrored onto the Save button's `disabled` state.
+    @State private var isSaving = false
 
     init(initialType: VitalType = .weight) {
         _type = State(initialValue: initialType)
@@ -512,7 +522,7 @@ struct AddVitalSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
-                        .disabled(!canSave)
+                        .disabled(!canSave || isSaving)
                 }
             }
         }
@@ -522,7 +532,9 @@ struct AddVitalSheet: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
         guard let value = parsedValue else { return }
+        isSaving = true
         let sample = VitalSample(
             type: type,
             value: Units.canonical(value, for: type),
@@ -565,7 +577,7 @@ private struct SheetHeader: View {
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: icon)
-                .font(.title2.weight(.semibold))
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 52, height: 52)
                 .background(tint.gradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -610,7 +622,7 @@ private struct VitalTypeChip: View {
         Button(action: action) {
             VStack(spacing: 6) {
                 Image(systemName: type.systemImage)
-                    .font(.title3)
+                    .font(.system(size: 20))
                     .frame(width: 40, height: 40)
                     .foregroundStyle(isSelected ? .white : Color.accentColor)
                     .background(

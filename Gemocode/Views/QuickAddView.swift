@@ -24,6 +24,10 @@ struct QuickAddView: View {
     @State private var isLoadingAI = false
     @State private var aiErrorMessage: String?
     @State private var showingPaywall = false
+    /// Guards `save()`/`saveBatch()` against a fast double-tap firing twice
+    /// before `dismiss()` actually removes the sheet — check-and-set at the
+    /// top of each, and the Add/confirm buttons disable on it too.
+    @State private var isSaving = false
     @FocusState private var isFieldFocused: Bool
 
     private static let examples = ["bp 128/82", "headache severity 6", "dentist tomorrow 3pm"]
@@ -113,11 +117,11 @@ struct QuickAddView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") { save() }
-                        .disabled(draft == nil)
+                        .disabled(draft == nil || isSaving)
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .presentationBackground(.ultraThinMaterial)
         .onAppear { isFieldFocused = true }
@@ -146,6 +150,7 @@ struct QuickAddView: View {
             }
             .buttonStyle(QuickAddAIButtonStyle())
             .accessibilityLabel("Add \(batchDrafts.count) item\(batchDrafts.count == 1 ? "" : "s")")
+            .disabled(isSaving)
         }
         .transition(.asymmetric(
             insertion: .scale(scale: 0.94).combined(with: .opacity),
@@ -183,6 +188,12 @@ struct QuickAddView: View {
                             .background(Circle().fill(.orange))
                             .offset(x: 10, y: -10)
                             .accessibilityHidden(true)
+                            // `premiumStore.isPremium` can flip out from under
+                            // this view (e.g. a purchase restored while the
+                            // sheet is open); without suppressing inherited
+                            // animation, the badge can animate in from a
+                            // stale/zero frame instead of simply appearing.
+                            .transaction { $0.animation = nil }
                     }
                 }
             }
@@ -281,14 +292,16 @@ struct QuickAddView: View {
     }
 
     private func save() {
-        guard let draft else { return }
+        guard let draft, !isSaving else { return }
+        isSaving = true
         insert(draft)
         Haptics.success()
         dismiss()
     }
 
     private func saveBatch() {
-        guard !batchDrafts.isEmpty else { return }
+        guard !batchDrafts.isEmpty, !isSaving else { return }
+        isSaving = true
         for item in batchDrafts {
             insert(item.draft)
         }
@@ -312,7 +325,11 @@ private struct QuickAddHeader: View {
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: "bolt.fill")
-                .font(.title2.weight(.semibold))
+                // Fixed point size, not `.title2` (which would grow with
+                // Dynamic Type and clip inside this fixed 52×52 badge) — 22pt
+                // matches `.title2`'s default rendered size, so this looks
+                // identical at the standard content size category.
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 52, height: 52)
                 .background(Glass.accentGradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -395,7 +412,12 @@ private struct QuickAddPreviewCard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: display.icon)
-                    .font(.headline)
+                    // Fixed point size, not `.headline` (which would grow
+                    // with Dynamic Type and clip inside this fixed 42×42
+                    // badge) — 17pt semibold matches `.headline`'s default
+                    // rendered size, so this looks identical at the standard
+                    // content size category.
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 42, height: 42)
                     .background(display.tint.gradient, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -453,7 +475,12 @@ private struct QuickAddBatchPreviewCard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: display.icon)
-                    .font(.headline)
+                    // Fixed point size, not `.headline` (which would grow
+                    // with Dynamic Type and clip inside this fixed 42×42
+                    // badge) — 17pt semibold matches `.headline`'s default
+                    // rendered size, so this looks identical at the standard
+                    // content size category.
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 42, height: 42)
                     .background(display.tint.gradient, in: RoundedRectangle(cornerRadius: 12, style: .continuous))

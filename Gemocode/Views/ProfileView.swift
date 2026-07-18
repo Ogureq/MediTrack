@@ -63,6 +63,14 @@ private struct ProfileForm: View {
     @State private var dataMessage: String?
     @State private var showingExportPassphraseSheet = false
     @State private var showingRestorePassphraseSheet = false
+    /// Set by `performExport` on success instead of `showingExporter`
+    /// directly, and consumed by the export sheet's `onDismiss` — see the
+    /// comment on that sheet for why the exporter can't be requested while
+    /// the passphrase sheet is still covering it.
+    @State private var pendingExport = false
+    /// Set by `attemptRestore` on success instead of `dataMessage` directly,
+    /// and consumed by the restore sheet's `onDismiss` for the same reason.
+    @State private var pendingRestoreMessage: String?
 
     private static let bloodTypes = ["", "A+", "A−", "B+", "B−", "AB+", "AB−", "O+", "O−"]
 
@@ -335,10 +343,28 @@ private struct ProfileForm: View {
         .sheet(isPresented: $showingPaywall) {
             PaywallView()
         }
-        .sheet(isPresented: $showingExportPassphraseSheet) {
+        .sheet(isPresented: $showingExportPassphraseSheet, onDismiss: {
+            // The .fileExporter below is attached to this same view, so it
+            // must only be requested once this sheet has fully finished
+            // dismissing — requesting it earlier (e.g. from `performExport`
+            // while the sheet is still covering the screen) asks UIKit to
+            // present the document picker over a sheet that's still being
+            // torn down, which silently drops the presentation.
+            if pendingExport {
+                pendingExport = false
+                showingExporter = true
+            }
+        }) {
             BackupExportPassphraseSheet(onExport: performExport)
         }
-        .sheet(isPresented: $showingRestorePassphraseSheet) {
+        .sheet(isPresented: $showingRestorePassphraseSheet, onDismiss: {
+            // Same ordering issue as export: the success alert must wait
+            // until the restore sheet is actually gone before it appears.
+            if let message = pendingRestoreMessage {
+                pendingRestoreMessage = nil
+                dataMessage = message
+            }
+        }) {
             BackupRestorePassphraseSheet(attemptRestore: attemptRestore)
         }
         .confirmationDialog(
@@ -419,10 +445,17 @@ private struct ProfileForm: View {
     /// been entered and confirmed. `BackupService.export` hops off the main
     /// actor internally for the PBKDF2/AES-GCM work, so this only blocks
     /// the sheet (via its own `isExporting` state), never the whole UI.
+    ///
+    /// Deliberately does NOT set `showingExporter` itself — the sheet is
+    /// still presented while this `await` is in flight (the sheet's own
+    /// Task calls `dismiss()` right after this returns), so flipping
+    /// `showingExporter` here would ask SwiftUI to present the
+    /// `.fileExporter` while the passphrase sheet is still on screen. The
+    /// `pendingExport` flag defers that to the sheet's `onDismiss` instead.
     private func performExport(passphrase: String) async {
         do {
             exportDocument = BackupJSONDocument(data: try await BackupService.export(from: modelContext, passphrase: passphrase))
-            showingExporter = true
+            pendingExport = true
         } catch {
             dataMessage = "Export failed: \(error.localizedDescription)"
         }
@@ -431,6 +464,13 @@ private struct ProfileForm: View {
     /// Called by `BackupRestorePassphraseSheet` for each attempt. Returns an
     /// error message to display inline (and keep the sheet open) on failure,
     /// or `nil` on success (the sheet dismisses itself).
+    ///
+    /// On success this stages the confirmation into `pendingRestoreMessage`
+    /// rather than `dataMessage` directly, for the same reason
+    /// `performExport` stages `pendingExport`: the restore sheet is still on
+    /// screen when this returns, and presenting the `.alert` immediately
+    /// would race its dismissal. The sheet's `onDismiss` promotes the
+    /// pending message once it's actually gone.
     private func attemptRestore(passphrase: String) async -> String? {
         guard let data = pendingRestoreData else {
             return "No backup file selected."
@@ -439,7 +479,7 @@ private struct ProfileForm: View {
             let count = try await BackupService.restore(from: data, passphrase: passphrase, into: modelContext)
             pendingRestoreData = nil
             Haptics.success()
-            dataMessage = "Backup restored — \(count) record\(count == 1 ? "" : "s"). Medication and appointment reminders need to be re-enabled."
+            pendingRestoreMessage = "Backup restored — \(count) record\(count == 1 ? "" : "s"). Medication and appointment reminders need to be re-enabled."
             return nil
         } catch {
             return error.localizedDescription

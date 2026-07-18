@@ -249,6 +249,10 @@ struct AddGoalSheet: View {
     @State private var targetDate = Calendar.current.date(byAdding: .month, value: 3, to: .now) ?? .now
     @State private var note = ""
     @State private var showingDetails = false
+    /// Guards `save()` against a double tap firing two inserts before the
+    /// sheet has dismissed — checked and set at the top of `save()`, and
+    /// mirrored onto the Save button's `disabled` state.
+    @State private var isSaving = false
 
     private struct GoalTemplate {
         let label: String
@@ -372,7 +376,7 @@ struct AddGoalSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
-                        .disabled(parsedTarget == nil)
+                        .disabled(parsedTarget == nil || isSaving)
                 }
             }
         }
@@ -382,7 +386,9 @@ struct AddGoalSheet: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
         guard let target = parsedTarget else { return }
+        isSaving = true
         modelContext.insert(HealthGoal(
             type: type,
             targetValue: Units.canonical(target, for: type),
@@ -408,7 +414,7 @@ private struct SheetHeader: View {
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: icon)
-                .font(.title2.weight(.semibold))
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 52, height: 52)
                 .background(tint.gradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -483,7 +489,7 @@ private struct GoalTypeChip: View {
         Button(action: action) {
             VStack(spacing: 6) {
                 Image(systemName: type.systemImage)
-                    .font(.title3)
+                    .font(.system(size: 20))
                     .frame(width: 40, height: 40)
                     .foregroundStyle(isSelected ? .white : Color.accentColor)
                     .background(

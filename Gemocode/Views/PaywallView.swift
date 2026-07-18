@@ -25,15 +25,26 @@ struct PaywallView: View {
                 PaywallHeader()
 
                 if store.isPremium {
+                    // Nulled: `.task { await store.loadProducts() }` and
+                    // `store`'s async entitlement refresh can both land
+                    // during sheet presentation, moments after this view
+                    // first appears. Without this, an ambient transaction
+                    // already in flight at that moment gets inherited by
+                    // this card's insertion and animates it in from a
+                    // stale/offset frame — same reasoning as ReviewScreen's
+                    // cards.
                     activeCard
+                        .transaction { $0.animation = nil }
                 }
 
                 featureList
 
                 if store.loadState == .unavailable {
                     unavailableCard
+                        .transaction { $0.animation = nil }
                 } else {
                     productSection
+                        .transaction { $0.animation = nil }
                 }
 
                 restoreButton
@@ -144,7 +155,12 @@ struct PaywallView: View {
                         isYearly: product.id == PremiumStore.yearlyProductID,
                         isLifetime: product.id == PremiumStore.lifetimeProductID,
                         isPurchasing: purchasingProductID == product.id,
-                        isDisabled: purchasingProductID != nil && purchasingProductID != product.id
+                        // Any purchase in flight disables every card,
+                        // including the one being purchased — otherwise the
+                        // purchasing product's own button stays tappable
+                        // mid-purchase and a second tap can fire a second
+                        // `product.purchase()` before the first resolves.
+                        isDisabled: purchasingProductID != nil
                     ) {
                         performPurchase(product)
                     }
@@ -210,7 +226,10 @@ struct PaywallView: View {
                 .foregroundStyle(.secondary, .ultraThinMaterial)
                 .symbolRenderingMode(.palette)
         }
-        .padding(12)
+        // Extra inset (vs. the usual 12pt) so this can't crowd
+        // PaywallHeader's crown/sparkle badge, which sits close to the top
+        // of the scroll content right below this overlay.
+        .padding(20)
         .accessibilityLabel("Close")
     }
 
@@ -256,10 +275,14 @@ private struct PaywallHeader: View {
                     .fill(Glass.accentGradient)
                     .frame(width: 68, height: 68)
                 Image(systemName: "crown.fill")
-                    .font(.title.weight(.semibold))
+                    .font(.system(size: 28, weight: .semibold))
                     .foregroundStyle(.white)
+                // Fixed-point font keeps this glyph's rendered size stable
+                // at accessibility Dynamic Type sizes, so the fixed `.offset`
+                // below can't drift it into colliding with the crown or
+                // spilling outside the 68×68 circle.
                 Image(systemName: "sparkles")
-                    .font(.caption.weight(.bold))
+                    .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(.white)
                     .offset(x: 20, y: -20)
             }
@@ -289,7 +312,7 @@ private struct PaywallFeatureRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
-                .font(.subheadline.weight(.semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 32, height: 32)
                 .background(Glass.accentGradient, in: RoundedRectangle(cornerRadius: 10, style: .continuous))

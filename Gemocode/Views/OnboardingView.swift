@@ -54,6 +54,7 @@ struct OnboardingView: View {
                 progressBar
                     .padding(.horizontal, 24)
                     .padding(.top, 14)
+                    .animation(.easeInOut(duration: 0.25), value: step)
 
                 // Each step manages its own scrolling: `QuizStepScaffold` (used by
                 // every step but `preview`) puts the icon/title/content in a
@@ -63,10 +64,27 @@ struct OnboardingView: View {
                 // views — the inner one's content can fail to lay out (rendering as
                 // an empty frame) and a pinned footer can't reserve its own height
                 // from a scroll view it isn't inside.
+                //
+                // The step-change animation used to sit on the outer `ZStack`
+                // above, as one blanket `.animation(value: step)` covering
+                // everything. Because switching `step` swaps in an entirely new
+                // `QuizStepScaffold` (or `previewStep`) instance, that blanket
+                // scope gave the *whole* outgoing/incoming view — scrolling
+                // content **and** the `.safeAreaInset` footer bundled inside it
+                // — the default implicit opacity cross-fade, so two different
+                // Continue/Skip button sets rendered blended together on every
+                // tap. Scoping the animation to just `stepContent` (and,
+                // separately, to `progressBar`) keeps that same pleasant
+                // cross-fade for content and the progress capsule, while
+                // `QuizStepScaffold`'s footer explicitly opts out via
+                // `.transaction { $0.animation = nil }` so it swaps instantly.
+                // `previewStep` has no separate footer — its button lives in the
+                // same scroll content as everything else — so it cross-fades
+                // consistently with the other steps without any extra handling.
                 stepContent
+                    .animation(.easeInOut(duration: 0.25), value: step)
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: step)
     }
 
     // MARK: Progress
@@ -181,26 +199,34 @@ struct OnboardingView: View {
             VStack(spacing: 14) {
                 HStack {
                     Text("Height")
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                     Spacer()
                     TextField("cm", text: $heightText)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
-                        .frame(width: 90)
+                        .frame(minWidth: 50, maxWidth: 110)
                     Text("cm")
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
                 .padding(12)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 HStack {
                     Text("Weight")
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                     Spacer()
                     TextField(Units.label(for: .weight), text: $weightText)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
-                        .frame(width: 90)
+                        .frame(minWidth: 50, maxWidth: 110)
                     Text(Units.label(for: .weight))
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
                 .padding(12)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -609,6 +635,14 @@ private struct QuizStepScaffold<Content: View>: View {
         // `FlowLayout`) can scroll fully into view above the footer instead
         // of being cut off / drawn underneath it, while Continue/Skip stay
         // fixed on screen as the content scrolls behind them.
+        //
+        // The footer view below carries `.transaction { $0.animation = nil }`
+        // so it is immune to the step-change cross-fade animation applied to
+        // `stepContent` in `OnboardingView.body` — without that override, the
+        // implicit opacity transition used when this whole scaffold instance
+        // is swapped for the next step's would blend the outgoing and
+        // incoming Continue/Skip button sets together instead of swapping
+        // them instantly.
         ScrollView {
             VStack(spacing: 22) {
                 ZStack {
@@ -656,6 +690,7 @@ private struct QuizStepScaffold<Content: View>: View {
             .padding(.top, 12)
             .padding(.bottom, 20)
             .background(.ultraThinMaterial)
+            .transaction { $0.animation = nil }
         }
     }
 }
@@ -786,6 +821,8 @@ private struct QuizPreviewRing: View {
             VStack(spacing: 0) {
                 Text("\(percent)%")
                     .font(.title3.bold())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
                 Text("Profile")
                     .font(.caption2)
                     .foregroundStyle(.secondary)

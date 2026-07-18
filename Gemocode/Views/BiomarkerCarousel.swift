@@ -111,6 +111,13 @@ struct BiomarkerCarouselSection: View {
                 }
             }
         }
+        // This section flips from EmptyView to populated content via `.task`
+        // below, moments after the dashboard first appears. Without nulling
+        // the transaction here, an ambient animation already in flight (e.g.
+        // from the onboarding fullScreenCover dismissing) gets inherited by
+        // this insertion and animates it in from a stale/offset frame — see
+        // the same guard, for the same reason, in ReviewScreen.
+        .transaction { $0.animation = nil }
         .task(id: labResults.count) {
             series = BiomarkerGrouping.series(from: labResults)
         }

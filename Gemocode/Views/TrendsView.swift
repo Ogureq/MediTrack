@@ -411,13 +411,19 @@ struct TrendsView: View {
                 }
             }
 
+            // The four annotations below are staggered across distinct
+            // corners (average top, max top-trailing, selection top-leading,
+            // min bottom) so their captions can't stack on top of each other
+            // when several are visible at once. Each also clamps to the plot
+            // area (`y: .fit(to: .plot)` instead of `.disabled`) so Charts
+            // keeps them inside the chart instead of letting them overflow.
             if let average {
                 RuleMark(y: .value("Average", average))
                     .foregroundStyle(.orange.opacity(0.55))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 4]))
                     .annotation(
                         position: .top,
-                        overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                        overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .plot))
                     ) {
                         Text("avg \(average.compactFormatted)")
                             .font(.caption2.weight(.semibold))
@@ -437,7 +443,7 @@ struct TrendsView: View {
                 .foregroundStyle(.purple)
                 .annotation(
                     position: .bottom,
-                    overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                    overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .plot))
                 ) {
                     Text(minPoint.value.compactFormatted)
                         .font(.caption2.weight(.semibold))
@@ -452,8 +458,8 @@ struct TrendsView: View {
                 .symbolSize(90)
                 .foregroundStyle(.purple)
                 .annotation(
-                    position: .top,
-                    overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                    position: .topTrailing,
+                    overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .plot))
                 ) {
                     Text(maxPoint.value.compactFormatted)
                         .font(.caption2.weight(.semibold))
@@ -466,8 +472,8 @@ struct TrendsView: View {
                     .foregroundStyle(.gray.opacity(0.5))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
                     .annotation(
-                        position: .top,
-                        overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                        position: .topLeading,
+                        overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .plot))
                     ) {
                         VStack(spacing: 2) {
                             Text(selected.date.formatted(date: .abbreviated, time: .omitted))

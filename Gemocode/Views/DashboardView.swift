@@ -185,15 +185,24 @@ struct DashboardView: View {
                     if review.hasData {
                         scoreCard(review: review)
                         retestCard
+                            .transaction { $0.animation = nil }
                         remindersCard
+                            .transaction { $0.animation = nil }
                         quarterlyReviewCard
+                            .transaction { $0.animation = nil }
                         scoreHistoryCard
                         BiomarkerCarouselSection()
+                            .transaction { $0.animation = nil }
                         alertsSection(review: review)
+                            .transaction { $0.animation = nil }
                         appointmentCard
+                            .transaction { $0.animation = nil }
                         vitalsGrid(vitalsByType: vitalsByType)
+                            .transaction { $0.animation = nil }
                         goalsCard(vitalsByType: vitalsByType)
+                            .transaction { $0.animation = nil }
                         recentReportsSection
+                            .transaction { $0.animation = nil }
                     } else {
                         emptyState
                     }
@@ -288,6 +297,10 @@ struct DashboardView: View {
                         .accessibilityHidden(true)
                 }
                 .padding()
+                // Extra trailing inset keeps the chevron clear of the share
+                // button overlaid in the top-trailing corner below — without
+                // it the two can collide at large Dynamic Type sizes.
+                .padding(.trailing, 28)
                 .glassCard()
                 .accessibilityElement(children: .combine)
             }
@@ -313,7 +326,7 @@ struct DashboardView: View {
                     .overlay(Circle().strokeBorder(Glass.bevelStroke, lineWidth: 1))
             }
             .accessibilityLabel("Share score card")
-            .padding(10)
+            .padding(14)
         }
     }
 
@@ -661,9 +674,13 @@ struct DashboardView: View {
                             Text(next.date.formatted(.dateTime.month(.abbreviated)))
                                 .font(.caption2.weight(.semibold))
                                 .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
                             Text(next.date.formatted(.dateTime.day()))
                                 .font(.title3.bold())
                                 .foregroundStyle(Color.accentColor)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
                         }
                         .frame(width: 44, height: 44)
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -987,6 +1004,8 @@ struct ScoreRing: View {
             VStack(spacing: 0) {
                 Text("\(score)")
                     .font(.title2.bold())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
                     .contentTransition(.numericText())
                 Text("of 100")
                     .font(.caption2)

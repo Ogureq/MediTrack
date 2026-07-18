@@ -94,6 +94,10 @@ struct EditReportView: View {
     @State private var isScanning = false
     @State private var scannedValues: [ScannedLabValue] = []
     @State private var showingScanResults = false
+    /// Double-tap guard for `save()` — checked and set at entry so a second
+    /// tap on the toolbar Save button before the sheet dismisses can't
+    /// re-run `save()` and double-append labResults/attachments.
+    @State private var isSaving = false
 
     init(report: MedicalReport) {
         self.report = report
@@ -183,14 +187,19 @@ struct EditReportView: View {
                         )
                     }
                     .onDelete { attachments.remove(atOffsets: $0) }
+                    // Disabled while a scan is running so a concurrent OCR
+                    // pass can't start over a growing attachment list mid-scan
+                    // (same race `ScanReportView`'s scan buttons guard against).
                     PhotosPicker(selection: $photoItems, matching: .images) {
                         Label("Add Photos", systemImage: "photo.on.rectangle")
                     }
+                    .disabled(isScanning)
                     Button {
                         showingFileImporter = true
                     } label: {
                         Label("Add PDF", systemImage: "doc.badge.plus")
                     }
+                    .disabled(isScanning)
                     if !attachments.isEmpty || !remainingAttachments.isEmpty {
                         Button {
                             scanAttachments()
@@ -226,7 +235,7 @@ struct EditReportView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
-                        .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
                 }
             }
             .sheet(isPresented: $showingLabEntry) {
@@ -312,6 +321,8 @@ struct EditReportView: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
+        isSaving = true
         report.title = title.trimmingCharacters(in: .whitespaces)
         report.category = category
         report.date = date
@@ -370,6 +381,10 @@ struct LabEntrySheet: View {
     @State private var lowText = ""
     @State private var highText = ""
     @State private var valueText = ""
+    /// Double-tap guard for `add()` — checked and set at entry so a second
+    /// tap on the toolbar Add button before the sheet dismisses can't
+    /// re-run `add()` and call `onAdd` twice for the same entry.
+    @State private var isSaving = false
 
     private var parsedValue: Double? {
         Double(valueText.replacingOccurrences(of: ",", with: "."))
@@ -459,7 +474,7 @@ struct LabEntrySheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") { add() }
-                        .disabled(!canAdd)
+                        .disabled(!canAdd || isSaving)
                 }
             }
         }
@@ -482,6 +497,8 @@ struct LabEntrySheet: View {
     }
 
     private func add() {
+        guard !isSaving else { return }
+        isSaving = true
         var draft = LabResultDraft()
         if let reference = selectedReference {
             draft.catalogID = reference.id

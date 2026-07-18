@@ -209,6 +209,8 @@ struct MedicalIDView: View {
                     ForEach(allergyChips, id: \.self) { allergy in
                         Text(allergy)
                             .font(.system(size: 12.5, weight: .semibold))
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
                             .padding(.horizontal, 13)
                             .padding(.vertical, 7)
                             .foregroundStyle(.orange)
@@ -364,7 +366,13 @@ private struct FlowLayout: Layout {
         var totalHeight: CGFloat = 0
 
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            // Clamp to the proposal's width before asking for a size so a
+            // single very long chip (e.g. an unusually long allergy name)
+            // wraps inside itself instead of measuring wider than the
+            // available row and running off-screen.
+            let unclamped = subview.sizeThatFits(.unspecified)
+            let clampedWidth = min(unclamped.width, maxWidth)
+            let size = subview.sizeThatFits(ProposedViewSize(width: clampedWidth, height: nil))
             if rowWidth > 0, rowWidth + spacing + size.width > maxWidth {
                 totalHeight += rowHeight + spacing
                 totalWidth = max(totalWidth, rowWidth)
@@ -380,18 +388,25 @@ private struct FlowLayout: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let maxWidth = bounds.width
         var x = bounds.minX
         var y = bounds.minY
         var rowHeight: CGFloat = 0
 
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            // Same clamp as `sizeThatFits`, and the clamped width (not the
+            // unclamped measured size) is what gets proposed when placing,
+            // so the subview actually wraps to it rather than overflowing
+            // the row it was placed in.
+            let unclamped = subview.sizeThatFits(.unspecified)
+            let clampedWidth = min(unclamped.width, maxWidth)
+            let size = subview.sizeThatFits(ProposedViewSize(width: clampedWidth, height: nil))
             if x > bounds.minX, x + size.width > bounds.maxX {
                 x = bounds.minX
                 y += rowHeight + spacing
                 rowHeight = 0
             }
-            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(width: clampedWidth, height: nil))
             x += size.width + spacing
             rowHeight = max(rowHeight, size.height)
         }

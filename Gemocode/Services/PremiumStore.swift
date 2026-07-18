@@ -107,6 +107,13 @@ final class PremiumStore: ObservableObject {
     /// throws so the paywall can tell the user instead of silently
     /// resetting.
     func purchase(_ product: Product) async throws {
+        // Re-entrancy guard: `PaywallView` also disables every product card
+        // while a purchase is in flight, but that's a UI-layer defense —
+        // this is the last line of defense against two concurrent
+        // `product.purchase()` calls (e.g. a second call site, or a race
+        // between disabling and a tap already in flight) double-charging
+        // or double-processing a transaction.
+        guard !isPurchasing else { return }
         isPurchasing = true
         defer { isPurchasing = false }
 

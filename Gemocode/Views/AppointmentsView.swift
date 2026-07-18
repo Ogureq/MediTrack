@@ -116,10 +116,14 @@ struct AppointmentRow: View {
                 Text(appointment.date.formatted(.dateTime.day()))
                     .font(.title3.weight(.heavy))
                     .foregroundStyle(tint)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
                 Text(appointment.date.formatted(.dateTime.month(.abbreviated)))
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(tint)
                     .textCase(.uppercase)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
             }
             .frame(width: 48, height: 52)
             .background(tint.opacity(0.16), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -189,6 +193,10 @@ struct AddAppointmentSheet: View {
     @State private var notes: String
     @State private var reminderEnabled: Bool
     @State private var showingDetails: Bool
+    /// Guards `save()` against a double tap firing two inserts before the
+    /// sheet has dismissed — checked and set at the top of `save()`, and
+    /// mirrored onto the Save button's `disabled` state.
+    @State private var isSaving = false
 
     private static let quickDateOptions: [(label: String, days: Int)] = [
         ("Tomorrow", 1), ("In 3 Days", 3), ("Next Week", 7),
@@ -295,7 +303,7 @@ struct AddAppointmentSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
-                        .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
                 }
             }
         }
@@ -312,6 +320,8 @@ struct AddAppointmentSheet: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
+        isSaving = true
         let appointment: Appointment
         if let existingAppointment {
             appointment = existingAppointment
@@ -372,7 +382,7 @@ private struct SheetHeader: View {
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: icon)
-                .font(.title2.weight(.semibold))
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 52, height: 52)
                 .background(tint.gradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))

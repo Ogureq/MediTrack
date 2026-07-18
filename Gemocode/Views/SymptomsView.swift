@@ -124,6 +124,10 @@ struct AddSymptomSheet: View {
     @State private var date = Date.now
     @State private var notes = ""
     @State private var showingDetails = false
+    /// Guards `save()` against a double tap firing two inserts before the
+    /// sheet has dismissed — checked and set at the top of `save()`, and
+    /// mirrored onto the Save button's `disabled` state.
+    @State private var isSaving = false
 
     private static let commonSymptoms = [
         "Headache", "Fatigue", "Nausea", "Dizziness", "Back Pain", "Cough",
@@ -212,7 +216,7 @@ struct AddSymptomSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
-                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
                 }
             }
         }
@@ -222,6 +226,8 @@ struct AddSymptomSheet: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
+        isSaving = true
         modelContext.insert(SymptomEntry(
             name: name.trimmingCharacters(in: .whitespaces),
             severity: Int(severity),
@@ -246,7 +252,7 @@ private struct SheetHeader: View {
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: icon)
-                .font(.title2.weight(.semibold))
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 52, height: 52)
                 .background(tint.gradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))

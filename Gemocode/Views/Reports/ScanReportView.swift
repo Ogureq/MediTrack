@@ -44,6 +44,13 @@ struct ScanReportView: View {
     @State private var isScanning = false
     @State private var hasScanned = false
     @State private var showingScanResults = false
+    /// The in-flight OCR task, so `.onDisappear` can cancel it if the sheet
+    /// is swiped away mid-scan (see `scanAttachments()`).
+    @State private var scanTask: Task<Void, Never>?
+    /// Set once, in `.onDisappear`, and checked before presenting anything
+    /// asynchronously (`showingScanResults`) so a torn-down view is never
+    /// driven — belt-and-suspenders alongside the tasks' own cancellation.
+    @State private var hasDisappeared = false
 
     @State private var showingPaywall = false
     @State private var showingCamera = false
@@ -79,6 +86,10 @@ struct ScanReportView: View {
     }
 
     @State private var stage: Stage = .scanning
+    /// The in-flight AI report generation task, so `.onDisappear` can cancel
+    /// it if the sheet is swiped away mid-generation — the free trial must
+    /// not be spent on a report the user never saw (see `generateAIReport`).
+    @State private var aiTask: Task<Void, Never>?
     /// The report `save()` just inserted — kept so the AI stage can attach
     /// the exported PDF to it and read back its saved lab results.
     @State private var savedReport: MedicalReport?
@@ -135,7 +146,16 @@ struct ScanReportView: View {
             }
             .sheet(isPresented: $showingScanResults) {
                 ScannedResultsSheet(values: scannedValues) { selected in
+                    // Move the confirmed values out of `scannedValues` (not
+                    // just append into `confirmedLabs`) — otherwise the next
+                    // page's scan still finds these already-confirmed values
+                    // sitting in `scannedValues` and re-offers/re-appends
+                    // them, duplicating LabResult rows on save. Match by the
+                    // same identity `scanAttachments()`'s dedupe uses:
+                    // `reference.id.lowercased()`.
+                    let selectedKeys = Set(selected.map { $0.reference.id.lowercased() })
                     confirmedLabs.append(contentsOf: selected)
+                    scannedValues.removeAll { selectedKeys.contains($0.reference.id.lowercased()) }
                 }
             }
             .sheet(isPresented: $showingCamera) {
@@ -170,6 +190,17 @@ struct ScanReportView: View {
                     shareItem = nil
                 }
             }
+            .onDisappear {
+                // The sheet was dismissed (swipe-to-dismiss or programmatic)
+                // while a scan or an AI generation was still running. Cancel
+                // both in-flight tasks and flag the view as gone so neither
+                // completion handler mutates state or presents anything —
+                // in particular, the AI free-trial quota must not be
+                // recorded for a report the user never actually saw.
+                hasDisappeared = true
+                aiTask?.cancel()
+                scanTask?.cancel()
+            }
         }
     }
 
@@ -185,6 +216,12 @@ struct ScanReportView: View {
                 ScanReportHeader()
 
                 if isLocked {
+                    // Nulled: an ambient transaction already in flight when
+                    // this appears (e.g. the camera sheet dismissing, or
+                    // `premiumStore` publishing its async-loaded entitlement
+                    // moments after appear) must not be inherited by this
+                    // ZStack's insertion — same reasoning as ReviewScreen's
+                    // cards.
                     ZStack {
                         unlockedBody
                             .disabled(true)
@@ -192,8 +229,10 @@ struct ScanReportView: View {
                             .accessibilityHidden(true)
                         lockedCard
                     }
+                    .transaction { $0.animation = nil }
                 } else {
                     unlockedBody
+                        .transaction { $0.animation = nil }
                 }
             }
         case .aiGenerating, .aiReport, .aiFailed:
@@ -216,10 +255,12 @@ struct ScanReportView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 4)
                 .accessibilityElement(children: .combine)
+                .transaction { $0.animation = nil }
             }
 
             if !attachments.isEmpty {
                 attachmentsSection
+                    .transaction { $0.animation = nil }
             }
 
             if !confirmedLabs.isEmpty {
@@ -228,10 +269,12 @@ struct ScanReportView: View {
 
             if !scannedValues.isEmpty {
                 reviewButton
+                    .transaction { $0.animation = nil }
             }
 
             if nothingExtracted {
                 categoryFallbackSection
+                    .transaction { $0.animation = nil }
             }
 
             if !attachments.isEmpty {
@@ -256,6 +299,7 @@ struct ScanReportView: View {
             )
         }
         .buttonStyle(.plain)
+        .disabled(isScanning)
         .accessibilityLabel("Photograph a document")
         .accessibilityHint("Opens the camera to capture a lab report.")
 
@@ -277,6 +321,7 @@ struct ScanReportView: View {
                 subtitle: "Choose an existing file from your library"
             )
         }
+        .disabled(isScanning)
         .accessibilityLabel("Import PDF or photo")
         .accessibilityHint("Choose a PDF or photo already saved on your device.")
     }
@@ -374,7 +419,7 @@ struct ScanReportView: View {
     private var lockedCard: some View {
         VStack(spacing: 14) {
             Image(systemName: "lock.fill")
-                .font(.title.weight(.semibold))
+                .font(.system(size: 28, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 56, height: 56)
                 .background(Glass.accentGradient, in: Circle())
@@ -411,7 +456,7 @@ struct ScanReportView: View {
     private var aiStageBody: some View {
         VStack(spacing: 10) {
             Image(systemName: "sparkles")
-                .font(.title.weight(.semibold))
+                .font(.system(size: 28, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 60, height: 60)
                 .background(Glass.accentGradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -633,6 +678,11 @@ struct ScanReportView: View {
     /// preserving the same "no duplicate detected value" behavior the old
     /// full-replace (`scannedValues = found`) approach had for free.
     private func scanAttachments() {
+        // Re-entrancy guard: a second trigger while OCR is still running
+        // (e.g. rapid camera taps landing before the buttons' `.disabled`
+        // takes effect) must not start a second concurrent scan. Nothing is
+        // queued — the user can rescan once the in-flight pass finishes.
+        guard !isScanning else { return }
         let unscanned = attachments.filter { !scannedAttachmentIDs.contains($0.id) }
         guard !unscanned.isEmpty else { return }
         isScanning = true
@@ -640,14 +690,20 @@ struct ScanReportView: View {
         let newlyScannedIDs = Set(unscanned.map { $0.id })
         let existingKeys = Set(confirmedLabs.map { $0.reference.id.lowercased() })
             .union(scannedValues.map { $0.reference.id.lowercased() })
-        Task {
+        scanTask = Task {
             let found = await LabScanService.scan(attachments: inputs)
                 .filter { !existingKeys.contains($0.reference.id.lowercased()) }
+            // Cancelled (sheet dismissed mid-OCR, see .onDisappear below) —
+            // skip every mutation, including `isScanning`/`hasScanned`,
+            // rather than update state on a view that's gone.
+            guard !Task.isCancelled else { return }
             scannedValues.append(contentsOf: found)
             scannedAttachmentIDs.formUnion(newlyScannedIDs)
             isScanning = false
             hasScanned = true
-            if !found.isEmpty {
+            // Belt-and-suspenders on top of the cancellation guard above:
+            // never present a sheet once the view has already torn down.
+            if !found.isEmpty && !hasDisappeared {
                 showingScanResults = true
             }
         }
@@ -715,7 +771,15 @@ struct ScanReportView: View {
         let report = MedicalReport(title: title, category: category, date: now)
         modelContext.insert(report)
 
-        for scanned in confirmedLabs {
+        // Defensive dedupe: the ScannedResultsSheet onAdd handler already
+        // removes confirmed values from `scannedValues` so a second scan
+        // can't re-offer and re-append them, but this is the last line of
+        // defense against any path double-writing the same lab value into
+        // one report — keep the first occurrence of each catalog id.
+        var seenLabKeys: Set<String> = []
+        let dedupedLabs = confirmedLabs.filter { seenLabKeys.insert($0.reference.id.lowercased()).inserted }
+
+        for scanned in dedupedLabs {
             report.labResults.append(LabResult(
                 catalogID: scanned.reference.id,
                 value: scanned.value,
@@ -867,7 +931,7 @@ struct ScanReportView: View {
     private func generateAIReport(for report: MedicalReport) {
         stage = .aiGenerating
 
-        Task {
+        aiTask = Task {
             let review = currentReview(including: report)
             let profileSummary = aiProfileSummary()
             do {
@@ -876,10 +940,18 @@ struct ScanReportView: View {
                     profileSummary: profileSummary,
                     deltas: []
                 )
+                // Sheet was dismissed while the request was in flight — do
+                // NOT set `stage` (there's no view left to show it) and, in
+                // particular, do NOT call `onAIReportGenerated()`: the free
+                // lifetime AI trial must only be spent when the user
+                // actually saw the result, not for a report generated after
+                // they'd already swiped the sheet away.
+                guard !Task.isCancelled else { return }
                 Haptics.success()
                 stage = .aiReport(generated)
                 await onAIReportGenerated()
             } catch {
+                guard !Task.isCancelled else { return }
                 stage = .aiFailed(error.localizedDescription)
             }
         }
@@ -965,7 +1037,7 @@ private struct ScanReportHeader: View {
     var body: some View {
         VStack(spacing: 10) {
             Image(systemName: "doc.text.viewfinder")
-                .font(.title.weight(.semibold))
+                .font(.system(size: 28, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 60, height: 60)
                 .background(Glass.accentGradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -991,7 +1063,7 @@ private struct ScanActionCard: View {
     var body: some View {
         HStack(spacing: 14) {
             Image(systemName: icon)
-                .font(.title2.weight(.semibold))
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 50, height: 50)
                 .background(Glass.accentGradient, in: RoundedRectangle(cornerRadius: 14, style: .continuous))

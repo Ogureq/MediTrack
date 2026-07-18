@@ -205,6 +205,10 @@ struct AddMedicationSheet: View {
     @State private var reminderEnabled: Bool
     @State private var reminderTime: Date
     @State private var showingDetails: Bool
+    /// Guards `save()` against a double tap firing two inserts before the
+    /// sheet has dismissed — checked and set at the top of `save()`, and
+    /// mirrored onto the Save button's `disabled` state.
+    @State private var isSaving = false
 
     private static let frequencyOptions = [
         "Once daily", "Twice daily", "Every morning", "Every night", "As needed",
@@ -327,7 +331,7 @@ struct AddMedicationSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
-                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
                 }
             }
         }
@@ -344,6 +348,8 @@ struct AddMedicationSheet: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
+        isSaving = true
         let medication: Medication
         if let existingMedication {
             medication = existingMedication
@@ -403,7 +409,7 @@ private struct SheetHeader: View {
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: icon)
-                .font(.title2.weight(.semibold))
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 52, height: 52)
                 .background(tint.gradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
