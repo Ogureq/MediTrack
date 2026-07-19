@@ -21,6 +21,16 @@
         }
       }
     },
+    " or enable %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " или включите %@"
+          }
+        }
+      }
+    },
     "%@ %@": {
       "localizations": {
         "ru": {
@@ -325,6 +335,16 @@
         }
       }
     },
+    "%lld biomarkers tracked": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Биомаркеров отслеживается: %lld"
+          }
+        }
+      }
+    },
     "%lld files": {
       "localizations": {
         "ru": {
@@ -375,6 +395,16 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "%lld months": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld мес."
           }
         }
       }
@@ -449,6 +479,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Сохранено отчётов: %lld%@"
+          }
+        }
+      }
+    },
+    "%lld reports logged": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отчётов сохранено: %lld"
           }
         }
       }
@@ -581,6 +621,26 @@
         }
       }
     },
+    ", best value": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ", лучшая цена"
+          }
+        }
+      }
+    },
+    ", one-time purchase": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ", разовая покупка"
+          }
+        }
+      }
+    },
     ", unchanged": {
       "localizations": {
         "ru": {
@@ -697,6 +757,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "/год"
+          }
+        }
+      }
+    },
+    "1 biomarker tracked": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отслеживается 1 биомаркер"
+          }
+        }
+      }
+    },
+    "1 month": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 месяц"
+          }
+        }
+      }
+    },
+    "1 report logged": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранён 1 отчёт"
           }
         }
       }
@@ -921,12 +1011,32 @@
         }
       }
     },
+    "Add %lld item": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавить (%lld)"
+          }
+        }
+      }
+    },
     "Add %lld item%@": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Добавить %lld элемент%@"
+          }
+        }
+      }
+    },
+    "Add %lld items": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавить (%lld)"
           }
         }
       }
@@ -1451,6 +1561,16 @@
         }
       }
     },
+    "Assistant": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ассистент"
+          }
+        }
+      }
+    },
     "Assistant is typing": {
       "localizations": {
         "ru": {
@@ -1507,6 +1627,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Автоматическая синхронизация с Apple Health"
+          }
+        }
+      }
+    },
+    "B12": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "B12"
           }
         }
       }
@@ -1571,6 +1701,26 @@
         }
       }
     },
+    "Backup restored — %lld record. Medication and appointment reminders need to be re-enabled.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Резервная копия восстановлена — записей: %lld. Напоминания о приёме лекарств и визитах нужно включить заново."
+          }
+        }
+      }
+    },
+    "Backup restored — %lld records. Medication and appointment reminders need to be re-enabled.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Резервная копия восстановлена — записей: %lld. Напоминания о приёме лекарств и визитах нужно включить заново."
+          }
+        }
+      }
+    },
     "Backups": {
       "localizations": {
         "ru": {
@@ -1587,6 +1737,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Экспортируемые резервные копии шифруются алгоритмом AES-GCM с ключом, полученным из кодовой фразы, которую знаете только вы. Без неё Gemocode не сможет открыть резервную копию — как и кто-либо другой."
+          }
+        }
+      }
+    },
+    "Balanced": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сбалансированное"
           }
         }
       }
@@ -1671,6 +1831,46 @@
         }
       }
     },
+    "Biometrics": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Биометрия"
+          }
+        }
+      }
+    },
+    "Biometrics is not available.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Биометрия недоступна."
+          }
+        }
+      }
+    },
+    "Blood Pressure": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Артериальное давление"
+          }
+        }
+      }
+    },
+    "Blood Sugar": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сахар в крови"
+          }
+        }
+      }
+    },
     "Blood glucose": {
       "localizations": {
         "ru": {
@@ -1707,6 +1907,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Основные параметры тела"
+          }
+        }
+      }
+    },
+    "Build Muscle": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нарастить мышцы"
           }
         }
       }
@@ -1877,6 +2087,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Дети"
+          }
+        }
+      }
+    },
+    "Cholesterol": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Холестерин"
           }
         }
       }
@@ -2321,12 +2541,32 @@
         }
       }
     },
+    "Diastolic Pressure": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Диастолическое давление"
+          }
+        }
+      }
+    },
     "Diet Style": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Стиль питания"
+          }
+        }
+      }
+    },
+    "Digestive Health": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пищеварение"
           }
         }
       }
@@ -2491,6 +2731,16 @@
         }
       }
     },
+    "Eat Healthier": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Питаться правильнее"
+          }
+        }
+      }
+    },
     "Edit": {
       "localizations": {
         "ru": {
@@ -2631,6 +2881,16 @@
         }
       }
     },
+    "Enter Passcode": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ввести код-пароль"
+          }
+        }
+      }
+    },
     "Enter the passphrase you used when this backup was exported. Older, unencrypted backups don't need one — leave this blank and tap Restore.": {
       "localizations": {
         "ru": {
@@ -2751,6 +3011,26 @@
         }
       }
     },
+    "Exercise: %lld day/week": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тренировки: %lld дн. в неделю"
+          }
+        }
+      }
+    },
+    "Exercise: %lld days/week": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тренировки: %lld дн. в неделю"
+          }
+        }
+      }
+    },
     "Existing conditions": {
       "localizations": {
         "ru": {
@@ -2801,12 +3081,32 @@
         }
       }
     },
+    "Face ID": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Face ID"
+          }
+        }
+      }
+    },
     "Facility": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Учреждение"
+          }
+        }
+      }
+    },
+    "Family History": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Наследственность"
           }
         }
       }
@@ -3061,6 +3361,16 @@
         }
       }
     },
+    "Gemocode will keep an eye on your %lld selected goal as new data comes in.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gemocode будет отслеживать выбранные цели (%lld) по мере поступления новых данных."
+          }
+        }
+      }
+    },
     "Gemocode will keep an eye on your %lld selected goal%@ as new data comes in.": {
       "localizations": {
         "ru": {
@@ -3071,12 +3381,42 @@
         }
       }
     },
+    "Gemocode will keep an eye on your %lld selected goals as new data comes in.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gemocode будет отслеживать выбранные цели (%lld) по мере поступления новых данных."
+          }
+        }
+      }
+    },
+    "Gemocode will pay closer attention to findings related to the %lld area you flagged.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gemocode будет уделять больше внимания заключениям по отмеченным областям (%lld)."
+          }
+        }
+      }
+    },
     "Gemocode will pay closer attention to findings related to the %lld area%@ you flagged.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Gemocode будет уделять больше внимания заключениям по отмеченным областям (%lld%@)."
+          }
+        }
+      }
+    },
+    "Gemocode will pay closer attention to findings related to the %lld areas you flagged.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gemocode будет уделять больше внимания заключениям по отмеченным областям (%lld)."
           }
         }
       }
@@ -3291,6 +3631,16 @@
         }
       }
     },
+    "Health Score Update": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обновление показателя здоровья"
+          }
+        }
+      }
+    },
     "Health Timeline": {
       "localizations": {
         "ru": {
@@ -3471,6 +3821,16 @@
         }
       }
     },
+    "Imported %lld reading from Apple Health.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Импортировано показаний из Apple Health: %lld."
+          }
+        }
+      }
+    },
     "Imported %lld reading%@ from Apple Health.": {
       "localizations": {
         "ru": {
@@ -3481,12 +3841,32 @@
         }
       }
     },
+    "Imported %lld readings from Apple Health.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Импортировано показаний из Apple Health: %lld."
+          }
+        }
+      }
+    },
     "Importing from Apple Health…": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Импорт из Apple Health…"
+          }
+        }
+      }
+    },
+    "Improve Sleep": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Улучшить сон"
           }
         }
       }
@@ -3521,12 +3901,62 @@
         }
       }
     },
+    "Incorrect passcode.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Неверный код-пароль."
+          }
+        }
+      }
+    },
+    "Increase Energy": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Повысить энергию"
+          }
+        }
+      }
+    },
     "Informational": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Информационно"
+          }
+        }
+      }
+    },
+    "Iron": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Железо"
+          }
+        }
+      }
+    },
+    "It's been %@ since your last lab report — re-test to see your trend.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Прошло %@ с момента последнего отчёта — сделайте повторный анализ, чтобы увидеть динамику."
+          }
+        }
+      }
+    },
+    "Joint & Muscle Pain": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Боль в суставах и мышцах"
           }
         }
       }
@@ -3855,6 +4285,26 @@
         }
       }
     },
+    "Lose Weight": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Снизить вес"
+          }
+        }
+      }
+    },
+    "Low-Carb": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Низкоуглеводное"
+          }
+        }
+      }
+    },
     "Lower Glucose": {
       "localizations": {
         "ru": {
@@ -3905,12 +4355,32 @@
         }
       }
     },
+    "Magnesium": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Магний"
+          }
+        }
+      }
+    },
     "Manage": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Управление"
+          }
+        }
+      }
+    },
+    "Manage a Condition": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Контролировать заболевание"
           }
         }
       }
@@ -4005,12 +4475,32 @@
         }
       }
     },
+    "Medication Reminder": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Напоминание о приёме лекарства"
+          }
+        }
+      }
+    },
     "Medication: %@": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Лекарство: %@"
+          }
+        }
+      }
+    },
+    "Medication: %@, %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Лекарство: %@, %@"
           }
         }
       }
@@ -4071,6 +4561,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Утро, 8:00"
+          }
+        }
+      }
+    },
+    "Multivitamin": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Мультивитамины"
           }
         }
       }
@@ -4555,6 +5055,16 @@
         }
       }
     },
+    "Omega-3": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Омега-3"
+          }
+        }
+      }
+    },
     "Once daily": {
       "localizations": {
         "ru": {
@@ -4651,6 +5161,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Донор органов: %@"
+          }
+        }
+      }
+    },
+    "Other": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Другое"
           }
         }
       }
@@ -5159,6 +5679,16 @@
         }
       }
     },
+    "Reduce Stress": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Снизить стресс"
+          }
+        }
+      }
+    },
     "Reference high (optional)": {
       "localizations": {
         "ru": {
@@ -5429,12 +5959,32 @@
         }
       }
     },
+    "Review %lld Detected Value": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Просмотреть найденные показатели (%lld)"
+          }
+        }
+      }
+    },
     "Review %lld Detected Value%@": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Просмотреть %lld найденных показателей%@"
+          }
+        }
+      }
+    },
+    "Review %lld Detected Values": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Просмотреть найденные показатели (%lld)"
           }
         }
       }
@@ -5859,6 +6409,16 @@
         }
       }
     },
+    "Sleep": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сон"
+          }
+        }
+      }
+    },
     "Something went wrong. Try rephrasing.": {
       "localizations": {
         "ru": {
@@ -5909,12 +6469,32 @@
         }
       }
     },
+    "Stay Active": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оставаться активным"
+          }
+        }
+      }
+    },
     "Stay signed in (Remember me)": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Оставаться в системе (запомнить меня)"
+          }
+        }
+      }
+    },
+    "Stress & Mood": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Стресс и настроение"
           }
         }
       }
@@ -5985,6 +6565,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Систолическое (%@)"
+          }
+        }
+      }
+    },
+    "Systolic Pressure": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Систолическое давление"
           }
         }
       }
@@ -6299,6 +6889,36 @@
         }
       }
     },
+    "Time for a Follow-Up?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пора на повторный анализ?"
+          }
+        }
+      }
+    },
+    "Time to take %@ (%@).": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Время принять %@ (%@)."
+          }
+        }
+      }
+    },
+    "Time to take %@.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Время принять %@."
+          }
+        }
+      }
+    },
     "Title": {
       "localizations": {
         "ru": {
@@ -6345,6 +6965,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Слишком много попыток. Повторите через %lld с."
+          }
+        }
+      }
+    },
+    "Touch ID": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touch ID"
           }
         }
       }
@@ -6445,6 +7075,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Динамика"
+          }
+        }
+      }
+    },
+    "Try again in %llds.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Повторите попытку через %lld с."
           }
         }
       }
@@ -6649,6 +7289,16 @@
         }
       }
     },
+    "Unlock your medical data": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Разблокируйте медицинские данные"
+          }
+        }
+      }
+    },
     "Upcoming": {
       "localizations": {
         "ru": {
@@ -6719,6 +7369,26 @@
         }
       }
     },
+    "Vegan": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Веганское"
+          }
+        }
+      }
+    },
+    "Vegetarian": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вегетарианское"
+          }
+        }
+      }
+    },
     "Version": {
       "localizations": {
         "ru": {
@@ -6779,6 +7449,16 @@
         }
       }
     },
+    "Vitamin D": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Витамин D"
+          }
+        }
+      }
+    },
     "We couldn't find lab values in this document — that's OK, it was saved with your attachment.": {
       "localizations": {
         "ru": {
@@ -6809,12 +7489,32 @@
         }
       }
     },
+    "We've set up %lld reminder for the supplements you take.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Настроено напоминаний для приёма добавок: %lld."
+          }
+        }
+      }
+    },
     "We've set up %lld reminder%@ for the supplements you take.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Настроено напоминаний для приёма добавок: %lld%@."
+          }
+        }
+      }
+    },
+    "We've set up %lld reminders for the supplements you take.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Настроено напоминаний для приёма добавок: %lld."
           }
         }
       }
@@ -7029,6 +7729,16 @@
         }
       }
     },
+    "You": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вы"
+          }
+        }
+      }
+    },
     "You agree not to misuse Gemocode's AI features — for example, by using them to generate content unrelated to your own health tracking, attempting to extract, abuse, or overload the relay service, or sending it anything other than the health information the feature is designed to process. You agree not to reverse-engineer, decompile, or attempt to bypass the AI relay's authentication or rate limits, or to interfere with its operation for other users.": {
       "localizations": {
         "ru": {
@@ -7219,6 +7929,16 @@
         }
       }
     },
+    "Your health score changed: %lld → %lld": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ваш показатель здоровья изменился: %lld → %lld"
+          }
+        }
+      }
+    },
     "Your name, date of birth, blood type, allergies, Medical ID, and original documents are never included in that request.": {
       "localizations": {
         "ru": {
@@ -7245,6 +7965,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ваш скан сохранён — вот расшифровка с помощью AI."
+          }
+        }
+      }
+    },
+    "all time": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "за всё время"
           }
         }
       }
@@ -7365,6 +8095,56 @@
           "stringUnit": {
             "state": "translated",
             "value": "каждые %lld мес.%@"
+          }
+        }
+      }
+    },
+    "every %lld months": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Интервал: %lld мес."
+          }
+        }
+      }
+    },
+    "every 1 month": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Интервал: 1 мес."
+          }
+        }
+      }
+    },
+    "last 3 months": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "последние 3 месяца"
+          }
+        }
+      }
+    },
+    "last 6 months": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "последние 6 месяцев"
+          }
+        }
+      }
+    },
+    "last year": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "последний год"
           }
         }
       }

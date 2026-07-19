@@ -31,9 +31,9 @@ struct AIChatView: View {
     }
 
     private static let starterQuestions = [
-        "What does my score mean?",
-        "Which finding should I focus on first?",
-        "What should I ask my doctor?"
+        String(localized: "What does my score mean?"),
+        String(localized: "Which finding should I focus on first?"),
+        String(localized: "What should I ask my doctor?")
     ]
 
     var body: some View {
@@ -255,7 +255,9 @@ private struct MessageBubble: View {
             if !isUser { Spacer(minLength: 40) }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(isUser ? "You" : "Assistant") said: \(message.text)")
+        .accessibilityLabel(
+            "\(isUser ? String(localized: "You") : String(localized: "Assistant")) said: \(message.text)"
+        )
     }
 
     @ViewBuilder

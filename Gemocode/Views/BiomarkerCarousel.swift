@@ -54,7 +54,7 @@ enum BiomarkerGrouping {
             let mostRecent = ascending.last
             return BiomarkerSeries(
                 id: key,
-                name: mostRecent?.displayName ?? "Unknown Test",
+                name: mostRecent?.displayName ?? String(localized: "Unknown Test"),
                 unit: mostRecent?.unit ?? "",
                 points: points
             )

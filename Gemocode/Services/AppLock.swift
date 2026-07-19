@@ -77,13 +77,13 @@ final class AppLock: ObservableObject {
     private func registerFailedAttempt() {
         failedAttempts += 1
         guard failedAttempts >= Self.attemptsThreshold else {
-            lastError = "Incorrect passcode."
+            lastError = String(localized: "Incorrect passcode.")
             return
         }
         let extraFailures = failedAttempts - Self.attemptsThreshold
         let seconds = min(Self.baseLockoutSeconds * pow(2, Double(extraFailures)), Self.maxLockoutSeconds)
         lockoutUntil = Date().addingTimeInterval(seconds)
-        lastError = "Try again in \(Int(seconds))s."
+        lastError = String(localized: "Try again in \(Int(seconds))s.")
     }
 
     private func resetFailedAttempts() {
@@ -105,9 +105,9 @@ final class AppLock: ObservableObject {
         let context = LAContext()
         _ = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
         switch context.biometryType {
-        case .faceID: return "Face ID"
-        case .touchID: return "Touch ID"
-        default: return "Biometrics"
+        case .faceID: return String(localized: "Face ID")
+        case .touchID: return String(localized: "Touch ID")
+        default: return String(localized: "Biometrics")
         }
     }
 
@@ -147,7 +147,7 @@ final class AppLock: ObservableObject {
     @discardableResult
     func unlock(passcode: String, remember: Bool) -> Bool {
         if isLockedOut {
-            lastError = "Try again in \(lockoutRemainingSeconds)s."
+            lastError = String(localized: "Try again in \(lockoutRemainingSeconds)s.")
             return false
         }
         guard verify(passcode) else {
@@ -163,16 +163,16 @@ final class AppLock: ObservableObject {
 
     func authenticateWithBiometrics(remember: Bool) async {
         let context = LAContext()
-        context.localizedFallbackTitle = "Enter Passcode"
+        context.localizedFallbackTitle = String(localized: "Enter Passcode")
         var error: NSError?
         guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
-            lastError = "Biometrics is not available."
+            lastError = String(localized: "Biometrics is not available.")
             return
         }
         do {
             let success = try await context.evaluatePolicy(
                 .deviceOwnerAuthenticationWithBiometrics,
-                localizedReason: "Unlock your medical data"
+                localizedReason: String(localized: "Unlock your medical data")
             )
             if success {
                 resetFailedAttempts()

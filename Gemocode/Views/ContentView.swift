@@ -114,7 +114,7 @@ struct MoreView: View {
 
     private var profileTitle: String {
         let name = profile?.name.trimmingCharacters(in: .whitespaces) ?? ""
-        return name.isEmpty ? "Your Profile" : name
+        return name.isEmpty ? String(localized: "Your Profile") : name
     }
 
     private var activeMedicationCount: Int {
@@ -122,7 +122,7 @@ struct MoreView: View {
     }
 
     private var medicationsSubtitle: String {
-        "\(activeMedicationCount) active"
+        String(format: String(localized: "%lld active"), activeMedicationCount)
     }
 
     private var nextAppointment: Appointment? {
@@ -130,8 +130,8 @@ struct MoreView: View {
     }
 
     private var appointmentsSubtitle: String {
-        guard let date = nextAppointment?.date else { return "None scheduled" }
-        return "Next: \(date.formatted(.dateTime.month(.abbreviated).day()))"
+        guard let date = nextAppointment?.date else { return String(localized: "None scheduled") }
+        return String(format: String(localized: "Next: %@"), date.formatted(.dateTime.month(.abbreviated).day()))
     }
 
     private var goalsInProgressCount: Int {
@@ -139,7 +139,7 @@ struct MoreView: View {
     }
 
     private var goalsSubtitle: String {
-        "\(goalsInProgressCount) in progress"
+        String(format: String(localized: "%lld in progress"), goalsInProgressCount)
     }
 
     /// Cached instead of a plain computed property — `.attachments` faults
@@ -149,7 +149,7 @@ struct MoreView: View {
     @State private var documentsCount = 0
 
     private var documentsSubtitle: String {
-        "\(documentsCount) files"
+        String(format: String(localized: "%lld files"), documentsCount)
     }
 
     var body: some View {
@@ -166,10 +166,10 @@ struct MoreView: View {
                         .padding(.horizontal, 4)
 
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible())], spacing: 14) {
-                        featureCard(icon: "waveform.path.ecg", tint: MoreTint.vitals, title: "Vitals", subtitle: "BP, heart rate, SpO₂") {
+                        featureCard(icon: "waveform.path.ecg", tint: MoreTint.vitals, title: "Vitals", subtitle: String(localized: "BP, heart rate, SpO₂")) {
                             VitalsView()
                         }
-                        featureCard(icon: "list.bullet.clipboard", tint: MoreTint.symptoms, title: "Symptoms", subtitle: "Log & track patterns") {
+                        featureCard(icon: "list.bullet.clipboard", tint: MoreTint.symptoms, title: "Symptoms", subtitle: String(localized: "Log & track patterns")) {
                             SymptomsView()
                         }
                         featureCard(icon: "pills.fill", tint: MoreTint.medications, title: "Medications", subtitle: medicationsSubtitle) {
@@ -250,7 +250,7 @@ struct MoreView: View {
     private func featureCard<Destination: View>(
         icon: String,
         tint: Color,
-        title: String,
+        title: LocalizedStringKey,
         subtitle: String,
         @ViewBuilder destination: () -> Destination
     ) -> some View {
@@ -282,7 +282,7 @@ struct MoreView: View {
         }
         .buttonStyle(CardPressStyle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title), \(subtitle)")
+        .accessibilityLabel(Text(title) + Text(verbatim: ", ") + Text(subtitle))
     }
 
     private func iconChip(icon: String, tint: Color, size: CGFloat, radius: CGFloat, iconColor: Color? = nil) -> some View {

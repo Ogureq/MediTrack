@@ -39,7 +39,7 @@ struct LabDetailView: View {
             }
         }
         .ambientScreen()
-        .navigationTitle(results.last?.displayName ?? "Lab Test")
+        .navigationTitle(results.last?.displayName ?? String(localized: "Lab Test"))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: reports.count) {
             results = Self.buildResults(reports: reports, seriesKey: seriesKey)
@@ -189,6 +189,6 @@ struct LabDetailView: View {
             }
         }
         .chartYAxisLabel(results.last?.unit ?? "")
-        .accessibilityLabel("\(results.last?.displayName ?? "Lab result") history chart")
+        .accessibilityLabel("\(results.last?.displayName ?? String(localized: "Lab result")) history chart")
     }
 }

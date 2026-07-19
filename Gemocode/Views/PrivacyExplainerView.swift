@@ -78,7 +78,7 @@ struct PrivacyExplainerView: View {
 
     @ViewBuilder
     private func section<Content: View>(
-        title: String,
+        title: LocalizedStringKey,
         systemImage: String,
         tint: Color,
         @ViewBuilder content: () -> Content
@@ -96,7 +96,7 @@ struct PrivacyExplainerView: View {
         .tintedGlassCard(tint)
     }
 
-    private func bullet(_ text: String) -> some View {
+    private func bullet(_ text: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Circle()
                 .fill(Color.secondary.opacity(0.5))

@@ -380,7 +380,9 @@ struct ScanReportView: View {
             showingScanResults = true
         } label: {
             Label(
-                "Review \(scannedValues.count) Detected Value\(scannedValues.count == 1 ? "" : "s")",
+                scannedValues.count == 1
+                    ? String(localized: "Review \(scannedValues.count) Detected Value")
+                    : String(localized: "Review \(scannedValues.count) Detected Values"),
                 systemImage: "checkmark.circle"
             )
             .frame(maxWidth: .infinity)
@@ -713,7 +715,7 @@ struct ScanReportView: View {
 
     private func presentCamera() {
         guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
-            cameraAlertMessage = "This device doesn't have a camera available. Use Import PDF or Photo instead."
+            cameraAlertMessage = String(localized: "This device doesn't have a camera available. Use Import PDF or Photo instead.")
             showingCameraAlert = true
             return
         }
@@ -721,7 +723,7 @@ struct ScanReportView: View {
         // Info.plist — presenting the camera without it would crash at the
         // OS level. Fail soft to the alert instead until that key is added.
         guard Bundle.main.object(forInfoDictionaryKey: "NSCameraUsageDescription") != nil else {
-            cameraAlertMessage = "Camera access isn't configured in this build yet. Use Import PDF or Photo instead."
+            cameraAlertMessage = String(localized: "Camera access isn't configured in this build yet. Use Import PDF or Photo instead.")
             showingCameraAlert = true
             return
         }
@@ -734,16 +736,16 @@ struct ScanReportView: View {
                     if granted {
                         showingCamera = true
                     } else {
-                        cameraAlertMessage = "Camera access was denied. Enable it in Settings, or use Import PDF or Photo instead."
+                        cameraAlertMessage = String(localized: "Camera access was denied. Enable it in Settings, or use Import PDF or Photo instead.")
                         showingCameraAlert = true
                     }
                 }
             }
         case .denied, .restricted:
-            cameraAlertMessage = "Camera access is disabled for Gemocode. Enable it in Settings, or use Import PDF or Photo instead."
+            cameraAlertMessage = String(localized: "Camera access is disabled for Gemocode. Enable it in Settings, or use Import PDF or Photo instead.")
             showingCameraAlert = true
         @unknown default:
-            cameraAlertMessage = "Camera access isn't available. Use Import PDF or Photo instead."
+            cameraAlertMessage = String(localized: "Camera access isn't available. Use Import PDF or Photo instead.")
             showingCameraAlert = true
         }
     }
@@ -834,18 +836,20 @@ struct ScanReportView: View {
         if let shortestMonths = knownIntervalMonths.min() {
             fireDate = Calendar.current.date(byAdding: .month, value: shortestMonths, to: .now)
                 ?? .now.addingTimeInterval(Double(shortestMonths) * 30 * 86_400)
-            intervalDescription = shortestMonths == 1 ? "1 month" : "\(shortestMonths) months"
+            intervalDescription = shortestMonths == 1
+                ? String(localized: "1 month")
+                : String(localized: "\(shortestMonths) months")
         } else {
             fireDate = Calendar.current.date(byAdding: .day, value: 90, to: .now) ?? .now.addingTimeInterval(90 * 86_400)
-            intervalDescription = "3 months"
+            intervalDescription = String(localized: "\(3) months")
         }
 
         Task {
             if await NotificationService.requestAuthorization() {
                 NotificationService.scheduleOneTime(
                     id: Self.retestNudgeID,
-                    title: "Time for a Follow-Up?",
-                    body: "It's been \(intervalDescription) since your last lab report — re-test to see your trend.",
+                    title: String(localized: "Time for a Follow-Up?"),
+                    body: String(localized: "It's been \(intervalDescription) since your last lab report — re-test to see your trend."),
                     at: fireDate
                 )
             }
@@ -1057,8 +1061,8 @@ private struct ScanReportHeader: View {
 
 private struct ScanActionCard: View {
     let icon: String
-    let title: String
-    let subtitle: String
+    let title: LocalizedStringKey
+    let subtitle: LocalizedStringKey
 
     var body: some View {
         HStack(spacing: 14) {

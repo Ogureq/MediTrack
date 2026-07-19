@@ -88,7 +88,7 @@ struct TrendsView: View {
             if type == .bloodPressure {
                 series.append(MetricSeries(
                     id: "vital:\(type.rawValue):systolic",
-                    name: "Systolic Pressure",
+                    name: String(localized: "Systolic Pressure"),
                     unit: type.unit,
                     range: 90...120,
                     points: samples.map { MetricPoint(date: $0.date, value: $0.value) }
@@ -100,7 +100,7 @@ struct TrendsView: View {
                 if diastolic.count >= 2 {
                     series.append(MetricSeries(
                         id: "vital:\(type.rawValue):diastolic",
-                        name: "Diastolic Pressure",
+                        name: String(localized: "Diastolic Pressure"),
                         unit: type.unit,
                         range: 60...80,
                         points: diastolic
@@ -125,10 +125,10 @@ struct TrendsView: View {
 
     private var timeRangeDescription: String {
         switch timeRange {
-        case .threeMonths: "last 3 months"
-        case .sixMonths: "last 6 months"
-        case .year: "last year"
-        case .all: "all time"
+        case .threeMonths: String(localized: "last 3 months")
+        case .sixMonths: String(localized: "last 6 months")
+        case .year: String(localized: "last year")
+        case .all: String(localized: "all time")
         }
     }
 

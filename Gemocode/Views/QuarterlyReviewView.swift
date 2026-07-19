@@ -150,7 +150,7 @@ struct QuarterlyReviewView: View {
         }
     }
 
-    private func scoreBubble(label: String, value: Int) -> some View {
+    private func scoreBubble(label: LocalizedStringKey, value: Int) -> some View {
         VStack(spacing: 2) {
             Text("\(value)")
                 .font(.title2.bold())
@@ -180,9 +180,13 @@ struct QuarterlyReviewView: View {
     }
 
     private func scoreTrajectoryAccessibilityLabel(startScore: Int, endScore: Int) -> String {
-        var text = "Health score went from \(startScore) to \(endScore)"
+        var text = String(format: String(localized: "Health score went from %lld to %lld"), startScore, endScore)
         if let scoreDelta = summary.scoreDelta {
-            text += scoreDelta == 0 ? ", unchanged" : ", a change of \(scoreDelta >= 0 ? "+" : "")\(scoreDelta) points"
+            if scoreDelta == 0 {
+                text += String(localized: ", unchanged")
+            } else {
+                text += String(format: String(localized: ", a change of %@%lld points"), scoreDelta >= 0 ? "+" : "", scoreDelta)
+            }
         }
         return text
     }
@@ -359,7 +363,7 @@ private struct ChangeRow: View {
 /// accessibility element.
 private struct WinRow: View {
     let systemImage: String
-    let text: String
+    let text: LocalizedStringKey
 
     var body: some View {
         Label(text, systemImage: systemImage)

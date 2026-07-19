@@ -46,12 +46,15 @@ private struct ProfileForm: View {
 
     private var securityFooter: String {
         if !lock.canLock {
-            return "Set a passcode\(AppLock.biometricsAvailable ? " or enable \(AppLock.biometryLabel)" : "") to protect your data. Everything is stored only on this device."
+            let biometricsClause = AppLock.biometricsAvailable
+                ? String(localized: " or enable \(AppLock.biometryLabel)")
+                : ""
+            return String(localized: "Set a passcode\(biometricsClause) to protect your data. Everything is stored only on this device.")
         }
         if rememberMe {
-            return "You'll stay signed in across launches until you tap Lock Now or turn this off. All data is stored only on this device."
+            return String(localized: "You'll stay signed in across launches until you tap Lock Now or turn this off. All data is stored only on this device.")
         }
-        return "Gemocode asks you to sign in whenever it returns from the background. All data is stored only on this device."
+        return String(localized: "Gemocode asks you to sign in whenever it returns from the background. All data is stored only on this device.")
     }
     @State private var confirmErase = false
     @State private var isImportingHealth = false
@@ -90,7 +93,7 @@ private struct ProfileForm: View {
                         displayedComponents: .date
                     )
                     if let age = profile.age {
-                        LabeledContent("Age", value: "\(age) years")
+                        LabeledContent("Age", value: String(localized: "\(age) years"))
                     }
                 } else {
                     Button("Add Date of Birth") {
@@ -106,7 +109,7 @@ private struct ProfileForm: View {
                     .keyboardType(.decimalPad)
                 Picker("Blood type", selection: $profile.bloodType) {
                     ForEach(Self.bloodTypes, id: \.self) { type in
-                        Text(type.isEmpty ? "Unknown" : type).tag(type)
+                        Text(type.isEmpty ? String(localized: "Unknown") : type).tag(type)
                     }
                 }
             } header: {
@@ -407,7 +410,7 @@ private struct ProfileForm: View {
             defaultFilename: "Gemocode Backup"
         ) { result in
             if case .success = result {
-                dataMessage = "Backup exported."
+                dataMessage = String(localized: "Backup exported.")
             }
         }
         .fileImporter(
@@ -423,7 +426,7 @@ private struct ProfileForm: View {
                 pendingRestoreData = data
                 confirmRestore = true
             } else {
-                dataMessage = "Couldn't read the selected file."
+                dataMessage = String(localized: "Couldn't read the selected file.")
             }
         }
         .confirmationDialog(
@@ -477,7 +480,7 @@ private struct ProfileForm: View {
             exportDocument = BackupJSONDocument(data: try await BackupService.export(from: modelContext, passphrase: passphrase))
             pendingExport = true
         } catch {
-            dataMessage = "Export failed: \(error.localizedDescription)"
+            dataMessage = String(localized: "Export failed: \(error.localizedDescription)")
         }
     }
 
@@ -493,13 +496,15 @@ private struct ProfileForm: View {
     /// pending message once it's actually gone.
     private func attemptRestore(passphrase: String) async -> String? {
         guard let data = pendingRestoreData else {
-            return "No backup file selected."
+            return String(localized: "No backup file selected.")
         }
         do {
             let count = try await BackupService.restore(from: data, passphrase: passphrase, into: modelContext)
             pendingRestoreData = nil
             Haptics.success()
-            pendingRestoreMessage = "Backup restored — \(count) record\(count == 1 ? "" : "s"). Medication and appointment reminders need to be re-enabled."
+            pendingRestoreMessage = count == 1
+                ? String(localized: "Backup restored — \(count) record. Medication and appointment reminders need to be re-enabled.")
+                : String(localized: "Backup restored — \(count) records. Medication and appointment reminders need to be re-enabled.")
             return nil
         } catch {
             return error.localizedDescription
@@ -516,11 +521,15 @@ private struct ProfileForm: View {
                     : Calendar.current.date(byAdding: .year, value: -1, to: .now) ?? .now
                 let count = try await HealthKitService.importVitals(since: since, into: modelContext)
                 lastHealthImportAt = Date.now.timeIntervalSince1970
-                healthImportMessage = count == 0
-                    ? "No new readings found in Apple Health."
-                    : "Imported \(count) reading\(count == 1 ? "" : "s") from Apple Health."
+                if count == 0 {
+                    healthImportMessage = String(localized: "No new readings found in Apple Health.")
+                } else if count == 1 {
+                    healthImportMessage = String(localized: "Imported \(count) reading from Apple Health.")
+                } else {
+                    healthImportMessage = String(localized: "Imported \(count) readings from Apple Health.")
+                }
             } catch {
-                healthImportMessage = "Import failed: \(error.localizedDescription)"
+                healthImportMessage = String(localized: "Import failed: \(error.localizedDescription)")
             }
             isImportingHealth = false
         }
@@ -613,11 +622,11 @@ private struct BackupExportPassphraseSheet: View {
     private func attemptExport() {
         guard !isExporting else { return }
         guard isValid else {
-            error = "Passphrase must be at least \(Self.minimumLength) characters."
+            error = String(localized: "Passphrase must be at least \(Self.minimumLength) characters.")
             return
         }
         guard passphrase == confirm else {
-            error = "Passphrases don't match."
+            error = String(localized: "Passphrases don't match.")
             confirm = ""
             return
         }

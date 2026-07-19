@@ -277,7 +277,9 @@ struct OnboardingView: View {
                 }
 
                 Stepper(
-                    "Exercise: \(exerciseDaysPerWeek) day\(exerciseDaysPerWeek == 1 ? "" : "s")/week",
+                    exerciseDaysPerWeek == 1
+                        ? "Exercise: \(exerciseDaysPerWeek) day/week"
+                        : "Exercise: \(exerciseDaysPerWeek) days/week",
                     value: $exerciseDaysPerWeek,
                     in: 0...7
                 )
@@ -527,31 +529,43 @@ struct OnboardingView: View {
             let heightM = heightCm / 100
             if heightM > 0 {
                 let bmi = weightKg / (heightM * heightM)
-                lines.append("Your BMI is in the \(bmiRangeLabel(bmi)) range — you'll see this reflected in your Health Review.")
+                lines.append(String(localized: "Your BMI is in the \(bmiRangeLabel(bmi)) range — you'll see this reflected in your Health Review."))
             }
         }
 
         if typicalSleepHours > 0, let healthyRange = VitalType.sleepHours.healthyRange {
             let hours = typicalSleepHours.compactFormatted
             if healthyRange.contains(typicalSleepHours) {
-                lines.append("You typically sleep \(hours) hours — right in the 7–9 hour range Gemocode looks for.")
+                lines.append(String(localized: "You typically sleep \(hours) hours — right in the 7–9 hour range Gemocode looks for."))
             } else if typicalSleepHours < healthyRange.lowerBound {
-                lines.append("You typically sleep \(hours) hours — a little under the 7–9 hour range Gemocode looks for.")
+                lines.append(String(localized: "You typically sleep \(hours) hours — a little under the 7–9 hour range Gemocode looks for."))
             } else {
-                lines.append("You typically sleep \(hours) hours — a little over the 7–9 hour range Gemocode looks for.")
+                lines.append(String(localized: "You typically sleep \(hours) hours — a little over the 7–9 hour range Gemocode looks for."))
             }
         }
 
         if !supplements.isEmpty {
-            lines.append("We've set up \(supplements.count) reminder\(supplements.count == 1 ? "" : "s") for the supplements you take.")
+            lines.append(
+                supplements.count == 1
+                    ? String(localized: "We've set up \(supplements.count) reminder for the supplements you take.")
+                    : String(localized: "We've set up \(supplements.count) reminders for the supplements you take.")
+            )
         } else if !goalTags.isEmpty {
-            lines.append("Gemocode will keep an eye on your \(goalTags.count) selected goal\(goalTags.count == 1 ? "" : "s") as new data comes in.")
+            lines.append(
+                goalTags.count == 1
+                    ? String(localized: "Gemocode will keep an eye on your \(goalTags.count) selected goal as new data comes in.")
+                    : String(localized: "Gemocode will keep an eye on your \(goalTags.count) selected goals as new data comes in.")
+            )
         } else if !concernTags.isEmpty {
-            lines.append("Gemocode will pay closer attention to findings related to the \(concernTags.count) area\(concernTags.count == 1 ? "" : "s") you flagged.")
+            lines.append(
+                concernTags.count == 1
+                    ? String(localized: "Gemocode will pay closer attention to findings related to the \(concernTags.count) area you flagged.")
+                    : String(localized: "Gemocode will pay closer attention to findings related to the \(concernTags.count) areas you flagged.")
+            )
         }
 
         if lines.isEmpty {
-            lines.append("Add reports, vitals, and medications anytime — your Health Review builds itself as you go.")
+            lines.append(String(localized: "Add reports, vitals, and medications anytime — your Health Review builds itself as you go."))
         }
 
         return Array(lines.prefix(3))
@@ -619,9 +633,9 @@ private enum QuizStep: CaseIterable, Equatable {
 
 private struct QuizStepScaffold<Content: View>: View {
     let systemImage: String
-    let title: String
-    let subtitle: String
-    let primaryTitle: String
+    let title: LocalizedStringKey
+    let subtitle: LocalizedStringKey
+    let primaryTitle: LocalizedStringKey
     let onPrimary: () -> Void
     var onSkip: (() -> Void)?
     @ViewBuilder var content: () -> Content
@@ -717,7 +731,15 @@ private struct SelectableChip: View {
                     Image(systemName: systemImage)
                         .accessibilityHidden(true)
                 }
-                Text(title)
+                // `title` is the identity tag stored/compared elsewhere
+                // (`dietStyle`, `goalTags`, …) and must stay the original
+                // English value — see `HealthProfile`. Wrapping it in
+                // `LocalizedStringKey` here only affects *display*: known
+                // catalog tags (the chip option lists below) render
+                // translated, while free-typed custom entries (e.g. a
+                // custom supplement) simply fall back to showing their own
+                // text verbatim when no catalog entry matches.
+                Text(LocalizedStringKey(title))
             }
             .font(.subheadline.weight(.medium))
             .padding(.horizontal, 14)

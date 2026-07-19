@@ -95,7 +95,7 @@ struct GoalRow: View {
                     .font(.subheadline.weight(.semibold))
                 Spacer()
                 if goal.isAchieved(latest: latest) {
-                    StatusPill(text: "Achieved", color: .green)
+                    StatusPill(text: String(localized: "Achieved"), color: .green)
                 }
             }
             HStack(spacing: 4) {
@@ -166,21 +166,26 @@ private struct GoalProgressRow: View {
         let unit = Units.label(for: goal.type)
         switch (goal.startValue, latest) {
         case let (start?, latest?):
-            return "\(Units.display(start, for: goal.type).compactFormatted) → \(Units.display(latest, for: goal.type).compactFormatted) \(unit)"
+            return String(
+                format: String(localized: "%@ → %@ %@"),
+                Units.display(start, for: goal.type).compactFormatted,
+                Units.display(latest, for: goal.type).compactFormatted,
+                unit
+            )
         case let (nil, latest?):
-            return "Currently \(Units.display(latest, for: goal.type).compactFormatted) \(unit)"
+            return String(format: String(localized: "Currently %@ %@"), Units.display(latest, for: goal.type).compactFormatted, unit)
         case let (start?, nil):
-            return "Started at \(Units.display(start, for: goal.type).compactFormatted) \(unit)"
+            return String(format: String(localized: "Started at %@ %@"), Units.display(start, for: goal.type).compactFormatted, unit)
         case (nil, nil):
-            return "No readings yet"
+            return String(localized: "No readings yet")
         }
     }
 
     private var dueText: String {
         if let targetDate = goal.targetDate {
-            return "Target: \(targetDate.formatted(.dateTime.month(.abbreviated).year()))"
+            return String(format: String(localized: "Target: %@"), targetDate.formatted(.dateTime.month(.abbreviated).year()))
         }
-        return "Ongoing"
+        return String(localized: "Ongoing")
     }
 
     var body: some View {
@@ -408,8 +413,8 @@ struct AddGoalSheet: View {
 private struct SheetHeader: View {
     let icon: String
     let tint: Color
-    let title: String
-    let subtitle: String
+    let title: LocalizedStringKey
+    let subtitle: LocalizedStringKey
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
@@ -435,14 +440,15 @@ private struct SheetHeader: View {
 
 /// Small uppercase caption used above a field inside a glass block.
 private struct SheetFieldLabel: View {
-    let text: String
+    let text: LocalizedStringKey
 
-    init(_ text: String) {
+    init(_ text: LocalizedStringKey) {
         self.text = text
     }
 
     var body: some View {
-        Text(text.uppercased())
+        Text(text)
+            .textCase(.uppercase)
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
     }

@@ -75,7 +75,7 @@ struct RetestScheduleView: View {
     /// One urgency section — omitted entirely when `items` is empty, per
     /// the screen's "only render sections that have something to show" rule.
     @ViewBuilder
-    private func section(title: String, items: [RetestItem], tint: Color, footer: String? = nil) -> some View {
+    private func section(title: LocalizedStringKey, items: [RetestItem], tint: Color, footer: LocalizedStringKey? = nil) -> some View {
         if !items.isEmpty {
             Section {
                 ForEach(items) { item in
@@ -105,16 +105,18 @@ private struct RetestScheduleRow: View {
     private var dueText: String {
         switch item.status {
         case .overdue:
-            "Overdue since \(item.dueDate.formatted(.dateTime.month(.abbreviated).year()))"
+            String(format: String(localized: "Overdue since %@"), item.dueDate.formatted(.dateTime.month(.abbreviated).year()))
         case .dueSoon:
-            "Due \(relativeDueText(item.dueDate))"
+            String(format: String(localized: "Due %@"), relativeDueText(item.dueDate))
         case .upcoming:
-            "Due \(item.dueDate.formatted(.dateTime.month(.abbreviated).year()))"
+            String(format: String(localized: "Due %@"), item.dueDate.formatted(.dateTime.month(.abbreviated).year()))
         }
     }
 
     private var intervalText: String {
-        "every \(item.intervalMonths) month\(item.intervalMonths == 1 ? "" : "s")"
+        item.intervalMonths == 1
+            ? String(localized: "every 1 month")
+            : String(format: String(localized: "every %lld months"), item.intervalMonths)
     }
 
     private func relativeDueText(_ date: Date) -> String {

@@ -200,11 +200,11 @@ struct PasscodeSetupSheet: View {
 
     private func save() {
         guard isValid else {
-            error = "Passcode must be 4–8 digits."
+            error = String(localized: "Passcode must be 4–8 digits.")
             return
         }
         guard passcode == confirm else {
-            error = "Passcodes don't match."
+            error = String(localized: "Passcodes don't match.")
             confirm = ""
             return
         }

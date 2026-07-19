@@ -145,11 +145,20 @@ struct QuickAddView: View {
             }
 
             Button(action: saveBatch) {
-                Label("Add \(batchDrafts.count) item\(batchDrafts.count == 1 ? "" : "s")", systemImage: "checkmark.circle.fill")
+                Label(
+                    batchDrafts.count == 1
+                        ? String(localized: "Add \(batchDrafts.count) item")
+                        : String(localized: "Add \(batchDrafts.count) items"),
+                    systemImage: "checkmark.circle.fill"
+                )
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(QuickAddAIButtonStyle())
-            .accessibilityLabel("Add \(batchDrafts.count) item\(batchDrafts.count == 1 ? "" : "s")")
+            .accessibilityLabel(
+                batchDrafts.count == 1
+                    ? String(localized: "Add \(batchDrafts.count) item")
+                    : String(localized: "Add \(batchDrafts.count) items")
+            )
             .disabled(isSaving)
         }
         .transition(.asymmetric(
@@ -260,7 +269,7 @@ struct QuickAddView: View {
                 isLoadingAI = false
             } catch {
                 aiErrorMessage = (error as? LocalizedError)?.errorDescription
-                    ?? "Something went wrong. Try rephrasing."
+                    ?? String(localized: "Something went wrong. Try rephrasing.")
                 isLoadingAI = false
             }
         }
@@ -451,7 +460,7 @@ private struct QuickAddPreviewCard: View {
         .glassCard()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            display.accessibilitySummary + (isAIFilled ? ". AI filled, please double-check." : "")
+            display.accessibilitySummary + (isAIFilled ? String(localized: ". AI filled, please double-check.") : "")
         )
     }
 }
@@ -497,7 +506,7 @@ private struct QuickAddBatchPreviewCard: View {
                     }
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(display.accessibilitySummary + ". AI filled, please double-check.")
+                .accessibilityLabel(display.accessibilitySummary + String(localized: ". AI filled, please double-check."))
 
                 Spacer(minLength: 0)
 
@@ -538,49 +547,51 @@ private struct QuickAddPreviewDisplay {
         case let .medication(name, dosage, frequency):
             icon = "pills.fill"
             tint = .teal
-            typeLabel = "Medication"
+            typeLabel = String(localized: "Medication")
             primaryText = name
             let parts = [dosage, frequency].filter { !$0.isEmpty }
             detailLines = parts.isEmpty ? [] : [parts.joined(separator: " · ")]
-            accessibilitySummary = "Medication: \(name)" + (parts.isEmpty ? "" : ", \(parts.joined(separator: ", "))")
+            accessibilitySummary = parts.isEmpty
+                ? String(localized: "Medication: \(name)")
+                : String(localized: "Medication: \(name), \(parts.joined(separator: ", "))")
 
         case let .vital(type, value, secondary):
             icon = type.systemImage
             tint = .blue
-            typeLabel = "Vital · \(type.displayName)"
+            typeLabel = String(localized: "Vital · \(type.displayName)")
             primaryText = Self.vitalValueText(type: type, value: value, secondary: secondary)
             detailLines = []
-            accessibilitySummary = "Vital, \(type.displayName): \(primaryText)"
+            accessibilitySummary = String(localized: "Vital, \(type.displayName): \(primaryText)")
 
         case let .symptom(name, severity):
             icon = "bandage.fill"
             tint = .orange
-            typeLabel = "Symptom"
+            typeLabel = String(localized: "Symptom")
             primaryText = name
-            detailLines = ["Severity \(severity) of 10"]
-            accessibilitySummary = "Symptom: \(name), severity \(severity) out of 10"
+            detailLines = [String(localized: "Severity \(severity) of 10")]
+            accessibilitySummary = String(localized: "Symptom: \(name), severity \(severity) out of 10")
 
         case let .appointment(title, date):
             icon = "calendar"
             tint = .indigo
-            typeLabel = "Appointment"
+            typeLabel = String(localized: "Appointment")
             primaryText = title
             let formattedDate = date.formatted(date: .abbreviated, time: .shortened)
             detailLines = [formattedDate]
-            accessibilitySummary = "Appointment: \(title), \(formattedDate)"
+            accessibilitySummary = String(localized: "Appointment: \(title), \(formattedDate)")
 
         case let .reminder(title, time):
             icon = "bell.fill"
             tint = .purple
-            typeLabel = "Reminder"
+            typeLabel = String(localized: "Reminder")
             primaryText = title
             if let time {
                 let formattedTime = time.formatted(date: .omitted, time: .shortened)
                 detailLines = [formattedTime]
-                accessibilitySummary = "Reminder: \(title), \(formattedTime)"
+                accessibilitySummary = String(localized: "Reminder: \(title), \(formattedTime)")
             } else {
                 detailLines = []
-                accessibilitySummary = "Reminder: \(title)"
+                accessibilitySummary = String(localized: "Reminder: \(title)")
             }
         }
     }

@@ -167,8 +167,8 @@ struct ReviewScreen: View {
             guard await NotificationService.requestAuthorization() else { return }
             NotificationService.scheduleOneTime(
                 id: "scoreChange-\(UUID().uuidString)",
-                title: "Health Score Update",
-                body: "Your health score changed: \(previousScore) → \(newScore)",
+                title: String(localized: "Health Score Update"),
+                body: String(format: String(localized: "Your health score changed: %lld → %lld"), previousScore, newScore),
                 at: Date().addingTimeInterval(5)
             )
         }
@@ -385,7 +385,7 @@ struct ReviewScreen: View {
     }
 
     @ViewBuilder
-    private func findingsGroup(_ title: String, severity: Severity, findings: [Finding]) -> some View {
+    private func findingsGroup(_ title: LocalizedStringKey, severity: Severity, findings: [Finding]) -> some View {
         if !findings.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Label(title, systemImage: severity.systemImage)
@@ -502,7 +502,7 @@ struct FindingRow: View {
     private var accessibilitySummary: String {
         var text = "\(finding.severity.displayName): \(finding.title). \(finding.detail)"
         if let recommendation = finding.recommendation {
-            text += " Recommended: \(recommendation)"
+            text += String(format: String(localized: " Recommended: %@"), recommendation)
         }
         return text
     }

@@ -107,7 +107,7 @@ struct HealthTimelineView: View {
         }
     }
 
-    private func chip(title: String, category: TimelineCategory?) -> some View {
+    private func chip(title: LocalizedStringKey, category: TimelineCategory?) -> some View {
         let isSelected = selectedCategory == category
         return Button {
             selectedCategory = category
@@ -143,9 +143,9 @@ private extension TimelineSignificance {
 
     var displayName: String {
         switch self {
-        case .routine: "Routine"
-        case .notable: "Notable"
-        case .important: "Important"
+        case .routine: String(localized: "Routine")
+        case .notable: String(localized: "Notable")
+        case .important: String(localized: "Important")
         }
     }
 }

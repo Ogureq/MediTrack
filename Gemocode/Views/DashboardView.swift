@@ -117,11 +117,17 @@ struct DashboardView: View {
         var stats: [ShareStat] = []
         if !review.labSnapshots.isEmpty {
             let count = review.labSnapshots.count
-            stats.append(ShareStat(systemImage: "testtube.2", text: "\(count) biomarker\(count == 1 ? "" : "s") tracked"))
+            let text = count == 1
+                ? String(localized: "1 biomarker tracked")
+                : String(format: String(localized: "%lld biomarkers tracked"), count)
+            stats.append(ShareStat(systemImage: "testtube.2", text: text))
         }
         stats.append(ShareStat(systemImage: shareTrendSystemImage(review: review), text: shareTrendText(review: review)))
         if !reports.isEmpty {
-            stats.append(ShareStat(systemImage: "doc.text", text: "\(reports.count) report\(reports.count == 1 ? "" : "s") logged"))
+            let text = reports.count == 1
+                ? String(localized: "1 report logged")
+                : String(format: String(localized: "%lld reports logged"), reports.count)
+            stats.append(ShareStat(systemImage: "doc.text", text: text))
         }
         return stats
     }
@@ -129,9 +135,9 @@ struct DashboardView: View {
     private func shareTrendText(review: HealthReview) -> String {
         let worsening = review.trends.filter { $0.direction == .worsening }.count
         let improving = review.trends.filter { $0.direction == .improving }.count
-        if worsening > improving { return "Trending down" }
-        if improving > worsening { return "Trending up" }
-        return "Trending steady"
+        if worsening > improving { return String(localized: "Trending down") }
+        if improving > worsening { return String(localized: "Trending up") }
+        return String(localized: "Trending steady")
     }
 
     private func shareTrendSystemImage(review: HealthReview) -> String {
@@ -158,13 +164,13 @@ struct DashboardView: View {
         let hour = Calendar.current.component(.hour, from: .now)
         let timeGreeting: String
         switch hour {
-        case 5..<12: timeGreeting = "Good morning"
-        case 12..<17: timeGreeting = "Good afternoon"
-        case 17..<22: timeGreeting = "Good evening"
-        default: timeGreeting = "Good night"
+        case 5..<12: timeGreeting = String(localized: "Good morning")
+        case 12..<17: timeGreeting = String(localized: "Good afternoon")
+        case 17..<22: timeGreeting = String(localized: "Good evening")
+        default: timeGreeting = String(localized: "Good night")
         }
         guard !firstName.isEmpty else { return timeGreeting }
-        return "\(timeGreeting), \(firstName)"
+        return String(format: String(localized: "%@, %@"), timeGreeting, firstName)
     }
 
     var body: some View {
@@ -919,11 +925,25 @@ struct TodayReminderRow: View {
             .accessibilityAddTraits(isCompleted ? [.isSelected] : [])
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            "\(reminder.title)\(reminder.isAISuggested ? ", AI suggested" : "")\(reminder.timeOfDay.map { ", " + $0.formatted(date: .omitted, time: .shortened) } ?? "")"
-        )
+        .accessibilityLabel(reminderAccessibilityText)
         .accessibilityValue(isCompleted ? "Done" : "Not done")
         .accessibilityAction(named: isCompleted ? "Mark as not done" : "Mark as done", onToggle)
+    }
+
+    /// Built explicitly (rather than as a literal string interpolation) so
+    /// the English fragments below go through `String(localized:)` — a
+    /// ternary/optional nested *inside* a `Text`/`.accessibilityLabel`
+    /// string-interpolation slot is evaluated as a plain `String` first,
+    /// so its own literal branches never reach the catalog.
+    private var reminderAccessibilityText: String {
+        var text = reminder.title
+        if reminder.isAISuggested {
+            text += String(localized: ", AI suggested")
+        }
+        if let timeOfDay = reminder.timeOfDay {
+            text += ", " + timeOfDay.formatted(date: .omitted, time: .shortened)
+        }
+        return text
     }
 }
 
@@ -936,9 +956,9 @@ private struct RetestRow: View {
 
     private var statusText: String {
         switch item.status {
-        case .overdue: "Overdue"
-        case .dueSoon: "Due Soon"
-        case .upcoming: "Upcoming"
+        case .overdue: String(localized: "Overdue")
+        case .dueSoon: String(localized: "Due Soon")
+        case .upcoming: String(localized: "Upcoming")
         }
     }
 

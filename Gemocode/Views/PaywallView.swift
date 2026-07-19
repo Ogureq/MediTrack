@@ -306,8 +306,8 @@ private struct PaywallHeader: View {
 
 private struct PaywallFeatureRow: View {
     let icon: String
-    let title: String
-    let detail: String
+    let title: LocalizedStringKey
+    let detail: LocalizedStringKey
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -342,20 +342,20 @@ private struct PaywallProductCard: View {
 
     private var planName: String {
         if product.displayName.isEmpty {
-            if isLifetime { return "Lifetime" }
-            return isYearly ? "Yearly" : "Monthly"
+            if isLifetime { return String(localized: "Lifetime") }
+            return isYearly ? String(localized: "Yearly") : String(localized: "Monthly")
         }
         return product.displayName
     }
 
     private var periodSuffix: String {
-        if isLifetime { return " once" }
+        if isLifetime { return String(localized: " once") }
         guard let period = product.subscription?.subscriptionPeriod else { return "" }
         switch period.unit {
-        case .day: return period.value == 1 ? "/day" : "/\(period.value) days"
-        case .week: return period.value == 1 ? "/week" : "/\(period.value) weeks"
-        case .month: return period.value == 1 ? "/month" : "/\(period.value) months"
-        case .year: return period.value == 1 ? "/year" : "/\(period.value) years"
+        case .day: return period.value == 1 ? String(localized: "/day") : String(localized: "/\(period.value) days")
+        case .week: return period.value == 1 ? String(localized: "/week") : String(localized: "/\(period.value) weeks")
+        case .month: return period.value == 1 ? String(localized: "/month") : String(localized: "/\(period.value) months")
+        case .year: return period.value == 1 ? String(localized: "/year") : String(localized: "/\(period.value) years")
         @unknown default: return ""
         }
     }
@@ -368,9 +368,9 @@ private struct PaywallProductCard: View {
                         Text(planName)
                             .font(.subheadline.weight(.semibold))
                         if isYearly {
-                            StatusPill(text: "Best value", color: .green)
+                            StatusPill(text: String(localized: "Best value"), color: .green)
                         } else if isLifetime {
-                            StatusPill(text: "One-time", color: .teal)
+                            StatusPill(text: String(localized: "One-time"), color: .teal)
                         }
                     }
                     Text("\(product.displayPrice)\(periodSuffix)")
@@ -395,7 +395,7 @@ private struct PaywallProductCard: View {
         .disabled(isDisabled)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            "\(planName) plan, \(product.displayPrice)\(periodSuffix)\(isYearly ? ", best value" : "")\(isLifetime ? ", one-time purchase" : "")"
+            "\(planName) plan, \(product.displayPrice)\(periodSuffix)\(isYearly ? String(localized: ", best value") : "")\(isLifetime ? String(localized: ", one-time purchase") : "")"
         )
         .accessibilityHint(
             isPurchasing

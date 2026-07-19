@@ -122,10 +122,10 @@ enum DocumentLibrary {
 
         var sections: [DocumentSection] = []
         if !thisMonth.isEmpty {
-            sections.append(DocumentSection(id: "this-month", label: "This Month", items: thisMonth))
+            sections.append(DocumentSection(id: "this-month", label: String(localized: "This Month"), items: thisMonth))
         }
         if !earlierThisYear.isEmpty {
-            sections.append(DocumentSection(id: "earlier-this-year", label: "Earlier This Year", items: earlierThisYear))
+            sections.append(DocumentSection(id: "earlier-this-year", label: String(localized: "Earlier This Year"), items: earlierThisYear))
         }
         for year in yearOrder.sorted(by: >) {
             sections.append(DocumentSection(id: "year-\(year)", label: String(year), items: byYear[year] ?? []))
@@ -275,7 +275,7 @@ struct DocumentsView: View {
     private var categoryChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                categoryChip(title: "All", category: nil)
+                categoryChip(title: String(localized: "All"), category: nil)
                 ForEach(availableCategories) { category in
                     categoryChip(title: category.displayName, category: category)
                 }

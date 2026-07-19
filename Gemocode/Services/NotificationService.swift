@@ -22,10 +22,10 @@ enum NotificationService {
     /// Schedules (or replaces) a repeating daily reminder.
     static func scheduleDailyReminder(id: String, medicationName: String, dosage: String, at time: Date) {
         let content = UNMutableNotificationContent()
-        content.title = "Medication Reminder"
+        content.title = String(localized: "Medication Reminder")
         content.body = dosage.isEmpty
-            ? "Time to take \(medicationName)."
-            : "Time to take \(medicationName) (\(dosage))."
+            ? String(localized: "Time to take \(medicationName).")
+            : String(localized: "Time to take \(medicationName) (\(dosage)).")
         content.sound = .default
 
         let components = Calendar.current.dateComponents([.hour, .minute], from: time)

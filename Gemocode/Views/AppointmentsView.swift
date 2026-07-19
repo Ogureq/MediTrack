@@ -349,15 +349,15 @@ struct AddAppointmentSheet: View {
             let id = appointment.reminderID
             let body = [
                 appointment.title,
-                appointment.doctor.isEmpty ? nil : "with \(appointment.doctor)",
-                "at \(date.formatted(date: .omitted, time: .shortened))",
+                appointment.doctor.isEmpty ? nil : String(format: String(localized: "with %@"), appointment.doctor),
+                String(format: String(localized: "at %@"), date.formatted(date: .omitted, time: .shortened)),
             ].compactMap { $0 }.joined(separator: " ")
             let fireDate = date.addingTimeInterval(-86_400)
             Task {
                 if await NotificationService.requestAuthorization() {
                     NotificationService.scheduleOneTime(
                         id: id,
-                        title: "Appointment Tomorrow",
+                        title: String(localized: "Appointment Tomorrow"),
                         body: body,
                         at: fireDate
                     )
@@ -376,8 +376,8 @@ struct AddAppointmentSheet: View {
 private struct SheetHeader: View {
     let icon: String
     let tint: Color
-    let title: String
-    let subtitle: String
+    let title: LocalizedStringKey
+    let subtitle: LocalizedStringKey
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
@@ -403,14 +403,15 @@ private struct SheetHeader: View {
 
 /// Small uppercase caption used above a field inside a glass block.
 private struct SheetFieldLabel: View {
-    let text: String
+    let text: LocalizedStringKey
 
-    init(_ text: String) {
+    init(_ text: LocalizedStringKey) {
         self.text = text
     }
 
     var body: some View {
-        Text(text.uppercased())
+        Text(text)
+            .textCase(.uppercase)
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
     }

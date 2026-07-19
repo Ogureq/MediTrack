@@ -143,19 +143,19 @@ struct MedicalIDView: View {
     private var infoRows: [(label: String, value: String)] {
         var rows: [(String, String)] = []
         if let heightCm = profile?.heightCm {
-            rows.append(("Height", "\(heightCm.compactFormatted) cm"))
+            rows.append((String(localized: "Height"), "\(heightCm.compactFormatted) cm"))
         }
         if let latestWeightSample {
-            rows.append(("Weight", latestWeightSample.formattedValue))
+            rows.append((String(localized: "Weight"), latestWeightSample.formattedValue))
         }
         if let conditions = profile?.conditions, !conditions.isEmpty {
-            rows.append(("Conditions", conditions))
+            rows.append((String(localized: "Conditions"), conditions))
         }
         if !activeMedicationNames.isEmpty {
-            rows.append(("Medications", activeMedicationNames))
+            rows.append((String(localized: "Medications"), activeMedicationNames))
         }
         if let status = profile?.organDonorStatus, !status.isEmpty {
-            rows.append(("Organ donor", status == "yes" ? "Yes" : "No"))
+            rows.append((String(localized: "Organ donor"), status == "yes" ? String(localized: "Yes") : String(localized: "No")))
         }
         return rows
     }
@@ -290,45 +290,53 @@ struct MedicalIDView: View {
     // MARK: - Share text
 
     private var shareText: String {
-        var lines = ["Medical ID"]
+        var lines = [String(localized: "Medical ID")]
 
         if let profile {
-            lines.append(profile.name.isEmpty ? "Name: —" : "Name: \(profile.name)")
+            lines.append(
+                profile.name.isEmpty
+                    ? String(localized: "Name: —")
+                    : String(localized: "Name: \(profile.name)")
+            )
             if let dateOfBirth = profile.dateOfBirth {
                 if let age = profile.age {
-                    lines.append("Date of birth: \(dateOfBirth.formatted(date: .abbreviated, time: .omitted)) (\(age) years)")
+                    lines.append(String(localized: "Date of birth: \(dateOfBirth.formatted(date: .abbreviated, time: .omitted)) (\(age) years)"))
                 } else {
-                    lines.append("Date of birth: \(dateOfBirth.formatted(date: .abbreviated, time: .omitted))")
+                    lines.append(String(localized: "Date of birth: \(dateOfBirth.formatted(date: .abbreviated, time: .omitted))"))
                 }
             }
             if profile.sex != .unspecified {
-                lines.append("Biological sex: \(profile.sex.displayName)")
+                lines.append(String(localized: "Biological sex: \(profile.sex.displayName)"))
             }
             if let heightCm = profile.heightCm {
-                lines.append("Height: \(heightCm.compactFormatted) cm")
+                lines.append(String(localized: "Height: \(heightCm.compactFormatted) cm"))
             }
             if let latestWeightSample {
-                lines.append("Weight: \(latestWeightSample.formattedValue)")
+                lines.append(String(localized: "Weight: \(latestWeightSample.formattedValue)"))
             }
-            lines.append("Blood type: \(profile.bloodType.isEmpty ? "Unknown" : profile.bloodType)")
+            lines.append(String(localized: "Blood type: \(profile.bloodType.isEmpty ? String(localized: "Unknown") : profile.bloodType)"))
             if !profile.allergies.isEmpty {
-                lines.append("Allergies: \(profile.allergies)")
+                lines.append(String(localized: "Allergies: \(profile.allergies)"))
             }
             if !profile.conditions.isEmpty {
-                lines.append("Medical conditions: \(profile.conditions)")
+                lines.append(String(localized: "Medical conditions: \(profile.conditions)"))
             }
             if !profile.organDonorStatus.isEmpty {
-                lines.append("Organ donor: \(profile.organDonorStatus == "yes" ? "Yes" : "No")")
+                lines.append(String(localized: "Organ donor: \(profile.organDonorStatus == "yes" ? String(localized: "Yes") : String(localized: "No"))"))
             }
         }
 
         if !activeMedications.isEmpty {
-            lines.append("Active medications:")
+            lines.append(String(localized: "Active medications:"))
             for medication in activeMedications {
                 let detail = [medication.dosage, medication.frequency]
                     .filter { !$0.isEmpty }
                     .joined(separator: " · ")
-                lines.append(detail.isEmpty ? "- \(medication.name)" : "- \(medication.name) (\(detail))")
+                lines.append(
+                    detail.isEmpty
+                        ? String(localized: "- \(medication.name)")
+                        : String(localized: "- \(medication.name) (\(detail))")
+                )
             }
         }
 
@@ -336,7 +344,11 @@ struct MedicalIDView: View {
             let caption = [profile.emergencyContactRelation, profile.emergencyContactPhone]
                 .filter { !$0.isEmpty }
                 .joined(separator: " · ")
-            lines.append(caption.isEmpty ? "Emergency contact: \(profile.emergencyContactName)" : "Emergency contact: \(profile.emergencyContactName) (\(caption))")
+            lines.append(
+                caption.isEmpty
+                    ? String(localized: "Emergency contact: \(profile.emergencyContactName)")
+                    : String(localized: "Emergency contact: \(profile.emergencyContactName) (\(caption))")
+            )
         }
 
         return lines.joined(separator: "\n")
