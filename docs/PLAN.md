@@ -208,6 +208,14 @@ This document records the phased plan executed to build Gemocode, a privacy-firs
 - [x] Timing-first Dashboard — the retest story is the hero directly under the score: "Tests due" when something needs attention, a green "You're caught up — next: <test> <when>" when nothing does, and a scan-first hero for users with no labs yet; all three lead to the new full Retest Schedule screen (Overdue / Due soon / Upcoming with last-tested and due dates, the Upcoming footer carrying the skip-duplicate-tests message)
 - [x] Marketing repositioned — all assets now lead with the money-and-timing story (never lose a result, know when you're due and when you're not, skip duplicate tests) with privacy as the strong second pillar; every stale "free scanning" claim resolved to the real tiering (tracking + basic Quick Add free forever, one free AI scan-and-report trial, scanning/AI Premium at $19.99/mo); App Store fields re-verified within limits
 
+## Phase 26 — Russian Localization & Light Theme
+
+- [x] Settings — new "Appearance & Language" section in Profile: Theme (System/Dark/Light, default Dark) and Language (System/English/Русский); language switch applies live via the locale environment plus AppleLanguages for full effect after relaunch
+- [x] Light theme — additive design-system palette in Theme.swift (white-washed glass fills, flat dark hairlines, scheme-aware ambient background) with dark mode byte-identical; share card and PDF exporters stay intentionally dark; a hardcoded-color polish pass across ~14 views remains as follow-up
+- [x] Russian, three string tables — Localizable.xcstrings (728 view keys from a 9-way parallel extraction, 7 proper Russian plural-variation keys, formal register), Model.xcstrings (20 display names), Engine.xcstrings (435 keys: every finding/recommendation/disclaimer, all 46 lab tests in standard Russian lab terminology); English output byte-identical everywhere via defaultValue, test-asserted strings individually verified
+- [x] Deliberate exclusions — Quick Add example chips stay English (they feed the English-keyword parser); unit symbols international
+- [ ] Follow-ups: replace the four `%@`-suffix English plural hacks with plural-aware keys; localize notification banners (service layer); goal/diet chip display-name mapping (stored tags must not change); teach QuickAddParser Russian keywords; light-mode color polish pass; AI report output language option via relay
+
 ## Future Milestones
 
 Not part of the current plan; captured here for future scoping:
