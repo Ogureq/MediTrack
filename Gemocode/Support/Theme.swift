@@ -11,6 +11,11 @@ enum Glass {
     static let chipRadius: CGFloat = 14
 
     /// Bevel edge: bright on the top-left, shaded on the bottom-right.
+    ///
+    /// Unchanged — this is the value every existing call site across the
+    /// app (`Glass.bevelStroke`, no arguments) still resolves to, so dark
+    /// mode renders byte-identically to before this file gained light-mode
+    /// support. Use `bevelStroke(for:)` below for scheme-aware call sites.
     static var bevelStroke: LinearGradient {
         LinearGradient(
             colors: [
@@ -21,6 +26,24 @@ enum Glass {
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
+    }
+
+    /// Scheme-aware bevel edge for the shared surfaces below
+    /// (`glassCard`/`tintedGlassCard`/`GlassRowBackground`/glass button
+    /// styles). Dark mode returns exactly `bevelStroke` (untouched); light
+    /// mode drops the bright top-left highlight — invisible against a pale
+    /// background — for a flat hairline border instead.
+    static func bevelStroke(for colorScheme: ColorScheme) -> LinearGradient {
+        switch colorScheme {
+        case .light:
+            LinearGradient(
+                colors: [.black.opacity(0.08)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        default:
+            bevelStroke
+        }
     }
 
     static var accentGradient: LinearGradient {
@@ -79,13 +102,24 @@ struct AmbientBackground: View {
 
 private struct GlassCardModifier: ViewModifier {
     let cornerRadius: CGFloat
+    @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
         content
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .background {
+                // `.ultraThinMaterial` alone reads slightly gray on a light
+                // background, so light mode washes a translucent white fill
+                // underneath it. Dark mode adds nothing here — identical to
+                // before this modifier gained light-mode support.
+                if colorScheme == .light {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(Color.white.opacity(0.65))
+                }
+            }
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(Glass.bevelStroke, lineWidth: 1)
+                    .strokeBorder(Glass.bevelStroke(for: colorScheme), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.16), radius: 14, x: 0, y: 8)
     }
@@ -136,13 +170,22 @@ extension View {
 /// Row background for `List`/`Form`: each row floats as a frosted glass chip.
 struct GlassRowBackground: View {
     var cornerRadius: CGFloat = Glass.chipRadius
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(.ultraThinMaterial)
+            .background {
+                // Same light-mode-only white wash as `GlassCardModifier`;
+                // dark mode is unaffected.
+                if colorScheme == .light {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(Color.white.opacity(0.65))
+                }
+            }
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(Glass.bevelStroke, lineWidth: 1)
+                    .strokeBorder(Glass.bevelStroke(for: colorScheme), lineWidth: 1)
             )
             .padding(.vertical, 3)
     }
@@ -151,6 +194,8 @@ struct GlassRowBackground: View {
 // MARK: - Buttons
 
 struct GlassProminentButtonStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var colorScheme
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.subheadline.weight(.semibold))
@@ -165,7 +210,7 @@ struct GlassProminentButtonStyle: ButtonStyle {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Glass.bevelStroke, lineWidth: 1)
+                    .strokeBorder(Glass.bevelStroke(for: colorScheme), lineWidth: 1)
             )
             .shadow(color: .blue.opacity(0.35), radius: 10, x: 0, y: 5)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
@@ -174,6 +219,8 @@ struct GlassProminentButtonStyle: ButtonStyle {
 }
 
 struct GlassButtonStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var colorScheme
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.subheadline.weight(.semibold))
@@ -183,7 +230,7 @@ struct GlassButtonStyle: ButtonStyle {
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Glass.bevelStroke, lineWidth: 1)
+                    .strokeBorder(Glass.bevelStroke(for: colorScheme), lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)

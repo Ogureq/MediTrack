@@ -39,6 +39,7 @@ private struct ProfileForm: View {
     @AppStorage(AppLock.biometricsEnabledKey) private var biometricsEnabled = true
     @EnvironmentObject private var lock: AppLock
     @ObservedObject private var premiumStore = PremiumStore.shared
+    @ObservedObject private var settings = AppSettingsStore.shared
     @State private var showingPasscodeSetup = false
     @State private var showingPaywall = false
     @State private var refreshToggle = false
@@ -163,6 +164,25 @@ private struct ProfileForm: View {
                 Text("Units")
             } footer: {
                 Text("Values are stored in metric and converted for display and entry.")
+            }
+            .listRowBackground(GlassRowBackground())
+            .listRowSeparator(.hidden)
+
+            Section {
+                Picker("Theme", selection: $settings.themeChoice) {
+                    ForEach(ThemeChoice.allCases, id: \.self) { choice in
+                        Text(choice.displayName).tag(choice)
+                    }
+                }
+                Picker("Language", selection: $settings.languageChoice) {
+                    ForEach(LanguageChoice.allCases, id: \.self) { choice in
+                        Text(choice.displayName).tag(choice)
+                    }
+                }
+            } header: {
+                Text("Appearance & Language")
+            } footer: {
+                Text("Language changes apply immediately to most screens; restart the app to apply everywhere.")
             }
             .listRowBackground(GlassRowBackground())
             .listRowSeparator(.hidden)
