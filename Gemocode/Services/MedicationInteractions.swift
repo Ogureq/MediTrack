@@ -19,9 +19,9 @@ enum InteractionSeverity: Int, Comparable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .minor: "Minor"
-        case .moderate: "Moderate"
-        case .major: "Major"
+        case .minor: String(localized: "interactionSeverity.minor", defaultValue: "Minor", table: "Engine")
+        case .moderate: String(localized: "interactionSeverity.moderate", defaultValue: "Moderate", table: "Engine")
+        case .major: String(localized: "interactionSeverity.major", defaultValue: "Major", table: "Engine")
         }
     }
 
@@ -45,12 +45,18 @@ struct DrugInteraction: Identifiable, Hashable {
 
 enum MedicationInteractions {
 
-    static let disclaimer = """
-        This is an educational check against a small list of well-known \
-        interactions — it is not exhaustive. The absence of a warning does \
-        not mean a combination is safe. Always confirm your full medication \
-        list with your pharmacist or doctor.
-        """
+    static var disclaimer: String {
+        String(
+            localized: "medicationInteractions.disclaimer",
+            defaultValue: """
+                This is an educational check against a small list of well-known \
+                interactions — it is not exhaustive. The absence of a warning does \
+                not mean a combination is safe. Always confirm your full medication \
+                list with your pharmacist or doctor.
+                """,
+            table: "Engine"
+        )
+    }
 
     // MARK: Drug classes and synonyms
     //
@@ -139,65 +145,65 @@ enum MedicationInteractions {
         }
 
         add("warfarin", "nsaid", .major,
-            "Combining warfarin with NSAIDs meaningfully increases the risk of serious bleeding, including gastrointestinal bleeding.",
-            "Ask your doctor about a safer pain reliever such as acetaminophen.")
+            String(localized: "interaction.warfarin_nsaid.explanation", defaultValue: "Combining warfarin with NSAIDs meaningfully increases the risk of serious bleeding, including gastrointestinal bleeding.", table: "Engine"),
+            String(localized: "interaction.warfarin_nsaid.recommendation", defaultValue: "Ask your doctor about a safer pain reliever such as acetaminophen.", table: "Engine"))
         add("warfarin", "aspirin", .major,
-            "Warfarin plus aspirin raises the risk of bleeding because both affect clotting.",
-            "Only combine under a doctor's supervision.")
+            String(localized: "interaction.warfarin_aspirin.explanation", defaultValue: "Warfarin plus aspirin raises the risk of bleeding because both affect clotting.", table: "Engine"),
+            String(localized: "interaction.warfarin_aspirin.recommendation", defaultValue: "Only combine under a doctor's supervision.", table: "Engine"))
         add("warfarin", "clopidogrel", .major,
-            "Two blood thinners together substantially increase bleeding risk.",
-            "This combination should only be used when a doctor specifically directs it.")
+            String(localized: "interaction.warfarin_clopidogrel.explanation", defaultValue: "Two blood thinners together substantially increase bleeding risk.", table: "Engine"),
+            String(localized: "interaction.warfarin_clopidogrel.recommendation", defaultValue: "This combination should only be used when a doctor specifically directs it.", table: "Engine"))
         add("ssri", "maoi", .major,
-            "SSRIs/SNRIs with MAOIs can cause serotonin syndrome, a potentially dangerous reaction.",
-            "This combination is generally avoided; talk to your prescriber right away.")
+            String(localized: "interaction.ssri_maoi.explanation", defaultValue: "SSRIs/SNRIs with MAOIs can cause serotonin syndrome, a potentially dangerous reaction.", table: "Engine"),
+            String(localized: "interaction.ssri_maoi.recommendation", defaultValue: "This combination is generally avoided; talk to your prescriber right away.", table: "Engine"))
         add("ssri", "tramadol", .moderate,
-            "Tramadol with an SSRI/SNRI raises the risk of serotonin syndrome and can lower the seizure threshold.",
-            "Mention this pairing to your doctor or pharmacist.")
+            String(localized: "interaction.ssri_tramadol.explanation", defaultValue: "Tramadol with an SSRI/SNRI raises the risk of serotonin syndrome and can lower the seizure threshold.", table: "Engine"),
+            String(localized: "interaction.ssri_tramadol.recommendation", defaultValue: "Mention this pairing to your doctor or pharmacist.", table: "Engine"))
         add("ssri", "triptan", .moderate,
-            "Triptans with SSRIs/SNRIs can, uncommonly, contribute to serotonin syndrome.",
-            "Usually manageable — review symptoms to watch for with your pharmacist.")
+            String(localized: "interaction.ssri_triptan.explanation", defaultValue: "Triptans with SSRIs/SNRIs can, uncommonly, contribute to serotonin syndrome.", table: "Engine"),
+            String(localized: "interaction.ssri_triptan.recommendation", defaultValue: "Usually manageable — review symptoms to watch for with your pharmacist.", table: "Engine"))
         add("tramadol", "triptan", .moderate,
-            "Both increase serotonin activity, which can rarely lead to serotonin syndrome.",
-            "Discuss with your pharmacist if used together often.")
+            String(localized: "interaction.tramadol_triptan.explanation", defaultValue: "Both increase serotonin activity, which can rarely lead to serotonin syndrome.", table: "Engine"),
+            String(localized: "interaction.tramadol_triptan.recommendation", defaultValue: "Discuss with your pharmacist if used together often.", table: "Engine"))
         add("ace_inhibitor", "potassium_sparing", .moderate,
-            "ACE inhibitors with potassium-sparing diuretics can raise blood potassium to unsafe levels.",
-            "Your doctor may want to monitor your potassium and kidney function.")
+            String(localized: "interaction.ace_inhibitor_potassium_sparing.explanation", defaultValue: "ACE inhibitors with potassium-sparing diuretics can raise blood potassium to unsafe levels.", table: "Engine"),
+            String(localized: "interaction.ace_inhibitor_potassium_sparing.recommendation", defaultValue: "Your doctor may want to monitor your potassium and kidney function.", table: "Engine"))
         add("ace_inhibitor", "potassium", .moderate,
-            "ACE inhibitors plus potassium supplements can raise blood potassium.",
-            "Have your potassium checked as your doctor advises.")
+            String(localized: "interaction.ace_inhibitor_potassium.explanation", defaultValue: "ACE inhibitors plus potassium supplements can raise blood potassium.", table: "Engine"),
+            String(localized: "interaction.ace_inhibitor_potassium.recommendation", defaultValue: "Have your potassium checked as your doctor advises.", table: "Engine"))
         add("ace_inhibitor", "arb", .moderate,
-            "Combining an ACE inhibitor and an ARB increases the risk of high potassium and kidney strain with little added benefit.",
-            "This combination is usually avoided; confirm with your doctor.")
+            String(localized: "interaction.ace_inhibitor_arb.explanation", defaultValue: "Combining an ACE inhibitor and an ARB increases the risk of high potassium and kidney strain with little added benefit.", table: "Engine"),
+            String(localized: "interaction.ace_inhibitor_arb.recommendation", defaultValue: "This combination is usually avoided; confirm with your doctor.", table: "Engine"))
         add("ace_inhibitor", "nsaid", .moderate,
-            "NSAIDs can reduce the effect of ACE inhibitors and, together, may strain the kidneys.",
-            "Limit NSAID use and discuss alternatives with your doctor.")
+            String(localized: "interaction.ace_inhibitor_nsaid.explanation", defaultValue: "NSAIDs can reduce the effect of ACE inhibitors and, together, may strain the kidneys.", table: "Engine"),
+            String(localized: "interaction.ace_inhibitor_nsaid.recommendation", defaultValue: "Limit NSAID use and discuss alternatives with your doctor.", table: "Engine"))
         add("statin", "grapefruit", .moderate,
-            "Grapefruit can raise levels of some statins (especially simvastatin and atorvastatin), increasing the risk of muscle problems.",
-            "Ask your pharmacist whether your specific statin is affected.")
+            String(localized: "interaction.statin_grapefruit.explanation", defaultValue: "Grapefruit can raise levels of some statins (especially simvastatin and atorvastatin), increasing the risk of muscle problems.", table: "Engine"),
+            String(localized: "interaction.statin_grapefruit.recommendation", defaultValue: "Ask your pharmacist whether your specific statin is affected.", table: "Engine"))
         add("pde5", "nitrate", .major,
-            "PDE5 inhibitors (e.g. sildenafil) with nitrates can cause a dangerous drop in blood pressure.",
-            "This combination should be avoided — tell any prescriber you take both.")
+            String(localized: "interaction.pde5_nitrate.explanation", defaultValue: "PDE5 inhibitors (e.g. sildenafil) with nitrates can cause a dangerous drop in blood pressure.", table: "Engine"),
+            String(localized: "interaction.pde5_nitrate.recommendation", defaultValue: "This combination should be avoided — tell any prescriber you take both.", table: "Engine"))
         add("opioid", "benzodiazepine", .major,
-            "Opioids with benzodiazepines can cause profound sedation and dangerous slowing of breathing.",
-            "Use together only under close medical supervision.")
+            String(localized: "interaction.opioid_benzodiazepine.explanation", defaultValue: "Opioids with benzodiazepines can cause profound sedation and dangerous slowing of breathing.", table: "Engine"),
+            String(localized: "interaction.opioid_benzodiazepine.recommendation", defaultValue: "Use together only under close medical supervision.", table: "Engine"))
         add("digoxin", "amiodarone", .major,
-            "Amiodarone can raise digoxin levels and lead to toxicity.",
-            "Your doctor may reduce your digoxin dose and monitor levels.")
+            String(localized: "interaction.digoxin_amiodarone.explanation", defaultValue: "Amiodarone can raise digoxin levels and lead to toxicity.", table: "Engine"),
+            String(localized: "interaction.digoxin_amiodarone.recommendation", defaultValue: "Your doctor may reduce your digoxin dose and monitor levels.", table: "Engine"))
         add("methotrexate", "nsaid", .major,
-            "NSAIDs can raise methotrexate levels and increase toxicity, especially at higher methotrexate doses.",
-            "Confirm any pain reliever with the doctor managing your methotrexate.")
+            String(localized: "interaction.methotrexate_nsaid.explanation", defaultValue: "NSAIDs can raise methotrexate levels and increase toxicity, especially at higher methotrexate doses.", table: "Engine"),
+            String(localized: "interaction.methotrexate_nsaid.recommendation", defaultValue: "Confirm any pain reliever with the doctor managing your methotrexate.", table: "Engine"))
         add("lithium", "nsaid", .moderate,
-            "NSAIDs can raise lithium levels and increase the risk of lithium toxicity.",
-            "Prefer acetaminophen and have lithium levels monitored.")
+            String(localized: "interaction.lithium_nsaid.explanation", defaultValue: "NSAIDs can raise lithium levels and increase the risk of lithium toxicity.", table: "Engine"),
+            String(localized: "interaction.lithium_nsaid.recommendation", defaultValue: "Prefer acetaminophen and have lithium levels monitored.", table: "Engine"))
         add("clopidogrel", "ppi", .moderate,
-            "Some PPIs (especially omeprazole) can reduce clopidogrel's anti-clotting effect.",
-            "Ask your pharmacist about a PPI that interacts less, if one is needed.")
+            String(localized: "interaction.clopidogrel_ppi.explanation", defaultValue: "Some PPIs (especially omeprazole) can reduce clopidogrel's anti-clotting effect.", table: "Engine"),
+            String(localized: "interaction.clopidogrel_ppi.recommendation", defaultValue: "Ask your pharmacist about a PPI that interacts less, if one is needed.", table: "Engine"))
         add("aspirin", "nsaid", .moderate,
-            "Taking aspirin with other NSAIDs increases stomach and bleeding risk and may blunt aspirin's heart benefit.",
-            "Space doses or ask your pharmacist about the safest option.")
+            String(localized: "interaction.aspirin_nsaid.explanation", defaultValue: "Taking aspirin with other NSAIDs increases stomach and bleeding risk and may blunt aspirin's heart benefit.", table: "Engine"),
+            String(localized: "interaction.aspirin_nsaid.recommendation", defaultValue: "Space doses or ask your pharmacist about the safest option.", table: "Engine"))
         add("statin", "amiodarone", .moderate,
-            "Amiodarone can raise levels of some statins, increasing the risk of muscle injury.",
-            "Your doctor may cap the statin dose; report muscle pain.")
+            String(localized: "interaction.statin_amiodarone.explanation", defaultValue: "Amiodarone can raise levels of some statins, increasing the risk of muscle injury.", table: "Engine"),
+            String(localized: "interaction.statin_amiodarone.recommendation", defaultValue: "Your doctor may cap the statin dose; report muscle pain.", table: "Engine"))
 
         return table
     }()

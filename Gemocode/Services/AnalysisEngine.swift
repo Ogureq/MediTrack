@@ -15,9 +15,9 @@ enum Severity: Int, Comparable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .info: "Informational"
-        case .attention: "Needs Attention"
-        case .critical: "Critical"
+        case .info: String(localized: "severity.info", defaultValue: "Informational", table: "Engine")
+        case .attention: String(localized: "severity.attention", defaultValue: "Needs Attention", table: "Engine")
+        case .critical: String(localized: "severity.critical", defaultValue: "Critical", table: "Engine")
         }
     }
 
@@ -57,12 +57,12 @@ enum LabStatus {
 
     var label: String {
         switch self {
-        case .criticalLow: "Critical Low"
-        case .low: "Low"
-        case .normal: "In Range"
-        case .high: "High"
-        case .criticalHigh: "Critical High"
-        case .unknown: "No Range"
+        case .criticalLow: String(localized: "labStatus.criticalLow", defaultValue: "Critical Low", table: "Engine")
+        case .low: String(localized: "labStatus.low", defaultValue: "Low", table: "Engine")
+        case .normal: String(localized: "labStatus.normal", defaultValue: "In Range", table: "Engine")
+        case .high: String(localized: "labStatus.high", defaultValue: "High", table: "Engine")
+        case .criticalHigh: String(localized: "labStatus.criticalHigh", defaultValue: "Critical High", table: "Engine")
+        case .unknown: String(localized: "labStatus.unknown", defaultValue: "No Range", table: "Engine")
         }
     }
 
@@ -87,11 +87,11 @@ enum TrendDirection {
 
     var displayName: String {
         switch self {
-        case .improving: "Improving"
-        case .worsening: "Worsening"
-        case .stable: "Stable"
-        case .rising: "Rising"
-        case .falling: "Falling"
+        case .improving: String(localized: "trend.improving", defaultValue: "Improving", table: "Engine")
+        case .worsening: String(localized: "trend.worsening", defaultValue: "Worsening", table: "Engine")
+        case .stable: String(localized: "trend.stable", defaultValue: "Stable", table: "Engine")
+        case .rising: String(localized: "trend.rising", defaultValue: "Rising", table: "Engine")
+        case .falling: String(localized: "trend.falling", defaultValue: "Falling", table: "Engine")
         }
     }
 
@@ -139,11 +139,11 @@ enum BloodPressureCategory {
 
     var displayName: String {
         switch self {
-        case .normal: "Normal"
-        case .elevated: "Elevated"
-        case .stage1: "Hypertension Stage 1"
-        case .stage2: "Hypertension Stage 2"
-        case .crisis: "Hypertensive Crisis"
+        case .normal: String(localized: "bp.normal", defaultValue: "Normal", table: "Engine")
+        case .elevated: String(localized: "bp.elevated", defaultValue: "Elevated", table: "Engine")
+        case .stage1: String(localized: "bp.stage1", defaultValue: "Hypertension Stage 1", table: "Engine")
+        case .stage2: String(localized: "bp.stage2", defaultValue: "Hypertension Stage 2", table: "Engine")
+        case .crisis: String(localized: "bp.crisis", defaultValue: "Hypertensive Crisis", table: "Engine")
         }
     }
 }
@@ -159,12 +159,18 @@ struct HealthReview {
     let trends: [TrendInsight]
     let labSnapshots: [LabSnapshot]
 
-    static let disclaimer = """
-        Gemocode provides educational information only. It is not a medical device, does not \
-        provide a diagnosis, and is not a substitute for professional medical advice. Always \
-        consult a qualified healthcare professional about your results and before making any \
-        health decisions.
-        """
+    static var disclaimer: String {
+        String(
+            localized: "review.disclaimer",
+            defaultValue: """
+                Gemocode provides educational information only. It is not a medical device, does not \
+                provide a diagnosis, and is not a substitute for professional medical advice. Always \
+                consult a qualified healthcare professional about your results and before making any \
+                health decisions.
+                """,
+            table: "Engine"
+        )
+    }
 
     var criticalFindings: [Finding] { findings.filter { $0.severity == .critical } }
     var attentionFindings: [Finding] { findings.filter { $0.severity == .attention } }
@@ -172,18 +178,24 @@ struct HealthReview {
 
     var scoreLabel: String {
         switch score {
-        case 90...100: "Excellent"
-        case 75..<90: "Good"
-        case 60..<75: "Fair"
-        case 40..<60: "Needs Attention"
-        default: "Talk to Your Doctor"
+        case 90...100: String(localized: "score.excellent", defaultValue: "Excellent", table: "Engine")
+        case 75..<90: String(localized: "score.good", defaultValue: "Good", table: "Engine")
+        case 60..<75: String(localized: "score.fair", defaultValue: "Fair", table: "Engine")
+        case 40..<60: String(localized: "score.needsAttention", defaultValue: "Needs Attention", table: "Engine")
+        default: String(localized: "score.talkToDoctor", defaultValue: "Talk to Your Doctor", table: "Engine")
         }
     }
 
     var shareText: String {
         var lines: [String] = []
-        lines.append("Gemocode Health Review — \(generatedAt.formatted(date: .abbreviated, time: .shortened))")
-        lines.append("Overall score: \(score)/100 (\(scoreLabel))")
+        lines.append(String(
+            format: String(localized: "share.title", defaultValue: "Gemocode Health Review — %@", table: "Engine"),
+            generatedAt.formatted(date: .abbreviated, time: .shortened)
+        ))
+        lines.append(String(
+            format: String(localized: "share.overallScore", defaultValue: "Overall score: %1$lld/100 (%2$@)", table: "Engine"),
+            Int64(score), scoreLabel
+        ))
         lines.append("")
         lines.append(summary)
         for severity in [Severity.critical, .attention, .info] {
@@ -192,17 +204,26 @@ struct HealthReview {
             lines.append("")
             lines.append(severity.displayName.uppercased())
             for finding in group {
-                lines.append("• \(finding.title): \(finding.detail)")
+                lines.append(String(
+                    format: String(localized: "share.bulletFinding", defaultValue: "• %1$@: %2$@", table: "Engine"),
+                    finding.title, finding.detail
+                ))
                 if let recommendation = finding.recommendation {
-                    lines.append("  → \(recommendation)")
+                    lines.append(String(
+                        format: String(localized: "share.bulletRecommendation", defaultValue: "  → %@", table: "Engine"),
+                        recommendation
+                    ))
                 }
             }
         }
         if !trends.isEmpty {
             lines.append("")
-            lines.append("TRENDS")
+            lines.append(String(localized: "share.trendsHeader", defaultValue: "TRENDS", table: "Engine"))
             for trend in trends {
-                lines.append("• \(trend.detail)")
+                lines.append(String(
+                    format: String(localized: "share.bulletTrend", defaultValue: "• %@", table: "Engine"),
+                    trend.detail
+                ))
             }
         }
         lines.append("")
@@ -248,10 +269,10 @@ enum AnalysisEngine {
 
     static func bmiCategory(_ bmi: Double) -> (name: String, severity: Severity) {
         switch bmi {
-        case ..<18.5: ("Underweight", .attention)
-        case 18.5..<25: ("Normal weight", .info)
-        case 25..<30: ("Overweight", .info)
-        default: ("Obese", .attention)
+        case ..<18.5: (String(localized: "bmi.underweight", defaultValue: "Underweight", table: "Engine"), .attention)
+        case 18.5..<25: (String(localized: "bmi.normal", defaultValue: "Normal weight", table: "Engine"), .info)
+        case 25..<30: (String(localized: "bmi.overweight", defaultValue: "Overweight", table: "Engine"), .info)
+        default: (String(localized: "bmi.obese", defaultValue: "Obese", table: "Engine"), .attention)
         }
     }
 
@@ -349,7 +370,8 @@ enum AnalysisEngine {
                 reference: reference
             ))
 
-            let rangeText = range.map { "\($0.lowerBound.compactFormatted)–\($0.upperBound.compactFormatted) \(latest.unit)" } ?? "no reference range"
+            let noReferenceRangeText = String(localized: "lab.noReferenceRange", defaultValue: "no reference range", table: "Engine")
+            let rangeText = range.map { "\($0.lowerBound.compactFormatted)–\($0.upperBound.compactFormatted) \(latest.unit)" } ?? noReferenceRangeText
             let valueText = "\(latest.value.compactFormatted) \(latest.unit)"
 
             switch labStatus {
@@ -358,18 +380,30 @@ enum AnalysisEngine {
                 findings.append(Finding(
                     severity: .critical,
                     category: .labs,
-                    title: "\(latest.displayName) is at a critical level",
-                    detail: "Latest value \(valueText) (typical range \(rangeText)). \(meaning ?? "")",
-                    recommendation: "Contact your healthcare provider promptly to review this result."
+                    title: String(
+                        format: String(localized: "finding.lab.critical.title", defaultValue: "%@ is at a critical level", table: "Engine"),
+                        latest.displayName
+                    ),
+                    detail: String(
+                        format: String(localized: "finding.lab.detail", defaultValue: "Latest value %1$@ (typical range %2$@). %3$@", table: "Engine"),
+                        valueText, rangeText, meaning ?? ""
+                    ),
+                    recommendation: String(localized: "finding.lab.critical.recommendation", defaultValue: "Contact your healthcare provider promptly to review this result.", table: "Engine")
                 ))
             case .low, .high:
                 let meaning = labStatus == .low ? reference?.lowMeaning : reference?.highMeaning
+                let titleFormat = labStatus == .low
+                    ? String(localized: "finding.lab.low.title", defaultValue: "%@ is below its reference range", table: "Engine")
+                    : String(localized: "finding.lab.high.title", defaultValue: "%@ is above its reference range", table: "Engine")
                 findings.append(Finding(
                     severity: .attention,
                     category: .labs,
-                    title: "\(latest.displayName) is \(labStatus == .low ? "below" : "above") its reference range",
-                    detail: "Latest value \(valueText) (typical range \(rangeText)). \(meaning ?? "")",
-                    recommendation: "Worth discussing with your doctor at your next visit."
+                    title: String(format: titleFormat, latest.displayName),
+                    detail: String(
+                        format: String(localized: "finding.lab.detail", defaultValue: "Latest value %1$@ (typical range %2$@). %3$@", table: "Engine"),
+                        valueText, rangeText, meaning ?? ""
+                    ),
+                    recommendation: String(localized: "finding.lab.attention.recommendation", defaultValue: "Worth discussing with your doctor at your next visit.", table: "Engine")
                 ))
             case .normal, .unknown:
                 break
@@ -381,13 +415,25 @@ enum AnalysisEngine {
                 let detail: String
                 switch direction {
                 case .improving:
-                    detail = "\(latest.displayName) changed \(changeText) over \(sorted.count) entries and is moving toward its reference range."
+                    detail = String(
+                        format: String(localized: "trend.lab.improving", defaultValue: "%1$@ changed %2$@ over %3$lld entries and is moving toward its reference range.", table: "Engine"),
+                        latest.displayName, changeText, Int64(sorted.count)
+                    )
                 case .worsening:
-                    detail = "\(latest.displayName) changed \(changeText) over \(sorted.count) entries and is moving away from its reference range."
+                    detail = String(
+                        format: String(localized: "trend.lab.worsening", defaultValue: "%1$@ changed %2$@ over %3$lld entries and is moving away from its reference range.", table: "Engine"),
+                        latest.displayName, changeText, Int64(sorted.count)
+                    )
                 case .stable:
-                    detail = "\(latest.displayName) is stable across \(sorted.count) entries."
+                    detail = String(
+                        format: String(localized: "trend.lab.stable", defaultValue: "%1$@ is stable across %2$lld entries.", table: "Engine"),
+                        latest.displayName, Int64(sorted.count)
+                    )
                 case .rising, .falling:
-                    detail = "\(latest.displayName) changed \(changeText) over \(sorted.count) entries."
+                    detail = String(
+                        format: String(localized: "trend.lab.risingFalling", defaultValue: "%1$@ changed %2$@ over %3$lld entries.", table: "Engine"),
+                        latest.displayName, changeText, Int64(sorted.count)
+                    )
                 }
                 trends.append(TrendInsight(
                     metricName: latest.displayName,
@@ -401,9 +447,12 @@ enum AnalysisEngine {
                     findings.append(Finding(
                         severity: .attention,
                         category: .trends,
-                        title: "\(latest.displayName) is trending away from its range",
+                        title: String(
+                            format: String(localized: "finding.trend.lab.worsening.title", defaultValue: "%@ is trending away from its range", table: "Engine"),
+                            latest.displayName
+                        ),
                         detail: detail,
-                        recommendation: "Keep tracking this value and mention the trend to your doctor."
+                        recommendation: String(localized: "finding.trend.recommendation", defaultValue: "Keep tracking this value and mention the trend to your doctor.", table: "Engine")
                     ))
                 }
             }
@@ -427,18 +476,24 @@ enum AnalysisEngine {
                 findings.append(Finding(
                     severity: .attention,
                     category: .labs,
-                    title: "Cholesterol ratio is high",
-                    detail: "Your total-to-HDL cholesterol ratio is \(ratioText) (target below 5, ideal below 3.5). This ratio is a useful indicator of cardiovascular risk.",
-                    recommendation: "Discuss lipid management with your doctor."
+                    title: String(localized: "finding.cholesterolRatio.high.title", defaultValue: "Cholesterol ratio is high", table: "Engine"),
+                    detail: String(
+                        format: String(localized: "finding.cholesterolRatio.high.detail", defaultValue: "Your total-to-HDL cholesterol ratio is %@ (target below 5, ideal below 3.5). This ratio is a useful indicator of cardiovascular risk.", table: "Engine"),
+                        ratioText
+                    ),
+                    recommendation: String(localized: "finding.cholesterolRatio.high.recommendation", defaultValue: "Discuss lipid management with your doctor.", table: "Engine")
                 ))
             } else {
                 findings.append(Finding(
                     severity: .info,
                     category: .labs,
-                    title: "Cholesterol ratio: \(ratioText)",
+                    title: String(
+                        format: String(localized: "finding.cholesterolRatio.normal.title", defaultValue: "Cholesterol ratio: %@", table: "Engine"),
+                        ratioText
+                    ),
                     detail: ratio < 3.5
-                        ? "A total-to-HDL cholesterol ratio below 3.5 is considered ideal."
-                        : "Your total-to-HDL cholesterol ratio is within the generally recommended target of below 5.",
+                        ? String(localized: "finding.cholesterolRatio.ideal.detail", defaultValue: "A total-to-HDL cholesterol ratio below 3.5 is considered ideal.", table: "Engine")
+                        : String(localized: "finding.cholesterolRatio.withinTarget.detail", defaultValue: "Your total-to-HDL cholesterol ratio is within the generally recommended target of below 5.", table: "Engine"),
                     recommendation: nil
                 ))
             }
@@ -447,9 +502,12 @@ enum AnalysisEngine {
                 findings.append(Finding(
                     severity: .attention,
                     category: .labs,
-                    title: "Non-HDL cholesterol is high",
-                    detail: "Non-HDL cholesterol (total minus HDL) is \(Int(nonHDL)) mg/dL; below 130 mg/dL is generally recommended. It captures all cholesterol carried by potentially artery-clogging particles.",
-                    recommendation: "Worth reviewing with your doctor alongside your full lipid panel."
+                    title: String(localized: "finding.nonHDL.title", defaultValue: "Non-HDL cholesterol is high", table: "Engine"),
+                    detail: String(
+                        format: String(localized: "finding.nonHDL.detail", defaultValue: "Non-HDL cholesterol (total minus HDL) is %lld mg/dL; below 130 mg/dL is generally recommended. It captures all cholesterol carried by potentially artery-clogging particles.", table: "Engine"),
+                        Int64(nonHDL)
+                    ),
+                    recommendation: String(localized: "finding.nonHDL.recommendation", defaultValue: "Worth reviewing with your doctor alongside your full lipid panel.", table: "Engine")
                 ))
             }
         }
@@ -462,45 +520,52 @@ enum AnalysisEngine {
         if let bp = latestVital(.bloodPressure), let diastolic = bp.secondaryValue {
             let category = bloodPressureCategory(systolic: bp.value, diastolic: diastolic)
             let reading = "\(Int(bp.value))/\(Int(diastolic)) mmHg"
+            let bpDetailFormat = String(localized: "finding.bp.detail", defaultValue: "Latest reading %1$@ falls in the %2$@ category.", table: "Engine")
             switch category {
             case .crisis:
                 findings.append(Finding(
                     severity: .critical,
                     category: .vitals,
-                    title: "Blood pressure at crisis level",
-                    detail: "Latest reading \(reading) falls in the \(category.displayName) category.",
-                    recommendation: "Readings this high need prompt medical attention. If it persists on re-measurement, seek care immediately."
+                    title: String(localized: "finding.bp.crisis.title", defaultValue: "Blood pressure at crisis level", table: "Engine"),
+                    detail: String(format: bpDetailFormat, reading, category.displayName),
+                    recommendation: String(localized: "finding.bp.crisis.recommendation", defaultValue: "Readings this high need prompt medical attention. If it persists on re-measurement, seek care immediately.", table: "Engine")
                 ))
             case .stage2:
                 findings.append(Finding(
                     severity: .attention,
                     category: .vitals,
-                    title: "Blood pressure in Stage 2 hypertension range",
-                    detail: "Latest reading \(reading) falls in the \(category.displayName) category.",
-                    recommendation: "Schedule a visit with your doctor to discuss blood pressure management."
+                    title: String(localized: "finding.bp.stage2.title", defaultValue: "Blood pressure in Stage 2 hypertension range", table: "Engine"),
+                    detail: String(format: bpDetailFormat, reading, category.displayName),
+                    recommendation: String(localized: "finding.bp.stage2.recommendation", defaultValue: "Schedule a visit with your doctor to discuss blood pressure management.", table: "Engine")
                 ))
             case .stage1:
                 findings.append(Finding(
                     severity: .attention,
                     category: .vitals,
-                    title: "Blood pressure in Stage 1 hypertension range",
-                    detail: "Latest reading \(reading) falls in the \(category.displayName) category.",
-                    recommendation: "Recheck regularly and mention it at your next appointment."
+                    title: String(localized: "finding.bp.stage1.title", defaultValue: "Blood pressure in Stage 1 hypertension range", table: "Engine"),
+                    detail: String(format: bpDetailFormat, reading, category.displayName),
+                    recommendation: String(localized: "finding.bp.stage1.recommendation", defaultValue: "Recheck regularly and mention it at your next appointment.", table: "Engine")
                 ))
             case .elevated:
                 findings.append(Finding(
                     severity: .info,
                     category: .vitals,
-                    title: "Blood pressure slightly elevated",
-                    detail: "Latest reading \(reading) is above normal but below hypertension thresholds.",
-                    recommendation: "Lifestyle measures like exercise and reduced sodium can help."
+                    title: String(localized: "finding.bp.elevated.title", defaultValue: "Blood pressure slightly elevated", table: "Engine"),
+                    detail: String(
+                        format: String(localized: "finding.bp.elevated.detail", defaultValue: "Latest reading %@ is above normal but below hypertension thresholds.", table: "Engine"),
+                        reading
+                    ),
+                    recommendation: String(localized: "finding.bp.elevated.recommendation", defaultValue: "Lifestyle measures like exercise and reduced sodium can help.", table: "Engine")
                 ))
             case .normal:
                 findings.append(Finding(
                     severity: .info,
                     category: .vitals,
-                    title: "Blood pressure is normal",
-                    detail: "Latest reading \(reading) is in the normal range.",
+                    title: String(localized: "finding.bp.normal.title", defaultValue: "Blood pressure is normal", table: "Engine"),
+                    detail: String(
+                        format: String(localized: "finding.bp.normal.detail", defaultValue: "Latest reading %@ is in the normal range.", table: "Engine"),
+                        reading
+                    ),
                     recommendation: nil
                 ))
             }
@@ -513,9 +578,17 @@ enum AnalysisEngine {
             findings.append(Finding(
                 severity: severity,
                 category: .vitals,
-                title: "BMI: \(bmiValue.compactFormatted) (\(name))",
-                detail: "Based on your latest weight of \(Units.formatted(weight.value, for: .weight)) and height of \(heightCm.compactFormatted) cm.",
-                recommendation: severity == .attention ? "Consider discussing weight management with your doctor." : nil
+                title: String(
+                    format: String(localized: "finding.bmi.title", defaultValue: "BMI: %1$@ (%2$@)", table: "Engine"),
+                    bmiValue.compactFormatted, name
+                ),
+                detail: String(
+                    format: String(localized: "finding.bmi.detail", defaultValue: "Based on your latest weight of %1$@ and height of %2$@ cm.", table: "Engine"),
+                    Units.formatted(weight.value, for: .weight), heightCm.compactFormatted
+                ),
+                recommendation: severity == .attention
+                    ? String(localized: "finding.bmi.recommendation", defaultValue: "Consider discussing weight management with your doctor.", table: "Engine")
+                    : nil
             ))
         }
 
@@ -524,9 +597,14 @@ enum AnalysisEngine {
                 findings.append(Finding(
                     severity: .attention,
                     category: .vitals,
-                    title: "Resting heart rate \(heartRate.value < 50 ? "low" : "high")",
-                    detail: "Latest reading \(Int(heartRate.value)) bpm is outside the typical resting range of 50–100 bpm.",
-                    recommendation: "If this persists or comes with symptoms, mention it to your doctor."
+                    title: heartRate.value < 50
+                        ? String(localized: "finding.heartRate.low.title", defaultValue: "Resting heart rate low", table: "Engine")
+                        : String(localized: "finding.heartRate.high.title", defaultValue: "Resting heart rate high", table: "Engine"),
+                    detail: String(
+                        format: String(localized: "finding.heartRate.detail", defaultValue: "Latest reading %lld bpm is outside the typical resting range of 50–100 bpm.", table: "Engine"),
+                        Int64(heartRate.value)
+                    ),
+                    recommendation: String(localized: "finding.heartRate.recommendation", defaultValue: "If this persists or comes with symptoms, mention it to your doctor.", table: "Engine")
                 ))
             }
         }
@@ -537,18 +615,24 @@ enum AnalysisEngine {
                 findings.append(Finding(
                     severity: .critical,
                     category: .vitals,
-                    title: "Blood glucose at a critical level",
-                    detail: "Latest reading \(reading) is far outside the safe range.",
-                    recommendation: "Contact your healthcare provider promptly."
+                    title: String(localized: "finding.glucose.critical.title", defaultValue: "Blood glucose at a critical level", table: "Engine"),
+                    detail: String(
+                        format: String(localized: "finding.glucose.critical.detail", defaultValue: "Latest reading %@ is far outside the safe range.", table: "Engine"),
+                        reading
+                    ),
+                    recommendation: String(localized: "finding.glucose.critical.recommendation", defaultValue: "Contact your healthcare provider promptly.", table: "Engine")
                 ))
             } else if glucose.value < 70 || glucose.value > 180 {
                 let band = Units.displayRange(70...180, for: .bloodGlucose)
                 findings.append(Finding(
                     severity: .attention,
                     category: .vitals,
-                    title: "Blood glucose out of range",
-                    detail: "Latest reading \(reading) is outside the typical range of \(band.lowerBound.compactFormatted)–\(band.upperBound.compactFormatted) \(Units.label(for: .bloodGlucose)).",
-                    recommendation: "Track further readings and discuss them with your doctor."
+                    title: String(localized: "finding.glucose.attention.title", defaultValue: "Blood glucose out of range", table: "Engine"),
+                    detail: String(
+                        format: String(localized: "finding.glucose.attention.detail", defaultValue: "Latest reading %1$@ is outside the typical range of %2$@–%3$@ %4$@.", table: "Engine"),
+                        reading, band.lowerBound.compactFormatted, band.upperBound.compactFormatted, Units.label(for: .bloodGlucose)
+                    ),
+                    recommendation: String(localized: "finding.glucose.attention.recommendation", defaultValue: "Track further readings and discuss them with your doctor.", table: "Engine")
                 ))
             }
         }
@@ -558,17 +642,23 @@ enum AnalysisEngine {
                 findings.append(Finding(
                     severity: .critical,
                     category: .vitals,
-                    title: "Oxygen saturation is very low",
-                    detail: "Latest reading \(spo2.value.compactFormatted)% is below 90%.",
-                    recommendation: "Values below 90% warrant prompt medical evaluation."
+                    title: String(localized: "finding.spo2.critical.title", defaultValue: "Oxygen saturation is very low", table: "Engine"),
+                    detail: String(
+                        format: String(localized: "finding.spo2.critical.detail", defaultValue: "Latest reading %@%% is below 90%%.", table: "Engine"),
+                        spo2.value.compactFormatted
+                    ),
+                    recommendation: String(localized: "finding.spo2.critical.recommendation", defaultValue: "Values below 90% warrant prompt medical evaluation.", table: "Engine")
                 ))
             } else if spo2.value < 95 {
                 findings.append(Finding(
                     severity: .attention,
                     category: .vitals,
-                    title: "Oxygen saturation slightly low",
-                    detail: "Latest reading \(spo2.value.compactFormatted)% is below the typical 95–100% range.",
-                    recommendation: "Re-measure at rest; mention persistent low readings to your doctor."
+                    title: String(localized: "finding.spo2.attention.title", defaultValue: "Oxygen saturation slightly low", table: "Engine"),
+                    detail: String(
+                        format: String(localized: "finding.spo2.attention.detail", defaultValue: "Latest reading %@%% is below the typical 95–100%% range.", table: "Engine"),
+                        spo2.value.compactFormatted
+                    ),
+                    recommendation: String(localized: "finding.spo2.attention.recommendation", defaultValue: "Re-measure at rest; mention persistent low readings to your doctor.", table: "Engine")
                 ))
             }
         }
@@ -579,17 +669,25 @@ enum AnalysisEngine {
                 findings.append(Finding(
                     severity: .critical,
                     category: .vitals,
-                    title: temperature.value >= 39.5 ? "High fever recorded" : "Very low body temperature recorded",
-                    detail: "Latest reading \(reading).",
-                    recommendation: "Seek medical advice if this reading is current."
+                    title: temperature.value >= 39.5
+                        ? String(localized: "finding.temp.highFever.title", defaultValue: "High fever recorded", table: "Engine")
+                        : String(localized: "finding.temp.lowTemp.title", defaultValue: "Very low body temperature recorded", table: "Engine"),
+                    detail: String(
+                        format: String(localized: "finding.temp.critical.detail", defaultValue: "Latest reading %@.", table: "Engine"),
+                        reading
+                    ),
+                    recommendation: String(localized: "finding.temp.critical.recommendation", defaultValue: "Seek medical advice if this reading is current.", table: "Engine")
                 ))
             } else if temperature.value >= 38 {
                 findings.append(Finding(
                     severity: .attention,
                     category: .vitals,
-                    title: "Fever recorded",
-                    detail: "Latest reading \(reading) is above the normal range.",
-                    recommendation: "Rest, hydrate, and consult a doctor if the fever persists."
+                    title: String(localized: "finding.temp.fever.title", defaultValue: "Fever recorded", table: "Engine"),
+                    detail: String(
+                        format: String(localized: "finding.temp.fever.detail", defaultValue: "Latest reading %@ is above the normal range.", table: "Engine"),
+                        reading
+                    ),
+                    recommendation: String(localized: "finding.temp.fever.recommendation", defaultValue: "Rest, hydrate, and consult a doctor if the fever persists.", table: "Engine")
                 ))
             }
         }
@@ -599,9 +697,14 @@ enum AnalysisEngine {
                 findings.append(Finding(
                     severity: .attention,
                     category: .vitals,
-                    title: "Respiratory rate \(respiratory.value < 12 ? "low" : "high")",
-                    detail: "Latest reading \(respiratory.value.compactFormatted) breaths/min is outside the typical resting range of 12–20.",
-                    recommendation: "Re-measure at rest; mention persistent abnormal readings to your doctor."
+                    title: respiratory.value < 12
+                        ? String(localized: "finding.resp.low.title", defaultValue: "Respiratory rate low", table: "Engine")
+                        : String(localized: "finding.resp.high.title", defaultValue: "Respiratory rate high", table: "Engine"),
+                    detail: String(
+                        format: String(localized: "finding.resp.detail", defaultValue: "Latest reading %@ breaths/min is outside the typical resting range of 12–20.", table: "Engine"),
+                        respiratory.value.compactFormatted
+                    ),
+                    recommendation: String(localized: "finding.resp.recommendation", defaultValue: "Re-measure at rest; mention persistent abnormal readings to your doctor.", table: "Engine")
                 ))
             }
         }
@@ -611,17 +714,23 @@ enum AnalysisEngine {
                 findings.append(Finding(
                     severity: .attention,
                     category: .vitals,
-                    title: "Short sleep duration",
-                    detail: "Latest entry \(sleep.value.compactFormatted) hours is below the recommended 7–9 hours for adults. Chronic short sleep affects blood pressure, glucose regulation, and mood.",
-                    recommendation: "Aim for a consistent sleep schedule; discuss persistent sleep problems with your doctor."
+                    title: String(localized: "finding.sleep.short.title", defaultValue: "Short sleep duration", table: "Engine"),
+                    detail: String(
+                        format: String(localized: "finding.sleep.short.detail", defaultValue: "Latest entry %@ hours is below the recommended 7–9 hours for adults. Chronic short sleep affects blood pressure, glucose regulation, and mood.", table: "Engine"),
+                        sleep.value.compactFormatted
+                    ),
+                    recommendation: String(localized: "finding.sleep.short.recommendation", defaultValue: "Aim for a consistent sleep schedule; discuss persistent sleep problems with your doctor.", table: "Engine")
                 ))
             } else if sleep.value > 10 {
                 findings.append(Finding(
                     severity: .info,
                     category: .vitals,
-                    title: "Long sleep duration",
-                    detail: "Latest entry \(sleep.value.compactFormatted) hours is above the typical 7–9 hour range.",
-                    recommendation: "Occasional long sleep is normal; consistently needing 10+ hours is worth mentioning at a checkup."
+                    title: String(localized: "finding.sleep.long.title", defaultValue: "Long sleep duration", table: "Engine"),
+                    detail: String(
+                        format: String(localized: "finding.sleep.long.detail", defaultValue: "Latest entry %@ hours is above the typical 7–9 hour range.", table: "Engine"),
+                        sleep.value.compactFormatted
+                    ),
+                    recommendation: String(localized: "finding.sleep.long.recommendation", defaultValue: "Occasional long sleep is normal; consistently needing 10+ hours is worth mentioning at a checkup.", table: "Engine")
                 ))
             }
         }
@@ -636,13 +745,25 @@ enum AnalysisEngine {
             let detail: String
             switch direction {
             case .improving:
-                detail = "\(type.displayName) changed \(changeText) over \(samples.count) readings and is moving toward its healthy range."
+                detail = String(
+                    format: String(localized: "trend.vital.improving", defaultValue: "%1$@ changed %2$@ over %3$lld readings and is moving toward its healthy range.", table: "Engine"),
+                    type.displayName, changeText, Int64(samples.count)
+                )
             case .worsening:
-                detail = "\(type.displayName) changed \(changeText) over \(samples.count) readings and is moving away from its healthy range."
+                detail = String(
+                    format: String(localized: "trend.vital.worsening", defaultValue: "%1$@ changed %2$@ over %3$lld readings and is moving away from its healthy range.", table: "Engine"),
+                    type.displayName, changeText, Int64(samples.count)
+                )
             case .stable:
-                detail = "\(type.displayName) is stable across \(samples.count) readings."
+                detail = String(
+                    format: String(localized: "trend.vital.stable", defaultValue: "%1$@ is stable across %2$lld readings.", table: "Engine"),
+                    type.displayName, Int64(samples.count)
+                )
             case .rising, .falling:
-                detail = "\(type.displayName) changed \(changeText) over \(samples.count) readings."
+                detail = String(
+                    format: String(localized: "trend.vital.risingFalling", defaultValue: "%1$@ changed %2$@ over %3$lld readings.", table: "Engine"),
+                    type.displayName, changeText, Int64(samples.count)
+                )
             }
             trends.append(TrendInsight(
                 metricName: type.displayName,
@@ -656,9 +777,12 @@ enum AnalysisEngine {
                 findings.append(Finding(
                     severity: .attention,
                     category: .trends,
-                    title: "\(type.displayName) is trending away from its healthy range",
+                    title: String(
+                        format: String(localized: "finding.trend.vital.worsening.title", defaultValue: "%@ is trending away from its healthy range", table: "Engine"),
+                        type.displayName
+                    ),
                     detail: detail,
-                    recommendation: "Keep tracking this value and mention the trend to your doctor."
+                    recommendation: String(localized: "finding.trend.recommendation", defaultValue: "Keep tracking this value and mention the trend to your doctor.", table: "Engine")
                 ))
             }
         }
@@ -667,12 +791,21 @@ enum AnalysisEngine {
         let activeMedications = medications.filter(\.isActive)
         if !activeMedications.isEmpty {
             let names = activeMedications.map(\.name).joined(separator: ", ")
+            let medicationsTitle = activeMedications.count == 1
+                ? String(localized: "finding.medications.title.one", defaultValue: "1 active medication", table: "Engine")
+                : String(
+                    format: String(localized: "finding.medications.title.many", defaultValue: "%lld active medications", table: "Engine"),
+                    Int64(activeMedications.count)
+                )
             findings.append(Finding(
                 severity: .info,
                 category: .medications,
-                title: "\(activeMedications.count) active medication\(activeMedications.count == 1 ? "" : "s")",
-                detail: "Currently tracking: \(names).",
-                recommendation: "Review your medication list with your doctor periodically."
+                title: medicationsTitle,
+                detail: String(
+                    format: String(localized: "finding.medications.detail", defaultValue: "Currently tracking: %@.", table: "Engine"),
+                    names
+                ),
+                recommendation: String(localized: "finding.medications.recommendation", defaultValue: "Review your medication list with your doctor periodically.", table: "Engine")
             ))
 
             // Educational drug-interaction check across active medications.
@@ -680,7 +813,10 @@ enum AnalysisEngine {
                 findings.append(Finding(
                     severity: interaction.severity == .major ? .attention : .info,
                     category: .medications,
-                    title: "\(interaction.severity.displayName) interaction: \(interaction.drugA) + \(interaction.drugB)",
+                    title: String(
+                        format: String(localized: "finding.medications.interaction.title", defaultValue: "%1$@ interaction: %2$@ + %3$@", table: "Engine"),
+                        interaction.severity.displayName, interaction.drugA, interaction.drugB
+                    ),
                     detail: interaction.explanation,
                     recommendation: interaction.recommendation
                 ))
@@ -693,29 +829,49 @@ enum AnalysisEngine {
             findings.append(Finding(
                 severity: .attention,
                 category: .general,
-                title: "Severe symptom logged: \(severe.name)",
-                detail: "You rated \(severe.name.lowercased()) at \(severe.severity)/10 on \(severe.date.formatted(date: .abbreviated, time: .omitted)).",
-                recommendation: "If this symptom persists or worsens, contact your healthcare provider."
+                title: String(
+                    format: String(localized: "finding.symptom.severe.title", defaultValue: "Severe symptom logged: %@", table: "Engine"),
+                    severe.name
+                ),
+                detail: String(
+                    format: String(localized: "finding.symptom.severe.detail", defaultValue: "You rated %1$@ at %2$lld/10 on %3$@.", table: "Engine"),
+                    severe.name.lowercased(), Int64(severe.severity), severe.date.formatted(date: .abbreviated, time: .omitted)
+                ),
+                recommendation: String(localized: "finding.symptom.severe.recommendation", defaultValue: "If this symptom persists or worsens, contact your healthcare provider.", table: "Engine")
             ))
         } else if recentSymptoms.count >= 3 {
             let names = Array(Set(recentSymptoms.map(\.name))).sorted().joined(separator: ", ")
             findings.append(Finding(
                 severity: .info,
                 category: .general,
-                title: "\(recentSymptoms.count) symptoms logged in the last two weeks",
-                detail: "Logged: \(names).",
-                recommendation: "Bring your symptom journal to your next appointment — patterns help your doctor."
+                title: String(
+                    format: String(localized: "finding.symptom.multiple.title", defaultValue: "%lld symptoms logged in the last two weeks", table: "Engine"),
+                    Int64(recentSymptoms.count)
+                ),
+                detail: String(
+                    format: String(localized: "finding.symptom.multiple.detail", defaultValue: "Logged: %@.", table: "Engine"),
+                    names
+                ),
+                recommendation: String(localized: "finding.symptom.multiple.recommendation", defaultValue: "Bring your symptom journal to your next appointment — patterns help your doctor.", table: "Engine")
             ))
         }
 
         // --- Appointments ---
         if let next = appointments.filter({ $0.date > now }).min(by: { $0.date < $1.date }) {
-            let doctorText = next.doctor.isEmpty ? "" : " with \(next.doctor)"
+            let doctorText = next.doctor.isEmpty
+                ? ""
+                : String(format: String(localized: "finding.appointment.withDoctor", defaultValue: " with %@", table: "Engine"), next.doctor)
             findings.append(Finding(
                 severity: .info,
                 category: .general,
-                title: "Upcoming: \(next.title)",
-                detail: "Scheduled for \(next.date.formatted(date: .abbreviated, time: .shortened))\(doctorText).",
+                title: String(
+                    format: String(localized: "finding.appointment.title", defaultValue: "Upcoming: %@", table: "Engine"),
+                    next.title
+                ),
+                detail: String(
+                    format: String(localized: "finding.appointment.detail", defaultValue: "Scheduled for %1$@%2$@.", table: "Engine"),
+                    next.date.formatted(date: .abbreviated, time: .shortened), doctorText
+                ),
                 recommendation: nil
             ))
         }
@@ -728,18 +884,21 @@ enum AnalysisEngine {
                 findings.append(Finding(
                     severity: .info,
                     category: .general,
-                    title: "No recent medical reports",
-                    detail: "Your most recent report is from \(lastReportDate.formatted(date: .abbreviated, time: .omitted)) — over a year ago.",
-                    recommendation: "Consider scheduling a routine checkup."
+                    title: String(localized: "finding.noRecentReports.title", defaultValue: "No recent medical reports", table: "Engine"),
+                    detail: String(
+                        format: String(localized: "finding.noRecentReports.detail", defaultValue: "Your most recent report is from %@ — over a year ago.", table: "Engine"),
+                        lastReportDate.formatted(date: .abbreviated, time: .omitted)
+                    ),
+                    recommendation: String(localized: "finding.noRecentReports.recommendation", defaultValue: "Consider scheduling a routine checkup.", table: "Engine")
                 ))
             }
             if profile == nil || profile?.heightCm == nil {
                 findings.append(Finding(
                     severity: .info,
                     category: .general,
-                    title: "Complete your health profile",
-                    detail: "Adding your height, date of birth, and biological sex enables BMI and sex-specific reference ranges.",
-                    recommendation: "Fill in your profile under More → Profile."
+                    title: String(localized: "finding.completeProfile.title", defaultValue: "Complete your health profile", table: "Engine"),
+                    detail: String(localized: "finding.completeProfile.detail", defaultValue: "Adding your height, date of birth, and biological sex enables BMI and sex-specific reference ranges.", table: "Engine"),
+                    recommendation: String(localized: "finding.completeProfile.recommendation", defaultValue: "Fill in your profile under More → Profile.", table: "Engine")
                 ))
             }
         }
@@ -761,28 +920,52 @@ enum AnalysisEngine {
         if hasData {
             var counted: [String] = []
             if !allResults.isEmpty {
-                counted.append("\(allResults.count) lab result\(allResults.count == 1 ? "" : "s") from \(reports.count) report\(reports.count == 1 ? "" : "s")")
+                let resultPhrase = allResults.count == 1
+                    ? String(localized: "summary.labResults.one", defaultValue: "1 lab result", table: "Engine")
+                    : String(format: String(localized: "summary.labResults.many", defaultValue: "%lld lab results", table: "Engine"), Int64(allResults.count))
+                let reportPhrase = reports.count == 1
+                    ? String(localized: "summary.reports.one", defaultValue: "1 report", table: "Engine")
+                    : String(format: String(localized: "summary.reports.many", defaultValue: "%lld reports", table: "Engine"), Int64(reports.count))
+                counted.append(String(
+                    format: String(localized: "summary.labResultsFromReports", defaultValue: "%1$@ from %2$@", table: "Engine"),
+                    resultPhrase, reportPhrase
+                ))
             }
             if !vitals.isEmpty {
-                counted.append("\(vitals.count) vital reading\(vitals.count == 1 ? "" : "s")")
+                let phrase = vitals.count == 1
+                    ? String(localized: "summary.vitalReadings.one", defaultValue: "1 vital reading", table: "Engine")
+                    : String(format: String(localized: "summary.vitalReadings.many", defaultValue: "%lld vital readings", table: "Engine"), Int64(vitals.count))
+                counted.append(phrase)
             }
             if !medications.isEmpty {
-                counted.append("\(medications.count) medication\(medications.count == 1 ? "" : "s")")
+                let phrase = medications.count == 1
+                    ? String(localized: "summary.medications.one", defaultValue: "1 medication", table: "Engine")
+                    : String(format: String(localized: "summary.medications.many", defaultValue: "%lld medications", table: "Engine"), Int64(medications.count))
+                counted.append(phrase)
             }
-            summaryParts.append("Reviewed " + counted.joined(separator: ", ") + ".")
+            summaryParts.append(String(
+                format: String(localized: "summary.reviewed", defaultValue: "Reviewed %@.", table: "Engine"),
+                counted.joined(separator: ", ")
+            ))
 
             if criticalCount > 0 {
-                summaryParts.append("\(criticalCount) item\(criticalCount == 1 ? " is" : "s are") at a critical level — please contact your healthcare provider promptly.")
+                summaryParts.append(criticalCount == 1
+                    ? String(localized: "summary.criticalItems.one", defaultValue: "1 item is at a critical level — please contact your healthcare provider promptly.", table: "Engine")
+                    : String(format: String(localized: "summary.criticalItems.many", defaultValue: "%lld items are at a critical level — please contact your healthcare provider promptly.", table: "Engine"), Int64(criticalCount)))
             } else if attentionCount > 0 {
-                summaryParts.append("\(attentionCount) item\(attentionCount == 1 ? " is" : "s are") outside typical ranges and worth discussing at your next visit.")
+                summaryParts.append(attentionCount == 1
+                    ? String(localized: "summary.attentionItems.one", defaultValue: "1 item is outside typical ranges and worth discussing at your next visit.", table: "Engine")
+                    : String(format: String(localized: "summary.attentionItems.many", defaultValue: "%lld items are outside typical ranges and worth discussing at your next visit.", table: "Engine"), Int64(attentionCount)))
             } else {
-                summaryParts.append("All tracked values are within their typical ranges.")
+                summaryParts.append(String(localized: "summary.allNormal", defaultValue: "All tracked values are within their typical ranges.", table: "Engine"))
             }
             if worseningCount > 0 {
-                summaryParts.append("\(worseningCount) metric\(worseningCount == 1 ? " is" : "s are") trending in a direction worth watching.")
+                summaryParts.append(worseningCount == 1
+                    ? String(localized: "summary.worseningMetrics.one", defaultValue: "1 metric is trending in a direction worth watching.", table: "Engine")
+                    : String(format: String(localized: "summary.worseningMetrics.many", defaultValue: "%lld metrics are trending in a direction worth watching.", table: "Engine"), Int64(worseningCount)))
             }
         } else {
-            summaryParts.append("Add medical reports, lab results, or vitals to generate your first health review.")
+            summaryParts.append(String(localized: "summary.noData", defaultValue: "Add medical reports, lab results, or vitals to generate your first health review.", table: "Engine"))
         }
 
         return HealthReview(

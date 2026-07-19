@@ -43,7 +43,13 @@ enum RetestSchedule {
 
     /// Must accompany any UI list of `RetestItem`s — these are general
     /// cadences, not a prescription. Educational, not diagnostic.
-    static let disclaimer = "Commonly recommended intervals — your doctor may advise a different schedule for you."
+    static var disclaimer: String {
+        String(
+            localized: "retest.disclaimer",
+            defaultValue: "Commonly recommended intervals — your doctor may advise a different schedule for you.",
+            table: "Engine"
+        )
+    }
 
     /// A test due within this many days counts as `.dueSoon` rather than
     /// `.upcoming`.
