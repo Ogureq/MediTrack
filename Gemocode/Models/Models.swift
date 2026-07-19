@@ -16,13 +16,13 @@ enum ReportCategory: String, Codable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .labReport: "Lab Report"
-        case .imaging: "Imaging"
-        case .prescription: "Prescription"
-        case .consultation: "Consultation"
-        case .vaccination: "Vaccination"
-        case .procedure: "Procedure"
-        case .other: "Other"
+        case .labReport: String(localized: "report.category.labReport", defaultValue: "Lab Report", table: "Model")
+        case .imaging: String(localized: "report.category.imaging", defaultValue: "Imaging", table: "Model")
+        case .prescription: String(localized: "report.category.prescription", defaultValue: "Prescription", table: "Model")
+        case .consultation: String(localized: "report.category.consultation", defaultValue: "Consultation", table: "Model")
+        case .vaccination: String(localized: "report.category.vaccination", defaultValue: "Vaccination", table: "Model")
+        case .procedure: String(localized: "report.category.procedure", defaultValue: "Procedure", table: "Model")
+        case .other: String(localized: "report.category.other", defaultValue: "Other", table: "Model")
         }
     }
 
@@ -117,7 +117,7 @@ final class LabResult {
     }
 
     var displayName: String {
-        catalogReference?.name ?? customName ?? "Unknown Test"
+        catalogReference?.name ?? customName ?? String(localized: "lab.unknownTest", defaultValue: "Unknown Test", table: "Model")
     }
 
     /// Stable key used to group results of the same test across reports.
@@ -176,14 +176,14 @@ enum VitalType: String, Codable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .weight: "Weight"
-        case .bloodPressure: "Blood Pressure"
-        case .heartRate: "Resting Heart Rate"
-        case .bloodGlucose: "Blood Glucose"
-        case .oxygenSaturation: "Oxygen Saturation"
-        case .temperature: "Body Temperature"
-        case .respiratoryRate: "Respiratory Rate"
-        case .sleepHours: "Sleep"
+        case .weight: String(localized: "vital.weight", defaultValue: "Weight", table: "Model")
+        case .bloodPressure: String(localized: "vital.bloodPressure", defaultValue: "Blood Pressure", table: "Model")
+        case .heartRate: String(localized: "vital.heartRate", defaultValue: "Resting Heart Rate", table: "Model")
+        case .bloodGlucose: String(localized: "vital.bloodGlucose", defaultValue: "Blood Glucose", table: "Model")
+        case .oxygenSaturation: String(localized: "vital.oxygenSaturation", defaultValue: "Oxygen Saturation", table: "Model")
+        case .temperature: String(localized: "vital.temperature", defaultValue: "Body Temperature", table: "Model")
+        case .respiratoryRate: String(localized: "vital.respiratoryRate", defaultValue: "Respiratory Rate", table: "Model")
+        case .sleepHours: String(localized: "vital.sleepHours", defaultValue: "Sleep", table: "Model")
         }
     }
 
@@ -507,10 +507,10 @@ enum ActivityLevel: String, Codable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .sedentary: "Sedentary"
-        case .light: "Lightly Active"
-        case .moderate: "Moderately Active"
-        case .active: "Very Active"
+        case .sedentary: String(localized: "activityLevel.sedentary", defaultValue: "Sedentary", table: "Model")
+        case .light: String(localized: "activityLevel.light", defaultValue: "Lightly Active", table: "Model")
+        case .moderate: String(localized: "activityLevel.moderate", defaultValue: "Moderately Active", table: "Model")
+        case .active: String(localized: "activityLevel.active", defaultValue: "Very Active", table: "Model")
         }
     }
 }
