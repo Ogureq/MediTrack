@@ -43,7 +43,6 @@ struct GemocodeApp: App {
     @ViewBuilder
     private var rootView: some View {
         let content = ContentView()
-            .fontDesign(.rounded)
             .task {
                 // No-op unless the user has opted in to Automatic Sync
                 // in Profile, and unavailable on the Simulator/CI —

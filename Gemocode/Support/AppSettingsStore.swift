@@ -6,11 +6,11 @@ import SwiftUI
 // the app root (`GemocodeApp`, which needs to react to changes to drive
 // `.preferredColorScheme`/`.environment(\.locale)`) and Profile & Settings
 // (which just needs bindings for the pickers) share the same live values —
-// the same `.shared` pattern `PremiumStore` uses. Gemocode's glass design
-// system (`Support/Theme.swift`) was built dark-only, so `.dark` stays the
-// default even though System/Light are now offered.
+// the same `.shared` pattern `PremiumStore` uses. Gemocode's paper-and-ink
+// editorial design system (`Support/Theme.swift`) is built light-first, so
+// `.light` is the default even though System/Dark are still offered.
 
-/// User's theme preference. `.dark` is the historical default.
+/// User's theme preference. `.light` is the default.
 enum ThemeChoice: String, CaseIterable {
     case system, dark, light
 
@@ -98,7 +98,7 @@ final class AppSettingsStore: ObservableObject {
 
     private init() {
         let storedTheme = UserDefaults.standard.string(forKey: Self.themeKey)
-        themeChoice = storedTheme.flatMap(ThemeChoice.init(rawValue:)) ?? .dark
+        themeChoice = storedTheme.flatMap(ThemeChoice.init(rawValue:)) ?? .light
         let storedLanguage = UserDefaults.standard.string(forKey: Self.languageKey)
         languageChoice = storedLanguage.flatMap(LanguageChoice.init(rawValue:)) ?? .system
     }

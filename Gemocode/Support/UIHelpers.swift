@@ -40,19 +40,40 @@ extension TrendDirection {
     }
 }
 
-/// Small frosted-glass capsule used for lab statuses and severities.
+/// Small solid-fill capsule used for lab statuses and severities — the
+/// editorial "tag" style: 9pt semibold uppercase white text on a solid
+/// color capsule. `color` is mapped to the nearest editorial tag token
+/// (green-family → good, orange/yellow → warn, red → bad) so callers that
+/// still pass a system color (`.green`, `.orange`, `.red`, from the
+/// `Severity`/`LabStatus`/`TrendDirection` extensions above) render with
+/// exact editorial hex values; any other color passes through unchanged.
 struct StatusPill: View {
     let text: String
     let color: Color
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         Text(text)
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
-            .background(.ultraThinMaterial, in: Capsule())
-            .background(color.opacity(0.22), in: Capsule())
-            .overlay(Capsule().strokeBorder(color.opacity(0.45), lineWidth: 1))
-            .foregroundStyle(color)
+            .font(.system(size: 9, weight: .semibold))
+            .kerning(0.72)
+            .textCase(.uppercase)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(fill, in: Capsule())
+    }
+
+    private var fill: Color {
+        switch color {
+        case .green, .mint:
+            Editorial.tagGood(colorScheme)
+        case .orange, .yellow:
+            Editorial.tagWarn(colorScheme)
+        case .red:
+            Editorial.tagBad(colorScheme)
+        default:
+            color
+        }
     }
 }
