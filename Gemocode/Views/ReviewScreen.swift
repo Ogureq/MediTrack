@@ -223,7 +223,6 @@ struct ReviewScreen: View {
     /// this bar is a "how much of this category is flagged" fraction, not a
     /// sub-score — the closest honest analog available from real data.
     @ViewBuilder
-    @ViewBuilder
     private func categoryBreakdown(review: HealthReview) -> some View {
         let groups = categoryGroups(for: review)
         if !groups.isEmpty {
