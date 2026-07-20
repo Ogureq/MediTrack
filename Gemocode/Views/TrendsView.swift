@@ -426,9 +426,8 @@ struct TrendsView: View {
         // its line directly rather than through `foregroundStyle(by:)`, so
         // this scale is only consulted for the dual-series blood-pressure
         // case, mapping systolic to ink and diastolic to muted.
-        let foregroundScale: [String: Color] = pair.map {
-            [$0.systolic.name: Editorial.ink(colorScheme), $0.diastolic.name: Editorial.muted(colorScheme)]
-        } ?? [:]
+        let scaleDomain: [String] = pair.map { [$0.systolic.name, $0.diastolic.name] } ?? []
+        let scaleRange: [Color] = pair == nil ? [] : [Editorial.ink(colorScheme), Editorial.muted(colorScheme)]
 
         Chart {
             if let range = series.range {
@@ -580,7 +579,7 @@ struct TrendsView: View {
                     }
             }
         }
-        .chartForegroundStyleScale(foregroundScale)
+        .chartForegroundStyleScale(domain: scaleDomain, range: scaleRange)
         .chartLegend(pair == nil ? .hidden : .visible)
         .chartXSelection(value: $selectedDate)
         .chartXAxis {
