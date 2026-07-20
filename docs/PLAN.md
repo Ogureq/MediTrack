@@ -216,6 +216,17 @@ This document records the phased plan executed to build Gemocode, a privacy-firs
 - [x] Deliberate exclusions — Quick Add example chips stay English (they feed the English-keyword parser); unit symbols international
 - [ ] Follow-ups: replace the four `%@`-suffix English plural hacks with plural-aware keys; localize notification banners (service layer); goal/diet chip display-name mapping (stored tags must not change); teach QuickAddParser Russian keywords; light-mode color polish pass; AI report output language option via relay
 
+## Phase 27 — Editorial Redesign (from the claude.ai/design canvas)
+
+- [x] Design imported — the "Gemocode - Editorial Redesign" project (24 screens × light/dark/Russian passes plus a style reference) pulled via DesignSync, distilled into a shared token spec, and implemented app-wide
+- [x] Core system — paper-and-ink `Editorial` tokens in Theme.swift (canvas/ink/muted/hairline/inset surfaces, tag and range-zone colors, both schemes); the legacy Glass API rewired in place so every call site renders editorial (flat canvas, hairline cards, no materials/orbs/gradients); `.rounded` retired for default SF with tight tracking; Light is the new default theme
+- [x] Component kit — `EditorialComponents.swift`: RangeBar (segmented reference-range bar with position marker + value-derived convenience init), EditorialTag, MicroLabel, outlined/accent pill button styles, ledger rows, PillTabBar; home-screen widget restyled with mirrored tokens (wire format and deep links untouched)
+- [x] Navigation IA — pill tab bar Today · Markers · Reports · Schedule · More (Schedule promoted to a first-class tab); Review moved off the bar to the Today score header, `gemocode://review` rerouted to the same presentation without changing the URL
+- [x] The bar-and-tag grammar everywhere — every lab value in the app (dashboard needs-attention, scan review, report detail, health review, markers ledger, lab detail) renders name/value/status-tag/range-bar; the retest schedule draws time-until-due bars; vitals get ACC/AHA zone bars; goals/symptoms progress in the same language; lists moved from glass cards to flat hairline ledgers with micro-label headers
+- [x] Screens restyled by six parallel agents with strict file ownership — dashboard/nav, labs+trends, scan+reports, schedule+review, profile/paywall/onboarding/lock/medical-ID, and daily-data screens; all engine, StoreKit, scan-quota, parser, and localization mechanisms verified untouched; 53 new localized strings with Russian taken from the design's own Russian pass
+- [x] CI-verified after three surgical compile fixes (Charts KeyValuePairs scale overload, a duplicated @ViewBuilder attribute, builder-context assignments in the review range bar)
+- [ ] Follow-ups from the canvas: "Action plan" premium screen (7e), editorial AI-report PDF (7s), Medical ID reachable from the lock screen, remove the now-unused ScoreRing, filled-vs-outlined decision on the lock screen unlock button
+
 ## Future Milestones
 
 Not part of the current plan; captured here for future scoping:
