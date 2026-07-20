@@ -11,6 +11,7 @@ struct AIChatView: View {
     let profileSummary: String
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var messages: [AIChatMessage] = []
     @State private var inputText: String = ""
@@ -54,7 +55,6 @@ struct AIChatView: View {
                 }
             }
         }
-        .fontDesign(.rounded)
     }
 
     // MARK: Unconfigured state
@@ -192,7 +192,7 @@ struct AIChatView: View {
                 .padding(.vertical, 10)
                 .padding(.horizontal, 14)
                 .background(.ultraThinMaterial, in: Capsule())
-                .overlay(Capsule().strokeBorder(Glass.bevelStroke, lineWidth: 1))
+                .overlay(Capsule().strokeBorder(Glass.bevelStroke(for: colorScheme), lineWidth: 1))
                 .disabled(isLoading)
 
             Button {
@@ -241,38 +241,34 @@ struct AIChatView: View {
 private struct MessageBubble: View {
     let message: AIChatMessage
 
+    @Environment(\.colorScheme) private var colorScheme
+
     private var isUser: Bool { message.role == .user }
 
     var body: some View {
-        HStack {
-            if isUser { Spacer(minLength: 40) }
-            Text(message.text)
-                .font(.subheadline)
-                .foregroundStyle(isUser ? .white : .primary)
-                .padding(.vertical, 10)
-                .padding(.horizontal, 14)
-                .background(bubbleBackground)
-            if !isUser { Spacer(minLength: 40) }
+        Group {
+            if isUser {
+                HStack {
+                    Spacer(minLength: 40)
+                    Text(message.text)
+                        .font(.subheadline)
+                        .foregroundStyle(Editorial.ink(colorScheme))
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 14)
+                        .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
+            } else {
+                Text(message.text)
+                    .font(.subheadline)
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .ledgerRow()
+            }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             "\(isUser ? String(localized: "You") : String(localized: "Assistant")) said: \(message.text)"
         )
-    }
-
-    @ViewBuilder
-    private var bubbleBackground: some View {
-        if isUser {
-            Capsule()
-                .fill(Glass.accentGradient)
-        } else {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(Glass.bevelStroke, lineWidth: 1)
-                )
-        }
     }
 }
 
@@ -281,29 +277,24 @@ private struct MessageBubble: View {
 private struct TypingIndicatorBubble: View {
     @State private var animate = false
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
-        HStack {
-            HStack(spacing: 4) {
-                ForEach(0..<3, id: \.self) { index in
-                    Circle()
-                        .fill(Color.secondary)
-                        .frame(width: 6, height: 6)
-                        .opacity(animate ? 1 : 0.3)
-                        .animation(
-                            .easeInOut(duration: 0.6).repeatForever().delay(Double(index) * 0.15),
-                            value: animate
-                        )
-                }
+        HStack(spacing: 4) {
+            ForEach(0..<3, id: \.self) { index in
+                Circle()
+                    .fill(Editorial.muted(colorScheme))
+                    .frame(width: 6, height: 6)
+                    .opacity(animate ? 1 : 0.3)
+                    .animation(
+                        .easeInOut(duration: 0.6).repeatForever().delay(Double(index) * 0.15),
+                        value: animate
+                    )
             }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 16)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(Glass.bevelStroke, lineWidth: 1)
-            )
             Spacer(minLength: 40)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 10)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Assistant is typing")
         .onAppear { animate = true }

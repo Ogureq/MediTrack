@@ -4,6 +4,7 @@ import UIKit
 
 struct GoalsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     @Query(sort: \HealthGoal.createdAt, order: .reverse) private var goals: [HealthGoal]
     @Query private var vitals: [VitalSample]
 
@@ -27,9 +28,10 @@ struct GoalsView: View {
             } else {
                 List {
                     if !activeGoals.isEmpty {
-                        Section("Active") {
+                        Section {
                             ForEach(activeGoals) { goal in
                                 GoalProgressRow(goal: goal, latest: latestValue(for: goal.type))
+                                    .ledgerRow()
                                     .contextMenu {
                                         Button {
                                             goal.isActive = false
@@ -41,23 +43,29 @@ struct GoalsView: View {
                             .onDelete { offsets in
                                 delete(offsets, from: activeGoals)
                             }
+                        } header: {
+                            MicroLabel("Active")
                         }
                         .listRowBackground(GlassRowBackground())
                         .listRowSeparator(.hidden)
                     }
                     if !completedGoals.isEmpty {
-                        Section("Completed") {
+                        Section {
                             ForEach(completedGoals) { goal in
                                 GoalProgressRow(goal: goal, latest: latestValue(for: goal.type))
+                                    .ledgerRow()
                             }
                             .onDelete { offsets in
                                 delete(offsets, from: completedGoals)
                             }
+                        } header: {
+                            MicroLabel("Completed")
                         }
                         .listRowBackground(GlassRowBackground())
                         .listRowSeparator(.hidden)
                     }
                 }
+                .listStyle(.plain)
             }
         }
         .ambientScreen()
@@ -67,6 +75,10 @@ struct GoalsView: View {
                 showingAdd = true
             } label: {
                 Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                    .frame(width: 28, height: 28)
+                    .overlay(Circle().strokeBorder(Editorial.controlBorder(colorScheme), lineWidth: 1))
             }
             .accessibilityLabel("Add goal")
         }
@@ -141,26 +153,15 @@ private struct GoalProgressRow: View {
     let goal: HealthGoal
     let latest: Double?
 
-    /// Rotating two-color gradient pairs for the progress bar — cycles
-    /// deterministically per goal and carries no semantic meaning.
-    private static let gradientPairs: [(Color, Color)] = [
-        (Color(red: 0x40 / 255, green: 0xC8 / 255, blue: 0xE0 / 255), Color(red: 0x7E / 255, green: 0xE8 / 255, blue: 0xB0 / 255)), // teal → mint
-        (Color(red: 0xA8 / 255, green: 0x96 / 255, blue: 0xFF / 255), Color(red: 0x78 / 255, green: 0xBE / 255, blue: 0xFF / 255)), // purple → blue
-        (Color(red: 0xFF / 255, green: 0xB2 / 255, blue: 0x66 / 255), Color(red: 0xFF / 255, green: 0xD6 / 255, blue: 0x66 / 255)), // orange → yellow
-    ]
+    @Environment(\.colorScheme) private var colorScheme
 
     private var progress: Double? { goal.progress(latest: latest) }
     private var achieved: Bool { goal.isAchieved(latest: latest) }
 
-    /// Stable per-goal gradient pair — keyed on fields that don't change
-    /// after creation, so a goal keeps the same colors across app launches.
-    private var pair: (Color, Color) {
-        let key = "\(goal.typeRaw)|\(goal.createdAt.timeIntervalSince1970)"
-        return Self.gradientPairs[stableIndex(key, count: Self.gradientPairs.count)]
+    private var progressAccessibilityLabel: Text? {
+        guard let progress else { return nil }
+        return Text(String(localized: "Progress toward goal, \(Int((progress * 100).rounded())) percent"))
     }
-
-    private var barColors: [Color] { achieved ? [.green, .mint] : [pair.0, pair.1] }
-    private var glowColor: Color { achieved ? Color.green.opacity(0.4) : pair.0.opacity(0.4) }
 
     private var progressLine: String {
         let unit = Units.label(for: goal.type)
@@ -189,33 +190,30 @@ private struct GoalProgressRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Label(goal.type.displayName, systemImage: goal.type.systemImage)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Editorial.ink(colorScheme))
                 Spacer()
                 if achieved {
-                    StatusPill(text: "Achieved", color: .green)
+                    EditorialTag("Achieved", kind: .good)
                 } else if let progress {
                     Text("\(Int((progress * 100).rounded()))%")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(pair.0)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Editorial.muted(colorScheme))
                 }
             }
 
             if let progress {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(Color.primary.opacity(0.08))
-                        Capsule()
-                            .fill(LinearGradient(colors: barColors, startPoint: .leading, endPoint: .trailing))
-                            .frame(width: geo.size.width * progress)
-                            .shadow(color: glowColor, radius: 6, x: 0, y: 0)
-                    }
-                }
-                .frame(height: 8)
-                .accessibilityHidden(true)
+                RangeBar(
+                    zones: [
+                        (fraction: CGFloat(progress), kind: achieved ? .optimal : .inRange),
+                        (fraction: CGFloat(1 - progress), kind: .out),
+                    ],
+                    marker: CGFloat(progress),
+                    accessibilityLabel: progressAccessibilityLabel
+                )
             }
 
             HStack {
@@ -223,24 +221,11 @@ private struct GoalProgressRow: View {
                 Spacer(minLength: 8)
                 Text(dueText)
             }
-            .font(.caption2)
-            .foregroundStyle(.secondary)
+            .font(.system(size: 11, weight: .regular))
+            .foregroundStyle(Editorial.muted(colorScheme))
         }
-        .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
     }
-}
-
-/// Deterministic (non-randomized) index into a fixed-size palette. Swift's
-/// `String.hashValue` uses a per-process random seed, so it would make the
-/// assigned gradient drift between app launches for the same goal — this
-/// stays stable for the life of the record.
-private func stableIndex(_ text: String, count: Int) -> Int {
-    var hash = 5381
-    for scalar in text.unicodeScalars {
-        hash = ((hash << 5) &+ hash) &+ Int(scalar.value)
-    }
-    return abs(hash) % count
 }
 
 struct AddGoalSheet: View {
@@ -460,6 +445,8 @@ private struct SuggestionChip: View {
     let isSelected: Bool
     let action: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         Button {
             SheetHaptics.selection()
@@ -470,14 +457,14 @@ private struct SuggestionChip: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
                 .background(.ultraThinMaterial, in: Capsule())
-                .background(isSelected ? Color.accentColor.opacity(0.22) : Color.clear, in: Capsule())
+                .background(isSelected ? Editorial.accent(colorScheme).opacity(0.22) : Color.clear, in: Capsule())
                 .overlay(
                     Capsule().strokeBorder(
-                        isSelected ? Color.accentColor.opacity(0.7) : Color.primary.opacity(0.12),
+                        isSelected ? Editorial.accent(colorScheme).opacity(0.7) : Editorial.controlBorder(colorScheme),
                         lineWidth: 1
                     )
                 )
-                .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                .foregroundStyle(isSelected ? Editorial.accent(colorScheme) : Editorial.ink(colorScheme))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -491,17 +478,19 @@ private struct GoalTypeChip: View {
     let isSelected: Bool
     let action: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         Button(action: action) {
             VStack(spacing: 6) {
                 Image(systemName: type.systemImage)
                     .font(.system(size: 20))
                     .frame(width: 40, height: 40)
-                    .foregroundStyle(isSelected ? .white : Color.accentColor)
+                    .foregroundStyle(isSelected ? .white : Editorial.accent(colorScheme))
                     .background(
                         Circle().fill(isSelected ? AnyShapeStyle(Glass.accentGradient) : AnyShapeStyle(.ultraThinMaterial))
                     )
-                    .overlay(Circle().strokeBorder(Glass.bevelStroke, lineWidth: 1))
+                    .overlay(Circle().strokeBorder(Glass.bevelStroke(for: colorScheme), lineWidth: 1))
                 Text(type.displayName)
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(isSelected ? .primary : .secondary)

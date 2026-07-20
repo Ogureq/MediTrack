@@ -4,6 +4,7 @@ import UIKit
 
 struct AppointmentsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     @Query(sort: \Appointment.date) private var appointments: [Appointment]
 
     @State private var showingAdd = false
@@ -11,6 +12,17 @@ struct AppointmentsView: View {
 
     private var upcoming: [Appointment] {
         appointments.filter(\.isUpcoming)
+    }
+
+    /// The single nearest upcoming appointment, featured as an inset card
+    /// (7p's "next draw" block) — everything else upcoming moves to the
+    /// flat "Later" ledger below it.
+    private var nearestUpcoming: Appointment? {
+        upcoming.first
+    }
+
+    private var laterUpcoming: [Appointment] {
+        Array(upcoming.dropFirst())
     }
 
     private var past: [Appointment] {
@@ -31,41 +43,68 @@ struct AppointmentsView: View {
                 }
             } else {
                 List {
-                    if !upcoming.isEmpty {
-                        Section("Upcoming") {
-                            ForEach(upcoming) { appointment in
+                    if let nearestUpcoming {
+                        Section {
+                            Button {
+                                editingAppointment = nearestUpcoming
+                            } label: {
+                                NextAppointmentCard(appointment: nearestUpcoming)
+                            }
+                            .buttonStyle(.plain)
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    deleteOne(nearestUpcoming)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                        }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets())
+                    }
+                    if !laterUpcoming.isEmpty {
+                        Section {
+                            ForEach(laterUpcoming) { appointment in
                                 Button {
                                     editingAppointment = appointment
                                 } label: {
                                     AppointmentRow(appointment: appointment, isUpcoming: true)
+                                        .ledgerRow()
                                 }
                                 .buttonStyle(.plain)
                             }
                             .onDelete { offsets in
-                                delete(offsets, from: upcoming)
+                                delete(offsets, from: laterUpcoming)
                             }
+                        } header: {
+                            MicroLabel("Later")
                         }
                         .listRowBackground(GlassRowBackground())
                         .listRowSeparator(.hidden)
                     }
                     if !past.isEmpty {
-                        Section("Past") {
+                        Section {
                             ForEach(past) { appointment in
                                 Button {
                                     editingAppointment = appointment
                                 } label: {
                                     AppointmentRow(appointment: appointment, isUpcoming: false)
+                                        .ledgerRow()
                                 }
                                 .buttonStyle(.plain)
                             }
                             .onDelete { offsets in
                                 delete(offsets, from: past)
                             }
+                        } header: {
+                            MicroLabel("Past")
                         }
                         .listRowBackground(GlassRowBackground())
                         .listRowSeparator(.hidden)
                     }
                 }
+                .listStyle(.plain)
             }
         }
         .ambientScreen()
@@ -75,6 +114,10 @@ struct AppointmentsView: View {
                 showingAdd = true
             } label: {
                 Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                    .frame(width: 28, height: 28)
+                    .overlay(Circle().strokeBorder(Editorial.controlBorder(colorScheme), lineWidth: 1))
             }
             .accessibilityLabel("Add appointment")
         }
@@ -90,94 +133,129 @@ struct AppointmentsView: View {
             modelContext.delete(list[index])
         }
     }
+
+    private func deleteOne(_ appointment: Appointment) {
+        NotificationService.cancelReminder(id: appointment.reminderID)
+        modelContext.delete(appointment)
+    }
+}
+
+/// Featured inset card for the nearest upcoming appointment (7p's "next
+/// draw" block): title, a system-localized countdown tag, doctor/location,
+/// and — only when the data actually says so — a note that the day-before
+/// reminder is set. No fasting/medication prep steps are shown because
+/// `Appointment` has no lab-panel data to derive them from; inventing that
+/// checklist would mean fabricating health guidance.
+private struct NextAppointmentCard: View {
+    let appointment: Appointment
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// Locale-aware "in 13 days" / "через 13 дней" — built from
+    /// `RelativeDateTimeFormatter` rather than a hand-rolled format string,
+    /// so pluralization is always correct for the user's language without
+    /// needing a new plural-variant localization key.
+    private var countdownText: String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return formatter.localizedString(for: appointment.date, relativeTo: .now)
+    }
+
+    private var detailLine: String {
+        [appointment.doctor, appointment.location].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    private var accessibilityText: String {
+        var parts = [appointment.title, appointment.date.formatted(date: .abbreviated, time: .shortened), countdownText]
+        if !detailLine.isEmpty { parts.append(detailLine) }
+        if appointment.reminderEnabled { parts.append(String(localized: "Reminder set for the night before")) }
+        return parts.joined(separator: ", ")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(appointment.title)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                Spacer(minLength: 8)
+                EditorialTag(verbatim: countdownText, kind: .warn)
+            }
+            Text(appointment.date.formatted(date: .abbreviated, time: .shortened))
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(Editorial.muted(colorScheme))
+            if !detailLine.isEmpty {
+                Text(detailLine)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(Editorial.muted(colorScheme))
+            }
+            if appointment.reminderEnabled {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Editorial.tagGood(colorScheme))
+                        .accessibilityHidden(true)
+                    Text("Reminder set for the night before")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(Editorial.ink(colorScheme))
+                }
+                .padding(.top, 4)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
+    }
 }
 
 struct AppointmentRow: View {
     let appointment: Appointment
     let isUpcoming: Bool
 
-    /// Rotating date-chip tints — cycles deterministically per appointment so
-    /// the list reads as a set of distinct cards. The color carries no
-    /// semantic meaning (unlike vitals, where tint encodes reading type).
-    private static let tintPalette: [Color] = [
-        Color(red: 0x5E / 255, green: 0x5C / 255, blue: 0xE6 / 255), // indigo
-        Color(red: 0x40 / 255, green: 0xC8 / 255, blue: 0xE0 / 255), // teal
-        Color(red: 0x0A / 255, green: 0x84 / 255, blue: 0xFF / 255), // blue
-        Color(red: 0xBF / 255, green: 0x5A / 255, blue: 0xF2 / 255), // purple
-    ]
+    @Environment(\.colorScheme) private var colorScheme
 
-    private var tint: Color {
-        Self.tintPalette[stableIndex(appointment.reminderID, count: Self.tintPalette.count)]
+    private var detailLine: String {
+        var parts = [appointment.date.formatted(date: .abbreviated, time: .omitted)]
+        if !appointment.doctor.isEmpty { parts.append(appointment.doctor) }
+        if !appointment.location.isEmpty { parts.append(appointment.location) }
+        return parts.joined(separator: " · ")
     }
 
     var body: some View {
-        HStack(spacing: 13) {
-            VStack(spacing: 2) {
-                Text(appointment.date.formatted(.dateTime.day()))
-                    .font(.title3.weight(.heavy))
-                    .foregroundStyle(tint)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                Text(appointment.date.formatted(.dateTime.month(.abbreviated)))
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(tint)
-                    .textCase(.uppercase)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-            }
-            .frame(width: 48, height: 52)
-            .background(tint.opacity(0.16), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(tint.opacity(0.32), lineWidth: 1)
-            )
-            .accessibilityHidden(true)
-
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(appointment.title)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Editorial.ink(colorScheme))
                     if isUpcoming && appointment.reminderEnabled {
                         Image(systemName: "bell.fill")
                             .font(.caption2)
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(Editorial.accent(colorScheme))
                             .accessibilityLabel("Reminder on")
                     }
                 }
-                if !appointment.doctor.isEmpty {
-                    Text(appointment.doctor)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                if !appointment.location.isEmpty {
-                    Text(appointment.location)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
+                Text(detailLine)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(Editorial.muted(colorScheme))
             }
 
             Spacer(minLength: 8)
 
-            Text(appointment.date.formatted(date: .omitted, time: .shortened))
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+            if isUpcoming {
+                Text(appointment.date.formatted(date: .omitted, time: .shortened))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Editorial.muted(colorScheme))
+            } else {
+                EditorialTag("Done", kind: .good)
+            }
         }
-        .padding(.vertical, 2)
-        .opacity(isUpcoming ? 1 : 0.55)
         .accessibilityElement(children: .combine)
     }
-}
-
-/// Deterministic (non-randomized) index into a fixed-size palette. Swift's
-/// `String.hashValue` uses a per-process random seed, so it would make the
-/// assigned tint drift between app launches for the same appointment — this
-/// stays stable for the life of the record.
-private func stableIndex(_ text: String, count: Int) -> Int {
-    var hash = 5381
-    for scalar in text.unicodeScalars {
-        hash = ((hash << 5) &+ hash) &+ Int(scalar.value)
-    }
-    return abs(hash) % count
 }
 
 struct AddAppointmentSheet: View {
@@ -423,6 +501,8 @@ private struct SuggestionChip: View {
     let isSelected: Bool
     let action: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         Button {
             SheetHaptics.selection()
@@ -433,14 +513,14 @@ private struct SuggestionChip: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
                 .background(.ultraThinMaterial, in: Capsule())
-                .background(isSelected ? Color.accentColor.opacity(0.22) : Color.clear, in: Capsule())
+                .background(isSelected ? Editorial.accent(colorScheme).opacity(0.22) : Color.clear, in: Capsule())
                 .overlay(
                     Capsule().strokeBorder(
-                        isSelected ? Color.accentColor.opacity(0.7) : Color.primary.opacity(0.12),
+                        isSelected ? Editorial.accent(colorScheme).opacity(0.7) : Editorial.controlBorder(colorScheme),
                         lineWidth: 1
                     )
                 )
-                .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                .foregroundStyle(isSelected ? Editorial.accent(colorScheme) : Editorial.ink(colorScheme))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)

@@ -8,6 +8,7 @@ import UIKit
 /// notifications in sync via `NotificationService` at every mutation point.
 struct RemindersView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     @Query(sort: \Reminder.createdAt) private var reminders: [Reminder]
 
     @State private var showingAdd = false
@@ -36,7 +37,7 @@ struct RemindersView: View {
             } else {
                 List {
                     if !activeReminders.isEmpty {
-                        Section("Active") {
+                        Section {
                             ForEach(activeReminders) { reminder in
                                 ReminderListRow(
                                     reminder: reminder,
@@ -44,16 +45,19 @@ struct RemindersView: View {
                                     onTap: { editingReminder = reminder },
                                     onToggleActive: { setActive(reminder, isActive: $0) }
                                 )
+                                .ledgerRow()
                             }
                             .onDelete { offsets in
                                 delete(offsets, from: activeReminders)
                             }
+                        } header: {
+                            MicroLabel("Active")
                         }
                         .listRowBackground(GlassRowBackground())
                         .listRowSeparator(.hidden)
                     }
                     if !inactiveReminders.isEmpty {
-                        Section("Inactive") {
+                        Section {
                             ForEach(inactiveReminders) { reminder in
                                 ReminderListRow(
                                     reminder: reminder,
@@ -61,15 +65,19 @@ struct RemindersView: View {
                                     onTap: { editingReminder = reminder },
                                     onToggleActive: { setActive(reminder, isActive: $0) }
                                 )
+                                .ledgerRow()
                             }
                             .onDelete { offsets in
                                 delete(offsets, from: inactiveReminders)
                             }
+                        } header: {
+                            MicroLabel("Inactive")
                         }
                         .listRowBackground(GlassRowBackground())
                         .listRowSeparator(.hidden)
                     }
                 }
+                .listStyle(.plain)
             }
         }
         .ambientScreen()
@@ -79,6 +87,10 @@ struct RemindersView: View {
                 showingAdd = true
             } label: {
                 Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                    .frame(width: 28, height: 28)
+                    .overlay(Circle().strokeBorder(Editorial.controlBorder(colorScheme), lineWidth: 1))
             }
             .accessibilityLabel("Add reminder")
         }
@@ -142,6 +154,8 @@ struct ReminderListRow: View {
     let onTap: () -> Void
     let onToggleActive: (Bool) -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         HStack(spacing: 12) {
             Button(action: onTap) {
@@ -152,14 +166,15 @@ struct ReminderListRow: View {
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .strokeBorder(Glass.bevelStroke, lineWidth: 1)
+                                .strokeBorder(Glass.bevelStroke(for: colorScheme), lineWidth: 1)
                         )
                         .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
                             Text(reminder.title)
-                                .font(.subheadline.weight(.semibold))
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(Editorial.ink(colorScheme))
                                 .lineLimit(1)
                             if reminder.isAISuggested {
                                 Image(systemName: "sparkles")
@@ -170,18 +185,21 @@ struct ReminderListRow: View {
                         }
                         if !reminder.detail.isEmpty {
                             Text(reminder.detail)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(.system(size: 12, weight: .regular))
+                                .foregroundStyle(Editorial.muted(colorScheme))
                                 .lineLimit(1)
                         }
                         HStack(spacing: 6) {
                             if let timeOfDay = reminder.timeOfDay {
                                 Label(timeOfDay.formatted(date: .omitted, time: .shortened), systemImage: "bell.fill")
                                     .font(.caption2)
-                                    .foregroundStyle(Color.accentColor)
+                                    .foregroundStyle(Editorial.accent(colorScheme))
                             }
                             if streak >= 2 {
-                                StatusPill(text: String(format: String(localized: "%lld-day streak"), streak), color: .teal)
+                                EditorialTag(verbatim: String(format: String(localized: "%lld-day streak"), streak), kind: .good)
+                            }
+                            if !reminder.isActive {
+                                EditorialTag("Paused", kind: .warn)
                             }
                         }
                         if reminder.isAISuggested && !reminder.suggestionReason.isEmpty {
@@ -206,7 +224,6 @@ struct ReminderListRow: View {
             .labelsHidden()
             .accessibilityLabel("\(reminder.title) active")
         }
-        .padding(.vertical, 2)
     }
 
     private var accessibilityLabel: String {
@@ -225,6 +242,7 @@ struct ReminderListRow: View {
 struct AddReminderSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
 
     private let existingReminder: Reminder?
 
@@ -381,11 +399,11 @@ struct AddReminderSheet: View {
             Image(systemName: icon)
                 .font(.title3)
                 .frame(width: 44, height: 44)
-                .foregroundStyle(isSelected ? .white : Color.accentColor)
+                .foregroundStyle(isSelected ? .white : Editorial.accent(colorScheme))
                 .background(
                     Circle().fill(isSelected ? AnyShapeStyle(Glass.accentGradient) : AnyShapeStyle(.ultraThinMaterial))
                 )
-                .overlay(Circle().strokeBorder(Glass.bevelStroke, lineWidth: 1))
+                .overlay(Circle().strokeBorder(Glass.bevelStroke(for: colorScheme), lineWidth: 1))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(icon.replacingOccurrences(of: ".", with: " "))
@@ -485,6 +503,8 @@ private struct SuggestionChip: View {
     let isSelected: Bool
     let action: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         Button {
             SheetHaptics.selection()
@@ -495,14 +515,14 @@ private struct SuggestionChip: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
                 .background(.ultraThinMaterial, in: Capsule())
-                .background(isSelected ? Color.accentColor.opacity(0.22) : Color.clear, in: Capsule())
+                .background(isSelected ? Editorial.accent(colorScheme).opacity(0.22) : Color.clear, in: Capsule())
                 .overlay(
                     Capsule().strokeBorder(
-                        isSelected ? Color.accentColor.opacity(0.7) : Color.primary.opacity(0.12),
+                        isSelected ? Editorial.accent(colorScheme).opacity(0.7) : Editorial.controlBorder(colorScheme),
                         lineWidth: 1
                     )
                 )
-                .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                .foregroundStyle(isSelected ? Editorial.accent(colorScheme) : Editorial.ink(colorScheme))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)

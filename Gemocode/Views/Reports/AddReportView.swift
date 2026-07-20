@@ -125,22 +125,29 @@ struct EditReportView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Report") {
+                Section {
                     TextField("Title (e.g. Annual Blood Panel)", text: $title)
+                        .ledgerRow()
                     Picker("Category", selection: $category) {
                         ForEach(ReportCategory.allCases) { category in
                             Label(category.displayName, systemImage: category.systemImage)
                                 .tag(category)
                         }
                     }
+                    .ledgerRow()
                     DatePicker("Date", selection: $date, displayedComponents: .date)
+                        .ledgerRow()
                     TextField("Doctor / Provider", text: $provider)
+                        .ledgerRow()
                     TextField("Facility", text: $facility)
+                        .ledgerRow()
+                } header: {
+                    MicroLabel("Report")
                 }
                 .listRowBackground(GlassRowBackground())
                 .listRowSeparator(.hidden)
 
-                Section("Lab Results") {
+                Section {
                     ForEach(remainingLabResults) { result in
                         HStack {
                             Text(result.displayName)
@@ -148,6 +155,7 @@ struct EditReportView: View {
                             Text("\(result.value.compactFormatted) \(result.unit)")
                                 .foregroundStyle(.secondary)
                         }
+                        .ledgerRow()
                     }
                     .onDelete { offsets in
                         removedLabResults.append(contentsOf: offsets.map { remainingLabResults[$0] })
@@ -159,6 +167,7 @@ struct EditReportView: View {
                             Text("\(draft.valueText) \(draft.unit)")
                                 .foregroundStyle(.secondary)
                         }
+                        .ledgerRow()
                     }
                     .onDelete { labDrafts.remove(atOffsets: $0) }
                     Button {
@@ -166,16 +175,20 @@ struct EditReportView: View {
                     } label: {
                         Label("Add Lab Result", systemImage: "plus.circle.fill")
                     }
+                    .ledgerRow()
+                } header: {
+                    MicroLabel("Lab Results")
                 }
                 .listRowBackground(GlassRowBackground())
                 .listRowSeparator(.hidden)
 
-                Section("Attachments") {
+                Section {
                     ForEach(remainingAttachments) { attachment in
                         Label(
                             attachment.filename,
                             systemImage: attachment.kind == .pdf ? "doc.richtext" : "photo"
                         )
+                        .ledgerRow()
                     }
                     .onDelete { offsets in
                         removedAttachments.append(contentsOf: offsets.map { remainingAttachments[$0] })
@@ -185,6 +198,7 @@ struct EditReportView: View {
                             attachment.filename,
                             systemImage: attachment.kind == .pdf ? "doc.richtext" : "photo"
                         )
+                        .ledgerRow()
                     }
                     .onDelete { attachments.remove(atOffsets: $0) }
                     // Disabled while a scan is running so a concurrent OCR
@@ -194,12 +208,14 @@ struct EditReportView: View {
                         Label("Add Photos", systemImage: "photo.on.rectangle")
                     }
                     .disabled(isScanning)
+                    .ledgerRow()
                     Button {
                         showingFileImporter = true
                     } label: {
                         Label("Add PDF", systemImage: "doc.badge.plus")
                     }
                     .disabled(isScanning)
+                    .ledgerRow()
                     if !attachments.isEmpty || !remainingAttachments.isEmpty {
                         Button {
                             scanAttachments()
@@ -214,14 +230,19 @@ struct EditReportView: View {
                             }
                         }
                         .disabled(isScanning)
+                        .ledgerRow()
                     }
+                } header: {
+                    MicroLabel("Attachments")
                 }
                 .listRowBackground(GlassRowBackground())
                 .listRowSeparator(.hidden)
 
-                Section("Notes") {
+                Section {
                     TextField("Notes", text: $notes, axis: .vertical)
                         .lineLimit(3...6)
+                } header: {
+                    MicroLabel("Notes")
                 }
                 .listRowBackground(GlassRowBackground())
                 .listRowSeparator(.hidden)
@@ -400,32 +421,45 @@ struct LabEntrySheet: View {
         NavigationStack {
             Form {
                 if let reference = selectedReference {
-                    Section("Test") {
+                    Section {
                         LabeledContent("Test", value: reference.name)
+                            .ledgerRow()
                         LabeledContent("Unit", value: reference.unit)
+                            .ledgerRow()
                         if let range = reference.referenceRange(for: nil) {
                             LabeledContent(
                                 "Typical Range",
                                 value: "\(range.lowerBound.compactFormatted)–\(range.upperBound.compactFormatted) \(reference.unit)"
                             )
+                            .ledgerRow()
                         }
                         Button("Choose a Different Test") {
                             selectedReference = nil
                             valueText = ""
                         }
+                        .ledgerRow()
+                    } header: {
+                        MicroLabel("Test")
                     }
                     .listRowBackground(GlassRowBackground())
                     .listRowSeparator(.hidden)
                     valueSection
                 } else if isCustom {
-                    Section("Custom Test") {
+                    Section {
                         TextField("Test name", text: $customName)
+                            .ledgerRow()
                         TextField("Unit (e.g. mg/dL)", text: $customUnit)
+                            .ledgerRow()
                         TextField("Reference low (optional)", text: $lowText)
                             .keyboardType(.decimalPad)
+                            .ledgerRow()
                         TextField("Reference high (optional)", text: $highText)
                             .keyboardType(.decimalPad)
+                            .ledgerRow()
                         Button("Back to Catalog") { isCustom = false }
+                            .ledgerRow()
+                    } header: {
+                        MicroLabel("Custom Test")
                     }
                     .listRowBackground(GlassRowBackground())
                     .listRowSeparator(.hidden)
@@ -437,13 +471,14 @@ struct LabEntrySheet: View {
                         } label: {
                             Label("Custom Test…", systemImage: "plus.circle")
                         }
+                        .ledgerRow()
                     }
                     .listRowBackground(GlassRowBackground())
                     .listRowSeparator(.hidden)
                     ForEach(LabCategory.allCases) { category in
                         let tests = filteredTests(in: category)
                         if !tests.isEmpty {
-                            Section(category.displayName) {
+                            Section {
                                 ForEach(tests) { reference in
                                     Button {
                                         selectedReference = reference
@@ -456,7 +491,10 @@ struct LabEntrySheet: View {
                                                 .foregroundStyle(.secondary)
                                         }
                                     }
+                                    .ledgerRow()
                                 }
+                            } header: {
+                                MicroLabel(verbatim: category.displayName)
                             }
                             .listRowBackground(GlassRowBackground())
                             .listRowSeparator(.hidden)
@@ -481,9 +519,11 @@ struct LabEntrySheet: View {
     }
 
     private var valueSection: some View {
-        Section("Result") {
+        Section {
             TextField("Value", text: $valueText)
                 .keyboardType(.decimalPad)
+        } header: {
+            MicroLabel("Result")
         }
         .listRowBackground(GlassRowBackground())
         .listRowSeparator(.hidden)

@@ -4,6 +4,7 @@ import Charts
 
 struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     @Query(sort: \MedicalReport.date, order: .reverse) private var reports: [MedicalReport]
     @Query private var vitals: [VitalSample]
     @Query private var medications: [Medication]
@@ -14,11 +15,11 @@ struct DashboardView: View {
     @Query private var goals: [HealthGoal]
     @Query(sort: \Reminder.createdAt) private var reminders: [Reminder]
 
-    /// Switches the enclosing `TabView` to the Review tab when the score
-    /// card is tapped — passed in from `ContentView`, which owns `AppTab`
-    /// and already does the same thing for the widget's deep link. Defaults
-    /// to a no-op so this view stays constructible without wiring a tab
-    /// selection (e.g. in a preview).
+    /// Presents `ReviewScreen` when the score header is tapped — passed in
+    /// from `ContentView`, which owns the presentation state and already
+    /// does the same thing for the widget's `gemocode://review` deep link.
+    /// Defaults to a no-op so this view stays constructible without wiring
+    /// it up (e.g. in a preview).
     var onOpenReview: () -> Void = {}
 
     @State private var showingAddReport = false
@@ -31,22 +32,14 @@ struct DashboardView: View {
     /// below — it flattens every report's lab results, which is wasted work
     /// to redo on every render — and rebuilt via `.task(id: retestSignature)`.
     ///
-    /// Together with `nextUpcomingRetestItem` and `hasAnyLabResults`
-    /// (rebuilt in the same task), this drives `retestCard`'s three states:
-    /// due/due-soon items, "caught up" with a next test to name, or a
-    /// scan-first prompt when there's no lab data yet.
+    /// Drives `nextDrawCard` together with `nextUpcomingRetestItem`: due/soon
+    /// items take priority; when there are none, the soonest upcoming item
+    /// is named instead.
     @State private var retestItems: [RetestItem] = []
 
     /// The soonest `.upcoming` retest item, per `RetestSchedule.nextUpcoming`
-    /// — named in the "You're caught up" card when `retestItems` is empty.
+    /// — named in `nextDrawCard` when `retestItems` is empty.
     @State private var nextUpcomingRetestItem: RetestItem?
-
-    /// Whether any saved report has at least one lab result, regardless of
-    /// whether it's catalog-tracked. Distinguishes "no lab data yet" (the
-    /// scan-first hero card) from "lab data exists but nothing is due" or
-    /// "lab data exists but none of it is catalog-tracked" (the latter shows
-    /// no retest card at all — there's nothing true to say yet).
-    @State private var hasAnyLabResults = false
 
     private var review: HealthReview {
         AnalysisEngine.generateReview(
@@ -157,20 +150,15 @@ struct DashboardView: View {
         return name.components(separatedBy: " ").first ?? ""
     }
 
-    /// Time-of-day-aware greeting shown in the scrollable header. Reads the
-    /// wall clock directly since this is presentation, not analysis — unlike
-    /// `AnalysisEngine`, which must stay deterministic.
-    private var greeting: String {
-        let hour = Calendar.current.component(.hour, from: .now)
-        let timeGreeting: String
-        switch hour {
-        case 5..<12: timeGreeting = String(localized: "Good morning")
-        case 12..<17: timeGreeting = String(localized: "Good afternoon")
-        case 17..<22: timeGreeting = String(localized: "Good evening")
-        default: timeGreeting = String(localized: "Good night")
-        }
-        guard !firstName.isEmpty else { return timeGreeting }
-        return String(format: String(localized: "%@, %@"), timeGreeting, firstName)
+    /// "Jul 20 · Anna"-style micro-label text for the header row — today's
+    /// date plus the profile's first name (date alone when there's no
+    /// profile name yet). Presentation-only, like the old `greeting` it
+    /// replaces: reads the wall clock directly rather than taking `now` as
+    /// a parameter, since this is UI text, not analysis.
+    private var headerDateNameText: String {
+        let dateText = Date.now.formatted(.dateTime.month(.abbreviated).day())
+        guard !firstName.isEmpty else { return dateText }
+        return "\(dateText) · \(firstName)"
     }
 
     var body: some View {
@@ -186,12 +174,13 @@ struct DashboardView: View {
                 // once here and threading the dictionary through does it once.
                 let vitalsByType = Dictionary(grouping: vitals, by: \.type)
                 VStack(alignment: .leading, spacing: 16) {
-                    greetingHeader
-                    quickAddButton
+                    editorialHeader
                     if review.hasData {
-                        scoreCard(review: review)
-                        retestCard
+                        scoreHeader(review: review)
+                        nextDrawCard
                             .transaction { $0.animation = nil }
+                        needsAttentionSection(review: review)
+                        scanReportButton
                         remindersCard
                             .transaction { $0.animation = nil }
                         quarterlyReviewCard
@@ -216,24 +205,7 @@ struct DashboardView: View {
                 .padding()
             }
             .background(AmbientBackground().accessibilityHidden(true))
-            .navigationTitle("Dashboard")
-            .toolbar {
-                Menu {
-                    Button {
-                        showingAddReport = true
-                    } label: {
-                        Label("Add Report", systemImage: "doc.badge.plus")
-                    }
-                    Button {
-                        showingAddVital = true
-                    } label: {
-                        Label("Add Vital", systemImage: "waveform.path.ecg")
-                    }
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .accessibilityLabel("Add")
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showingAddReport) { AddReportView() }
             .sheet(isPresented: $showingAddVital) { AddVitalSheet() }
             .sheet(isPresented: $showingQuickAdd) { QuickAddView() }
@@ -245,72 +217,78 @@ struct DashboardView: View {
         .task(id: retestSignature) {
             retestItems = RetestSchedule.dueOrSoon(reports: reports, now: .now)
             nextUpcomingRetestItem = RetestSchedule.nextUpcoming(reports: reports, now: .now)
-            hasAnyLabResults = reports.contains { !$0.labResults.isEmpty }
         }
     }
 
-    // MARK: Sections
+    // MARK: Editorial header
 
-    private var quickAddButton: some View {
-        Button {
-            showingQuickAdd = true
-        } label: {
-            Label("Quick Add", systemImage: "sparkles")
-                .font(.subheadline.weight(.semibold))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 13)
-                .tintedGlassCard(.teal, cornerRadius: 999)
+    /// Micro-label date/name row plus the small circled "+" — the
+    /// restyled home for Quick Add, replacing the old full-width
+    /// "Quick Add" pill.
+    private var editorialHeader: some View {
+        HStack(spacing: 12) {
+            MicroLabel(verbatim: headerDateNameText)
+            Spacer()
+            Button {
+                showingQuickAdd = true
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                    .frame(width: 28, height: 28)
+                    .overlay(Circle().strokeBorder(Editorial.controlBorder(colorScheme), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Quick Add")
+            .accessibilityHint("Add a medication, vital, symptom, appointment, or reminder by typing a sentence.")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Quick Add")
-        .accessibilityHint("Add a medication, vital, symptom, appointment, or reminder by typing a sentence.")
     }
 
-    private var greetingHeader: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(greeting)
-                .font(.title2.bold())
-            Text(Date.now.formatted(date: .complete, time: .omitted))
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
-    }
+    // MARK: Score header
 
-    private func scoreCard(review: HealthReview) -> some View {
+    /// The 64pt score, its `EditorialTag`, and the three-zone score
+    /// `RangeBar` with a trend caption — tapping anywhere opens the full
+    /// review (`onOpenReview`); the share button is a separate tap target
+    /// in the top-trailing corner, same split as the card it replaces.
+    private func scoreHeader(review: HealthReview) -> some View {
         ZStack(alignment: .topTrailing) {
             Button {
                 onOpenReview()
             } label: {
-                HStack(spacing: 16) {
-                    ScoreRing(score: review.score)
-                        .frame(width: 84, height: 84)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Health Score")
-                            .font(.headline)
-                        Text(review.scoreLabel)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        Text("Tap for your detailed review")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .lastTextBaseline, spacing: 12) {
+                        Text("\(review.score)")
+                            .font(.system(size: 64, weight: .regular))
+                            .kerning(-2.56)
+                            .foregroundStyle(Editorial.ink(colorScheme))
+                            .contentTransition(.numericText())
+                        EditorialTag(verbatim: review.scoreLabel, kind: scoreTagKind(review.score))
                     }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 6) {
+                        RangeBar(
+                            zones: [
+                                (fraction: 0.40, kind: .out),
+                                (fraction: 0.35, kind: .inRange),
+                                (fraction: 0.25, kind: .optimal),
+                            ],
+                            marker: CGFloat(review.score) / 100
+                        )
+                        scoreTrendCaption(review: review)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Editorial.muted(colorScheme))
+                    }
                 }
-                .padding()
-                // Extra trailing inset keeps the chevron clear of the share
-                // button overlaid in the top-trailing corner below — without
-                // it the two can collide at large Dynamic Type sizes.
-                .padding(.trailing, 28)
-                .glassCard()
-                .accessibilityElement(children: .combine)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.trailing, 32)
             }
             .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(
+                Text("Health score, \(review.score) out of 100")
+                    + Text(verbatim: ", ")
+                    + Text(verbatim: review.scoreLabel)
+            )
+            .accessibilityHint("Tap for your detailed review")
 
             // Redacted, shareable score card — see ScoreShareCard.swift.
             // Rendered lazily (ScoreShareImage's Transferable) only when
@@ -325,16 +303,226 @@ struct DashboardView: View {
                 preview: SharePreview("Gemocode Score", image: Image(systemName: "heart.text.square.fill"))
             ) {
                 Image(systemName: "square.and.arrow.up")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .padding(8)
-                    .background(.ultraThinMaterial, in: Circle())
-                    .overlay(Circle().strokeBorder(Glass.bevelStroke, lineWidth: 1))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Editorial.muted(colorScheme))
+                    .frame(width: 28, height: 28)
+                    .overlay(Circle().strokeBorder(Editorial.controlBorder(colorScheme), lineWidth: 1))
             }
             .accessibilityLabel("Share score card")
-            .padding(14)
         }
     }
+
+    private func scoreTagKind(_ score: Int) -> TagKind {
+        switch score {
+        case 75...: .good
+        case 60..<75: .warn
+        default: .bad
+        }
+    }
+
+    /// "Health Score · ↗ up 6 since January"-style caption, built from the
+    /// existing `snapshots` history: reuses the "Health Score" key, then
+    /// appends an arrow (universal glyph, not localized) plus a templated
+    /// phrase comparing `review.score` against the earliest snapshot on
+    /// record. Falls back to just "Health Score" when there's fewer than
+    /// two snapshots to compare.
+    private func scoreTrendCaption(review: HealthReview) -> Text {
+        let base = Text("Health Score")
+        guard snapshots.count >= 2, let baseline = snapshots.first else {
+            return base
+        }
+        let delta = review.score - baseline.score
+        let month = baseline.date.formatted(.dateTime.month(.wide))
+        let dot = Text(verbatim: " · ")
+        if delta > 0 {
+            let phrase = String(format: String(localized: "up %lld since %@"), delta, month)
+            return base + dot + Text(verbatim: "↗ ") + Text(phrase)
+        } else if delta < 0 {
+            let phrase = String(format: String(localized: "down %lld since %@"), -delta, month)
+            return base + dot + Text(verbatim: "↘ ") + Text(phrase)
+        } else {
+            let phrase = String(format: String(localized: "steady since %@"), month)
+            return base + dot + Text(verbatim: "→ ") + Text(phrase)
+        }
+    }
+
+    // MARK: Next draw
+
+    /// The restyled retest hero: an `insetCard` naming the next lab draw,
+    /// built from the same `RetestSchedule` data the old `retestCard` used.
+    /// Priority mirrors the card it replaces:
+    ///
+    /// 1. `retestItems` non-empty → names the due/soon tests (up to 3) and
+    ///    keeps `RetestSchedule.disclaimer` alongside them.
+    /// 2. Otherwise, `nextUpcomingRetestItem` set → names the soonest
+    ///    upcoming test.
+    /// 3. Otherwise nothing renders here — the always-visible
+    ///    `scanReportButton` below covers "no lab data yet" instead of a
+    ///    separate hero card.
+    @ViewBuilder
+    private var nextDrawCard: some View {
+        if !retestItems.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                nextDrawInsetCard(
+                    title: nextDrawTitle(dueDate: retestItems.first?.dueDate ?? .now),
+                    subtitle: nextDrawSubtitle(items: retestItems)
+                )
+                Text(RetestSchedule.disclaimer)
+                    .font(.system(size: 10))
+                    .foregroundStyle(Editorial.muted(colorScheme))
+            }
+        } else if let next = nextUpcomingRetestItem {
+            nextDrawInsetCard(
+                title: nextDrawTitle(dueDate: next.dueDate),
+                subtitle: next.displayName
+            )
+        }
+    }
+
+    private func nextDrawTitle(dueDate: Date) -> String {
+        String(format: String(localized: "Next draw — %@"), dueDate.formatted(.dateTime.month(.abbreviated).day()))
+    }
+
+    private func nextDrawSubtitle(items: [RetestItem]) -> String {
+        let names = items.prefix(3).map(\.displayName)
+        let joined = names.joined(separator: " + ")
+        guard names.count > 1 else { return joined }
+        return String(format: String(localized: "%@ · one visit"), joined)
+    }
+
+    /// `insetCard` fill, radius 18: title/subtitle plus a "Book"-look accent
+    /// pill. The whole card is one `NavigationLink` into the full retest
+    /// schedule (there's no separate booking flow today), so the pill is
+    /// drawn — not a nested button — to avoid two overlapping tap targets.
+    private func nextDrawInsetCard(title: String, subtitle: String) -> some View {
+        NavigationLink {
+            RetestScheduleView()
+        } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(verbatim: title)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Editorial.ink(colorScheme))
+                        .lineLimit(2)
+                    Text(verbatim: subtitle)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Editorial.muted(colorScheme))
+                        .lineLimit(2)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Text("Book")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white)
+                    .padding(.vertical, 9)
+                    .padding(.horizontal, 16)
+                    .background(Editorial.accent(colorScheme), in: Capsule())
+            }
+            .padding(14)
+            .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(title). \(subtitle)")
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Needs attention
+
+    /// Out-of-range lab rows — a direct restyle of `review.labSnapshots`
+    /// filtered to `status.isOutOfRange`, each with its own `RangeBar` built
+    /// from the lab's reference range via the `lower:upper:min:max:value:`
+    /// initializer.
+    @ViewBuilder
+    private func needsAttentionSection(review: HealthReview) -> some View {
+        let outOfRange = review.labSnapshots.filter { $0.status.isOutOfRange }
+        if !outOfRange.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                MicroLabel(verbatim: needsAttentionHeaderText(count: outOfRange.count))
+                    .padding(.bottom, 2)
+                VStack(spacing: 0) {
+                    ForEach(outOfRange) { snapshot in
+                        needsAttentionRow(snapshot)
+                    }
+                }
+            }
+        }
+    }
+
+    private func needsAttentionHeaderText(count: Int) -> String {
+        String(format: String(localized: "Needs attention · %lld"), count)
+    }
+
+    private func needsAttentionRow(_ snapshot: LabSnapshot) -> some View {
+        let axis = snapshot.range.map { rangeAxis(lower: $0.lowerBound, upper: $0.upperBound, value: snapshot.value) }
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .lastTextBaseline) {
+                Text(verbatim: snapshot.name)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                Spacer()
+                Text(verbatim: "\(snapshot.value.compactFormatted) \(snapshot.unit)")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                EditorialTag(verbatim: snapshot.status.label, kind: tagKind(for: snapshot.status))
+            }
+            if let range = snapshot.range, let axis {
+                RangeBar(
+                    lower: range.lowerBound,
+                    upper: range.upperBound,
+                    min: axis.min,
+                    max: axis.max,
+                    value: snapshot.value
+                )
+            }
+        }
+        .ledgerRow()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(snapshot.name), \(snapshot.value.compactFormatted) \(snapshot.unit), \(snapshot.status.label)")
+    }
+
+    /// Padded axis for a lab's `RangeBar`: at least 40% of the reference
+    /// range's own span beyond whichever is further out — the reference
+    /// range itself, or the value when it's outside that range — so an
+    /// out-of-range marker never sits flush against the bar's edge.
+    private func rangeAxis(lower: Double, upper: Double, value: Double) -> (min: Double, max: Double) {
+        let span = Swift.max(upper - lower, .ulpOfOne)
+        let low = Swift.min(lower, value)
+        let high = Swift.max(upper, value)
+        let pad = span * 0.4
+        return (low - pad, high + pad)
+    }
+
+    private func tagKind(for status: LabStatus) -> TagKind {
+        switch status {
+        case .high: .warn
+        case .low, .criticalLow, .criticalHigh: .bad
+        case .normal, .unknown: .good
+        }
+    }
+
+    private func tagKind(for severity: Severity) -> TagKind {
+        switch severity {
+        case .critical: .bad
+        case .attention: .warn
+        case .info: .good
+        }
+    }
+
+    // MARK: Scan a report
+
+    /// Always-visible outlined CTA — the mockup's persistent "Scan a
+    /// report" button, wired to the same `showingAddReport` entry point the
+    /// toolbar menu and empty state already use.
+    private var scanReportButton: some View {
+        Button {
+            showingAddReport = true
+        } label: {
+            Label("Scan a Report", systemImage: "doc.text.viewfinder")
+        }
+        .buttonStyle(OutlinedPillButtonStyle())
+        .accessibilityHint("Opens the report scanner.")
+    }
+
+    // MARK: Sections (existing content, restyled below the mockup structure)
 
     private var remindersCard: some View {
         let today = Date.now
@@ -343,20 +531,19 @@ struct DashboardView: View {
 
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                Text("Today")
-                    .font(.headline)
+                MicroLabel("Today")
                 Spacer()
                 if !activeReminders.isEmpty {
                     Text("\(doneCount) of \(activeReminders.count) done")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Editorial.muted(colorScheme))
                 }
                 NavigationLink {
                     RemindersView()
                 } label: {
                     Text("Manage")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.accentColor)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Editorial.accent(colorScheme))
                 }
                 .buttonStyle(.plain)
             }
@@ -365,7 +552,7 @@ struct DashboardView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("No reminders yet — add one to stay on top of medications, checkups, and healthy habits.")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Editorial.muted(colorScheme))
                     NavigationLink {
                         RemindersView()
                     } label: {
@@ -376,34 +563,30 @@ struct DashboardView: View {
                             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .strokeBorder(Glass.bevelStroke, lineWidth: 1)
+                                    .strokeBorder(Glass.bevelStroke(for: colorScheme), lineWidth: 1)
                             )
                     }
                     .buttonStyle(.plain)
                 }
             } else {
-                VStack(spacing: 10) {
-                    ForEach(Array(activeReminders.enumerated()), id: \.offset) { index, reminder in
-                        if index > 0 {
-                            Divider()
-                        }
+                VStack(spacing: 0) {
+                    ForEach(activeReminders) { reminder in
                         TodayReminderRow(
                             reminder: reminder,
                             isCompleted: reminder.isCompleted(on: today)
                         ) {
                             toggleReminderCompletion(reminder, on: today)
                         }
+                        .ledgerRow()
                     }
                 }
                 if hasAISuggestions {
                     Text("AI-suggested reminders are educational, not medical advice — worth discussing with your doctor before changing your routine.")
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Editorial.muted(colorScheme))
                 }
             }
         }
-        .padding()
-        .glassCard()
     }
 
     /// Toggles today's completion for a reminder: inserts a `ReminderCompletion`
@@ -432,19 +615,19 @@ struct DashboardView: View {
                         .foregroundStyle(Glass.accentGradient)
                         .frame(width: 40, height: 40)
                         .background(.ultraThinMaterial, in: Circle())
-                        .overlay(Circle().strokeBorder(Glass.bevelStroke, lineWidth: 1))
+                        .overlay(Circle().strokeBorder(Glass.bevelStroke(for: colorScheme), lineWidth: 1))
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Quarterly Review is ready")
                             .font(.subheadline.weight(.semibold))
                         Text("See how your last 90 days trended.")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Editorial.muted(colorScheme))
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Editorial.muted(colorScheme))
                         .accessibilityHidden(true)
                 }
                 .padding(12)
@@ -459,8 +642,7 @@ struct DashboardView: View {
     private var scoreHistoryCard: some View {
         if snapshots.count >= 2 {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Score History")
-                    .font(.headline)
+                MicroLabel("Score History")
                 Chart(snapshots) { snapshot in
                     AreaMark(
                         x: .value("Date", snapshot.date),
@@ -491,174 +673,28 @@ struct DashboardView: View {
         }
     }
 
-    /// The app's core story — "know when you're due, never lose a result,
-    /// skip duplicate tests" — rendered as one of three mutually exclusive
-    /// states, in priority order:
-    ///
-    /// 1. `retestItems` non-empty → the "Tests Due" card (existing rows/
-    ///    pills/cap/disclaimer), now with a "See All" link into the full
-    ///    `RetestScheduleView`.
-    /// 2. Otherwise, `nextUpcomingRetestItem` set → a compact "You're caught
-    ///    up" card naming the soonest upcoming test.
-    /// 3. Otherwise, `hasAnyLabResults` false → a scan-first hero card.
-    ///
-    /// If none apply (lab results exist but none are catalog-tracked, or
-    /// none of the tracked ones have a known interval), nothing renders —
-    /// there's nothing true to say yet.
-    @ViewBuilder
-    private var retestCard: some View {
-        if !retestItems.isEmpty {
-            dueOrSoonRetestCard
-        } else if let next = nextUpcomingRetestItem {
-            caughtUpRetestCard(next: next)
-        } else if !hasAnyLabResults {
-            scanFirstHeroCard
-        }
-    }
-
-    /// State 1: lab series overdue or due soon for a re-test per
-    /// `RetestSchedule`. Capped at 4 rows with an "and N more" caption for
-    /// the rest, and always paired with `RetestSchedule.disclaimer` — these
-    /// are commonly recommended cadences, not a personalized or clinical
-    /// schedule.
-    private var dueOrSoonRetestCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Tests Due")
-                    .font(.headline)
-                Spacer()
-                NavigationLink {
-                    RetestScheduleView()
-                } label: {
-                    Text("See All")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.accentColor)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("See all tests due")
-            }
-            VStack(spacing: 10) {
-                ForEach(Array(retestItems.prefix(4).enumerated()), id: \.element.id) { index, item in
-                    if index > 0 {
-                        Divider()
-                    }
-                    RetestRow(item: item)
-                }
-                if retestItems.count > 4 {
-                    Text("and \(retestItems.count - 4) more")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            .padding(12)
-            .glassCard(cornerRadius: 16)
-            Text(RetestSchedule.disclaimer)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-        }
-    }
-
-    /// State 2: nothing due right now, but at least one catalog-tracked test
-    /// has a known upcoming due date — names the soonest one so the "skip
-    /// duplicate tests" story stays visible even when there's nothing urgent.
-    private func caughtUpRetestCard(next: RetestItem) -> some View {
-        NavigationLink {
-            RetestScheduleView()
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.green)
-                    .frame(width: 40, height: 40)
-                    .background(.ultraThinMaterial, in: Circle())
-                    .overlay(Circle().strokeBorder(Color.green.opacity(0.4), lineWidth: 1))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("You're caught up")
-                        .font(.subheadline.weight(.semibold))
-                    Text("Next: \(next.displayName) \(relativeDueText(next.dueDate))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-                    .accessibilityHidden(true)
-            }
-            .padding(12)
-            .glassCard(cornerRadius: 16)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("You're caught up. Next: \(next.displayName) \(relativeDueText(next.dueDate))")
-        }
-        .buttonStyle(.plain)
-    }
-
-    /// State 3: no lab results saved yet — leads straight into the same
-    /// report-scanning sheet the toolbar's "Add Report" action and the
-    /// dashboard's own empty state use (`AddReportView()` routes to
-    /// `ScanReportView` when there's no report to edit).
-    private var scanFirstHeroCard: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "doc.text.viewfinder")
-                .font(.system(size: 32, weight: .semibold))
-                .foregroundStyle(Glass.accentGradient)
-                .accessibilityHidden(true)
-            VStack(spacing: 4) {
-                Text("Scan your first lab report")
-                    .font(.headline)
-                Text("Gemocode remembers every value and tells you when each test is due again — so you never repeat a test you didn't need.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            Button {
-                showingAddReport = true
-            } label: {
-                Label("Scan a Report", systemImage: "sparkles")
-            }
-            .buttonStyle(GlassProminentButtonStyle())
-            .accessibilityHint("Opens the report scanner.")
-        }
-        .frame(maxWidth: .infinity)
-        .padding(20)
-        .glassCard()
-    }
-
-    /// "in 4 months"-style relative phrasing for the caught-up card's next
-    /// due date. Presentation-only — like `greeting`, reads the wall clock
-    /// directly rather than taking `now` as a parameter, since it's UI text,
-    /// not analysis.
-    private func relativeDueText(_ date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .full
-        return formatter.localizedString(for: date, relativeTo: .now)
-    }
-
     @ViewBuilder
     private func alertsSection(review: HealthReview) -> some View {
         let alerts = review.findings.filter { $0.severity > .info }.prefix(3)
         if !alerts.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Needs Your Attention")
-                    .font(.headline)
+            VStack(alignment: .leading, spacing: 0) {
+                MicroLabel("Needs Your Attention")
+                    .padding(.bottom, 8)
                 ForEach(Array(alerts)) { finding in
-                    HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: finding.severity.systemImage)
-                            .foregroundStyle(finding.severity.color)
-                        VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .top) {
                             Text(finding.title)
-                                .font(.subheadline.weight(.semibold))
-                            Text(finding.detail)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(3)
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(Editorial.ink(colorScheme))
+                            Spacer(minLength: 8)
+                            EditorialTag(verbatim: finding.severity.displayName, kind: tagKind(for: finding.severity))
                         }
+                        Text(finding.detail)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Editorial.muted(colorScheme))
+                            .lineLimit(3)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-                    .tintedGlassCard(finding.severity.color)
+                    .ledgerRow()
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("\(finding.severity.displayName): \(finding.title). \(finding.detail)")
                 }
@@ -670,8 +706,7 @@ struct DashboardView: View {
     private var appointmentCard: some View {
         if let next = nextAppointment {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Next Appointment")
-                    .font(.headline)
+                MicroLabel("Next Appointment")
                 NavigationLink {
                     AppointmentsView()
                 } label: {
@@ -679,12 +714,12 @@ struct DashboardView: View {
                         VStack(spacing: 0) {
                             Text(next.date.formatted(.dateTime.month(.abbreviated)))
                                 .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Editorial.muted(colorScheme))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.6)
                             Text(next.date.formatted(.dateTime.day()))
                                 .font(.title3.bold())
-                                .foregroundStyle(Color.accentColor)
+                                .foregroundStyle(Editorial.accent(colorScheme))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.6)
                         }
@@ -692,7 +727,7 @@ struct DashboardView: View {
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .strokeBorder(Glass.bevelStroke, lineWidth: 1)
+                                .strokeBorder(Glass.bevelStroke(for: colorScheme), lineWidth: 1)
                         )
                         .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 2) {
@@ -701,16 +736,15 @@ struct DashboardView: View {
                                 .lineLimit(1)
                             Text(next.date.formatted(date: .abbreviated, time: .shortened))
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Editorial.muted(colorScheme))
                         }
                         Spacer()
                         Image(systemName: "chevron.right")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(Editorial.muted(colorScheme))
                             .accessibilityHidden(true)
                     }
-                    .padding(12)
-                    .glassCard(cornerRadius: 16)
+                    .ledgerRow()
                     .accessibilityElement(children: .combine)
                 }
                 .buttonStyle(.plain)
@@ -727,8 +761,7 @@ struct DashboardView: View {
         }
         if !tiles.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Latest Vitals")
-                    .font(.headline)
+                MicroLabel("Latest Vitals")
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     ForEach(tiles, id: \.type) { tile in
                         NavigationLink {
@@ -737,7 +770,7 @@ struct DashboardView: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 Label(tile.type.displayName, systemImage: tile.type.systemImage)
                                     .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(Editorial.muted(colorScheme))
                                     .lineLimit(1)
                                 Text(tile.latest.formattedValue)
                                     .font(.title3.bold())
@@ -760,7 +793,7 @@ struct DashboardView: View {
                                 }
                                 Text(tile.latest.date.formatted(date: .abbreviated, time: .omitted))
                                     .font(.caption2)
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(Editorial.muted(colorScheme))
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(12)
@@ -779,21 +812,19 @@ struct DashboardView: View {
         let active = Array(goals.filter(\.isActive).prefix(2))
         if !active.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Goals")
-                    .font(.headline)
+                MicroLabel("Goals")
                 NavigationLink {
                     GoalsView()
                 } label: {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 0) {
                         ForEach(active) { goal in
                             GoalRow(
                                 goal: goal,
                                 latest: (vitalsByType[goal.type] ?? []).max { $0.date < $1.date }?.value
                             )
+                            .ledgerRow()
                         }
                     }
-                    .padding(12)
-                    .glassCard(cornerRadius: 16)
                 }
                 .buttonStyle(.plain)
             }
@@ -804,41 +835,41 @@ struct DashboardView: View {
     private var recentReportsSection: some View {
         if !reports.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Recent Reports")
-                    .font(.headline)
-                ForEach(reports.prefix(3)) { report in
-                    NavigationLink {
-                        ReportDetailView(report: report)
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: report.category.systemImage)
-                                .foregroundStyle(Glass.accentGradient)
-                                .frame(width: 36, height: 36)
-                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .strokeBorder(Glass.bevelStroke, lineWidth: 1)
-                                )
-                                .accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(report.title)
-                                    .font(.subheadline.weight(.semibold))
-                                    .lineLimit(1)
-                                Text(report.date.formatted(date: .abbreviated, time: .omitted))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                MicroLabel("Recent Reports")
+                VStack(spacing: 0) {
+                    ForEach(reports.prefix(3)) { report in
+                        NavigationLink {
+                            ReportDetailView(report: report)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: report.category.systemImage)
+                                    .foregroundStyle(Glass.accentGradient)
+                                    .frame(width: 36, height: 36)
+                                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .strokeBorder(Glass.bevelStroke(for: colorScheme), lineWidth: 1)
+                                    )
+                                    .accessibilityHidden(true)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(report.title)
+                                        .font(.subheadline.weight(.semibold))
+                                        .lineLimit(1)
+                                    Text(report.date.formatted(date: .abbreviated, time: .omitted))
+                                        .font(.caption)
+                                        .foregroundStyle(Editorial.muted(colorScheme))
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Editorial.muted(colorScheme))
+                                    .accessibilityHidden(true)
                             }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.tertiary)
-                                .accessibilityHidden(true)
+                            .ledgerRow()
+                            .accessibilityElement(children: .combine)
                         }
-                        .padding(12)
-                        .glassCard(cornerRadius: 16)
-                        .accessibilityElement(children: .combine)
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
@@ -880,6 +911,8 @@ struct TodayReminderRow: View {
     let isCompleted: Bool
     let onToggle: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: reminder.systemImage)
@@ -888,7 +921,7 @@ struct TodayReminderRow: View {
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .strokeBorder(Glass.bevelStroke, lineWidth: 1)
+                        .strokeBorder(Glass.bevelStroke(for: colorScheme), lineWidth: 1)
                 )
                 .accessibilityHidden(true)
 
@@ -947,49 +980,9 @@ struct TodayReminderRow: View {
     }
 }
 
-/// A single row in the dashboard's "Tests Due" card: test name, last-tested
-/// date, and an "Overdue"/"Due Soon" status chip. `.upcoming` is handled
-/// only for `RetestStatus`'s exhaustiveness — `retestCard` only ever passes
-/// rows sourced from `RetestSchedule.dueOrSoon`, which excludes it.
-private struct RetestRow: View {
-    let item: RetestItem
-
-    private var statusText: String {
-        switch item.status {
-        case .overdue: String(localized: "Overdue")
-        case .dueSoon: String(localized: "Due Soon")
-        case .upcoming: String(localized: "Upcoming")
-        }
-    }
-
-    private var statusColor: Color {
-        switch item.status {
-        case .overdue: .red
-        case .dueSoon: .orange
-        case .upcoming: .blue
-        }
-    }
-
-    var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.displayName)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                Text("Last tested \(item.lastTestedAt.formatted(date: .abbreviated, time: .omitted))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            StatusPill(text: statusText, color: statusColor)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            "\(item.displayName), \(statusText), last tested \(item.lastTestedAt.formatted(date: .abbreviated, time: .omitted))"
-        )
-    }
-}
-
+/// Kept only for `ReviewScreen`, which still uses this animated ring for its
+/// own score header — the dashboard's own score header is now the flat
+/// 64pt/`EditorialTag`/`RangeBar` treatment in `scoreHeader(review:)` above.
 struct ScoreRing: View {
     let score: Int
 

@@ -15,6 +15,7 @@ struct OnboardingView: View {
     let onFinish: () -> Void
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     @Query private var existingProfiles: [HealthProfile]
 
     @State private var step: QuizStep = .welcome
@@ -93,7 +94,7 @@ struct OnboardingView: View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(Color.primary.opacity(0.08))
+                    .fill(Editorial.hairline(colorScheme))
                 Capsule()
                     .fill(Glass.accentGradient)
                     .frame(width: geometry.size.width * progressFraction)
@@ -140,8 +141,70 @@ struct OnboardingView: View {
             primaryTitle: "Get Started",
             onPrimary: { advance() }
         ) {
-            EmptyView()
+            VStack(spacing: 4) {
+                welcomeDemoRangeBar
+                VStack(alignment: .leading, spacing: 0) {
+                    welcomeBullet("Originals filed forever — nothing on paper to lose")
+                    welcomeBullet("Told when a retest is actually worth paying for")
+                    welcomeBullet("Tracking, health score, trends & backups")
+                    welcomeBullet("100% on this device — no account, no cloud")
+                }
+            }
         }
+    }
+
+    /// A small, static illustration of the range-bar grammar every lab
+    /// value in Gemocode uses — sourced from the real Vitamin D reference
+    /// range in `LabCatalog` (not an invented number) so the demo teaches
+    /// the actual visual language, not a fabricated example.
+    private var welcomeDemoRangeBar: some View {
+        let reference = LabCatalog.reference(for: "vitaminD")
+        let lower = reference?.commonRange?.lowerBound ?? 30
+        let upper = reference?.commonRange?.upperBound ?? 100
+        let axisMax = upper * 1.3
+        let demoValue = 21.0
+
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(reference?.shortName ?? "Vit D")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                Spacer(minLength: 8)
+                HStack(spacing: 8) {
+                    Text(verbatim: "\(demoValue.compactFormatted) \(reference?.unit ?? "ng/mL")")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Editorial.ink(colorScheme))
+                    EditorialTag(verbatim: LabStatus.low.label, kind: .bad)
+                }
+            }
+            RangeBar(
+                lower: lower,
+                upper: upper,
+                min: 0,
+                max: axisMax,
+                value: demoValue,
+                accessibilityLabel: Text(verbatim: "\(reference?.name ?? "Vitamin D") \(demoValue.compactFormatted) \(reference?.unit ?? "ng/mL"), \(LabStatus.low.label)")
+            )
+            Text("Every value you track will look like this — no decoding needed.")
+                .font(.system(size: 11, weight: .regular))
+                .foregroundStyle(Editorial.muted(colorScheme))
+        }
+        .padding(16)
+        .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private func welcomeBullet(_ text: LocalizedStringKey) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text("✓")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Editorial.tagGood(colorScheme))
+                .accessibilityHidden(true)
+            Text(text)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(Editorial.ink(colorScheme))
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 8)
     }
 
     private var aboutYouStep: some View {
@@ -160,7 +223,7 @@ struct OnboardingView: View {
             VStack(spacing: 14) {
                 TextField("Name", text: $name)
                     .padding(12)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 DatePicker(
                     "Date of birth",
@@ -172,7 +235,7 @@ struct OnboardingView: View {
                     displayedComponents: .date
                 )
                 .padding(12)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 Picker("Biological sex", selection: $sex) {
                     ForEach(BiologicalSex.allCases) { option in
@@ -212,7 +275,7 @@ struct OnboardingView: View {
                         .minimumScaleFactor(0.7)
                 }
                 .padding(12)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 HStack {
                     Text("Weight")
@@ -229,7 +292,7 @@ struct OnboardingView: View {
                         .minimumScaleFactor(0.7)
                 }
                 .padding(12)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
         }
     }
@@ -391,7 +454,7 @@ struct OnboardingView: View {
                 HStack(spacing: 10) {
                     TextField("Add another…", text: $customSupplementText)
                         .padding(12)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .onSubmit { addCustomSupplement() }
                     Button {
                         addCustomSupplement()
@@ -443,7 +506,9 @@ struct OnboardingView: View {
         ScrollView {
             VStack(spacing: 24) {
                 Text("Your Starting Point")
-                    .font(.title2.bold())
+                    .font(.system(size: 26, weight: .regular))
+                    .tracking(-0.4)
+                    .foregroundStyle(Editorial.ink(colorScheme))
                     .padding(.top, 24)
 
                 QuizPreviewRing(percent: completenessPercent)
@@ -640,6 +705,8 @@ private struct QuizStepScaffold<Content: View>: View {
     var onSkip: (() -> Void)?
     @ViewBuilder var content: () -> Content
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         // Scrollable header + content, with Continue/Skip pinned in a
         // `.safeAreaInset` footer below the scroll view rather than living
@@ -661,26 +728,27 @@ private struct QuizStepScaffold<Content: View>: View {
             VStack(spacing: 22) {
                 ZStack {
                     Circle()
-                        .fill(.ultraThinMaterial)
+                        .fill(Editorial.insetCard(colorScheme))
                         .overlay(
-                            Circle().strokeBorder(Glass.bevelStroke, lineWidth: 1)
+                            Circle().strokeBorder(Glass.bevelStroke(for: colorScheme), lineWidth: 1)
                         )
-                        .shadow(color: .black.opacity(0.14), radius: 10, x: 0, y: 5)
                         .frame(width: 78, height: 78)
 
                     Image(systemName: systemImage)
-                        .font(.system(size: 34, weight: .semibold))
-                        .foregroundStyle(Glass.accentGradient)
+                        .font(.system(size: 34, weight: .medium))
+                        .foregroundStyle(Editorial.ink(colorScheme))
                 }
                 .padding(.top, 20)
 
                 VStack(spacing: 6) {
                     Text(title)
-                        .font(.title2.bold())
+                        .font(.system(size: 26, weight: .regular))
+                        .tracking(-0.4)
+                        .foregroundStyle(Editorial.ink(colorScheme))
                         .multilineTextAlignment(.center)
                     Text(subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(Editorial.muted(colorScheme))
                         .multilineTextAlignment(.center)
                 }
                 .padding(.horizontal, 12)
@@ -697,13 +765,13 @@ private struct QuizStepScaffold<Content: View>: View {
                 if let onSkip {
                     Button("Skip", action: onSkip)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Editorial.muted(colorScheme))
                 }
             }
             .padding(.horizontal, 24)
             .padding(.top, 12)
             .padding(.bottom, 20)
-            .background(.ultraThinMaterial)
+            .background(Editorial.canvas(colorScheme))
             .transaction { $0.animation = nil }
         }
     }
@@ -716,6 +784,8 @@ private struct SelectableChip: View {
     var systemImage: String?
     let isSelected: Bool
     let action: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
 
     init(title: String, systemImage: String? = nil, isSelected: Bool, action: @escaping () -> Void) {
         self.title = title
@@ -744,16 +814,16 @@ private struct SelectableChip: View {
             .font(.subheadline.weight(.medium))
             .padding(.horizontal, 14)
             .padding(.vertical, 9)
-            .foregroundStyle(isSelected ? .white : .primary)
+            .foregroundStyle(isSelected ? .white : Editorial.ink(colorScheme))
             .background {
                 if isSelected {
                     Capsule().fill(Glass.accentGradient)
                 } else {
-                    Capsule().fill(.ultraThinMaterial)
+                    Capsule().fill(Editorial.canvas(colorScheme))
                 }
             }
             .overlay(
-                Capsule().strokeBorder(isSelected ? AnyShapeStyle(Color.clear) : AnyShapeStyle(Glass.bevelStroke), lineWidth: 1)
+                Capsule().strokeBorder(isSelected ? AnyShapeStyle(Color.clear) : AnyShapeStyle(Glass.bevelStroke(for: colorScheme)), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -832,22 +902,25 @@ private struct FlowLayout: Layout {
 private struct QuizPreviewRing: View {
     let percent: Int
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.primary.opacity(0.08), lineWidth: 9)
+                .stroke(Editorial.hairline(colorScheme), lineWidth: 9)
             Circle()
                 .trim(from: 0, to: max(0.02, CGFloat(percent) / 100))
                 .stroke(Glass.accentGradient, style: StrokeStyle(lineWidth: 9, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             VStack(spacing: 0) {
                 Text("\(percent)%")
-                    .font(.title3.bold())
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(Editorial.ink(colorScheme))
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
                 Text("Profile")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Editorial.muted(colorScheme))
             }
         }
         .accessibilityElement(children: .ignore)

@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 enum AppTab: Hashable {
-    case dashboard, reports, review, trends, more
+    case dashboard, reports, review, trends, more, schedule
 }
 
 struct ContentView: View {
@@ -12,32 +12,74 @@ struct ContentView: View {
     @StateObject private var lock = AppLock()
     @State private var showingOnboarding = false
     @State private var selectedTab: AppTab = .dashboard
+    /// Presents `ReviewScreen` as a full-screen cover — Review is no longer
+    /// a `TabView` page (see `AppTab`'s doc comment below), so both the
+    /// dashboard's score header and the widget's `gemocode://review` deep
+    /// link route through `presentReview()` instead of switching tabs.
+    @State private var showingReview = false
+
+    /// Bottom pill-tab-bar order (Today / Markers / Reports / Schedule /
+    /// More), mapped to the `Int` tags `PillTabBar` expects. `.review` is
+    /// deliberately absent from this list — kept on `AppTab` itself only
+    /// for source compatibility.
+    private static let tabBarOrder: [AppTab] = [.dashboard, .trends, .reports, .schedule, .more]
+
+    private var tabBarSelection: Binding<Int> {
+        Binding(
+            get: { Self.tabBarOrder.firstIndex(of: selectedTab) ?? 0 },
+            set: { index in
+                guard Self.tabBarOrder.indices.contains(index) else { return }
+                selectedTab = Self.tabBarOrder[index]
+            }
+        )
+    }
+
+    private var tabBarItems: [(label: LocalizedStringKey, icon: String, tag: Int)] {
+        [
+            (label: "Today", icon: "house.fill", tag: 0),
+            (label: "Markers", icon: "chart.line.uptrend.xyaxis", tag: 1),
+            (label: "Reports", icon: "doc.text.fill", tag: 2),
+            (label: "Schedule", icon: "calendar.badge.clock", tag: 3),
+            (label: "More", icon: "ellipsis.circle.fill", tag: 4),
+        ]
+    }
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            DashboardView(onOpenReview: { selectedTab = .review })
-                .tabItem { Label("Dashboard", systemImage: "house.fill") }
+            DashboardView(onOpenReview: presentReview)
+                .tabItem { Label("Today", systemImage: "house.fill") }
+                .toolbar(.hidden, for: .tabBar)
                 .tag(AppTab.dashboard)
+            TrendsView()
+                .tabItem { Label("Markers", systemImage: "chart.line.uptrend.xyaxis") }
+                .toolbar(.hidden, for: .tabBar)
+                .tag(AppTab.trends)
             ReportsListView()
                 .tabItem { Label("Reports", systemImage: "doc.text.fill") }
+                .toolbar(.hidden, for: .tabBar)
                 .tag(AppTab.reports)
-            NavigationStack { ReviewScreen() }
-                .tabItem { Label("Review", systemImage: "heart.text.square.fill") }
-                .tag(AppTab.review)
-            TrendsView()
-                .tabItem { Label("Trends", systemImage: "chart.line.uptrend.xyaxis") }
-                .tag(AppTab.trends)
+            NavigationStack { RetestScheduleView() }
+                .tabItem { Label("Schedule", systemImage: "calendar.badge.clock") }
+                .toolbar(.hidden, for: .tabBar)
+                .tag(AppTab.schedule)
             MoreView()
                 .tabItem { Label("More", systemImage: "ellipsis.circle.fill") }
+                .toolbar(.hidden, for: .tabBar)
                 .tag(AppTab.more)
         }
-        .tint(.teal)
+        .tint(Editorial.accent(.light))
         .environmentObject(lock)
+        .safeAreaInset(edge: .bottom) {
+            PillTabBar(items: tabBarItems, selection: tabBarSelection)
+                .padding(.horizontal, 24)
+        }
         .onOpenURL { url in
-            // Deep link from the home-screen widget (gemocode://review).
+            // Deep link from the home-screen widget (gemocode://review) —
+            // host strings are the widget's contract with the app and must
+            // not change.
             guard url.scheme == "gemocode" else { return }
             switch url.host {
-            case "review": selectedTab = .review
+            case "review": presentReview()
             case "trends": selectedTab = .trends
             default: break
             }
@@ -60,11 +102,22 @@ struct ContentView: View {
                 showingOnboarding = false
             }
         }
+        .fullScreenCover(isPresented: $showingReview) {
+            NavigationStack { ReviewScreen() }
+        }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .background {
                 lock.lockOnBackground(lockEnabled: appLockEnabled)
             }
         }
+    }
+
+    /// Selects the Today tab and presents `ReviewScreen` as a full-screen
+    /// cover — the shared target for the dashboard's score header tap and
+    /// the widget's `gemocode://review` deep link.
+    private func presentReview() {
+        selectedTab = .dashboard
+        showingReview = true
     }
 }
 

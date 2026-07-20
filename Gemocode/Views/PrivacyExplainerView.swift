@@ -9,39 +9,41 @@ import SwiftUI
 /// including the specific numbers behind them) when the user opts in, and
 /// this screen says so rather than pretending nothing leaves.
 struct PrivacyExplainerView: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 heroCard
 
-                section(title: "What's Stored", systemImage: "internaldrive", tint: .teal) {
+                section(title: "What's Stored", systemImage: "internaldrive", tint: Editorial.ink(colorScheme)) {
                     bullet("Reports, lab results, vitals, medications, symptoms, appointments, and goals all live in an on-device SwiftData database.")
                     bullet("There's no Gemocode account, server, or sync. Nothing is uploaded automatically — ever.")
                 }
 
-                section(title: "What's Protected", systemImage: "lock.shield", tint: .blue) {
+                section(title: "What's Protected", systemImage: "lock.shield", tint: Editorial.accent(colorScheme)) {
                     bullet("An optional app passcode — plus Face ID or Touch ID where your device supports it — keeps the app locked when you step away.")
                     bullet("Backups you export are encrypted with AES-GCM using a key derived from a passphrase only you know. Gemocode can't open a backup without it, and neither can anyone else.")
                 }
 
-                section(title: "What Leaves the Device — Only When You Ask", systemImage: "arrow.up.right.square", tint: .orange) {
+                section(title: "What Leaves the Device — Only When You Ask", systemImage: "arrow.up.right.square", tint: Editorial.tagWarn(colorScheme)) {
                     bullet("The AI Summary feature in Profile & Settings is opt-in and off by default. When you tap Generate, Gemocode sends the health review it already built for you — your score, findings, and trends, including the specific lab and vital values behind them — to Anthropic's API, using your own API key.")
                     bullet("Your name, date of birth, blood type, allergies, Medical ID, and original documents are never included in that request.")
                     bullet("This is the only network call Gemocode ever makes. Leave the API key blank to keep the app fully offline.")
                 }
 
-                section(title: "What Never Leaves", systemImage: "shield.lefthalf.filled", tint: .green) {
+                section(title: "What Never Leaves", systemImage: "shield.lefthalf.filled", tint: Editorial.tagGood(colorScheme)) {
                     bullet("Attachments — scanned photos and PDFs of your reports — are never transmitted anywhere by the app itself.")
                     bullet("Your Medical ID is for on-device viewing. It only leaves your phone if you personally tap Share on that screen or export a backup — Gemocode never sends it on its own.")
                 }
 
-                section(title: "Erasing Everything", systemImage: "trash", tint: .red) {
+                section(title: "Erasing Everything", systemImage: "trash", tint: Editorial.tagBad(colorScheme)) {
                     bullet("Profile & Settings → Data → Erase All Data removes every record from this device immediately. This can't be undone, so export a backup first if you want to keep a copy.")
                 }
 
                 Text("This screen describes Gemocode's current behavior. If that ever changes, this page — and the disclaimers throughout the app — change with it.")
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Editorial.muted(colorScheme))
                     .padding(.horizontal, 4)
             }
             .padding()
@@ -57,20 +59,22 @@ struct PrivacyExplainerView: View {
         VStack(spacing: 10) {
             Image(systemName: "lock.shield.fill")
                 .font(.system(size: 40))
-                .foregroundStyle(Glass.accentGradient)
+                .foregroundStyle(Editorial.ink(colorScheme))
                 .accessibilityHidden(true)
             Text("Your data stays on your phone")
-                .font(.title3.weight(.bold))
+                .font(.system(size: 20, weight: .regular))
+                .tracking(-0.3)
+                .foregroundStyle(Editorial.ink(colorScheme))
                 .multilineTextAlignment(.center)
             Text("Gemocode is local-first: everything you enter is stored on this device, not in the cloud.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(Editorial.muted(colorScheme))
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 6)
         .padding()
-        .glassCard()
+        .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .accessibilityElement(children: .combine)
     }
 
@@ -85,7 +89,7 @@ struct PrivacyExplainerView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Label(title, systemImage: systemImage)
-                .font(.subheadline.weight(.semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(tint)
             VStack(alignment: .leading, spacing: 8) {
                 content()
@@ -93,19 +97,23 @@ struct PrivacyExplainerView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .tintedGlassCard(tint)
+        .background(Editorial.canvas(colorScheme), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(Editorial.hairline(colorScheme), lineWidth: 1)
+        )
     }
 
     private func bullet(_ text: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Circle()
-                .fill(Color.secondary.opacity(0.5))
+                .fill(Editorial.muted(colorScheme).opacity(0.5))
                 .frame(width: 5, height: 5)
                 .padding(.top, 7)
                 .accessibilityHidden(true)
             Text(text)
-                .font(.subheadline)
-                .foregroundStyle(.primary)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(Editorial.ink(colorScheme))
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

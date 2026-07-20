@@ -4,6 +4,7 @@ import UIKit
 
 struct MedicationsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     @Query(sort: \Medication.startDate, order: .reverse) private var medications: [Medication]
 
     @State private var showingAdd = false
@@ -39,10 +40,10 @@ struct MedicationsView: View {
                         Section {
                             ForEach(interactions) { interaction in
                                 InteractionRow(interaction: interaction)
+                                    .ledgerRow()
                             }
                         } header: {
-                            Label("Possible Interactions", systemImage: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.orange)
+                            MicroLabel("Possible Interactions")
                         } footer: {
                             Text(MedicationInteractions.disclaimer)
                         }
@@ -50,12 +51,13 @@ struct MedicationsView: View {
                         .listRowSeparator(.hidden)
                     }
                     if !activeMedications.isEmpty {
-                        Section("Active") {
+                        Section {
                             ForEach(activeMedications) { medication in
                                 Button {
                                     editingMedication = medication
                                 } label: {
                                     MedicationRow(medication: medication)
+                                        .ledgerRow()
                                 }
                                 .buttonStyle(.plain)
                                 .contextMenu {
@@ -70,28 +72,34 @@ struct MedicationsView: View {
                             .onDelete { offsets in
                                 delete(offsets, from: activeMedications)
                             }
+                        } header: {
+                            MicroLabel("Active")
                         }
                         .listRowBackground(GlassRowBackground())
                         .listRowSeparator(.hidden)
                     }
                     if !pastMedications.isEmpty {
-                        Section("Past") {
+                        Section {
                             ForEach(pastMedications) { medication in
                                 Button {
                                     editingMedication = medication
                                 } label: {
                                     MedicationRow(medication: medication)
+                                        .ledgerRow()
                                 }
                                 .buttonStyle(.plain)
                             }
                             .onDelete { offsets in
                                 delete(offsets, from: pastMedications)
                             }
+                        } header: {
+                            MicroLabel("Past")
                         }
                         .listRowBackground(GlassRowBackground())
                         .listRowSeparator(.hidden)
                     }
                 }
+                .listStyle(.plain)
             }
         }
         .ambientScreen()
@@ -101,6 +109,10 @@ struct MedicationsView: View {
                 showingAdd = true
             } label: {
                 Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                    .frame(width: 28, height: 28)
+                    .overlay(Circle().strokeBorder(Editorial.controlBorder(colorScheme), lineWidth: 1))
             }
             .accessibilityLabel("Add medication")
         }
@@ -121,33 +133,31 @@ struct MedicationsView: View {
 struct InteractionRow: View {
     let interaction: DrugInteraction
 
-    private var color: Color {
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var tagKind: TagKind {
         switch interaction.severity {
-        case .major: .red
-        case .moderate: .orange
-        case .minor: .yellow
+        case .major: .bad
+        case .moderate, .minor: .warn
         }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
-                Image(systemName: interaction.severity.systemImage)
-                    .foregroundStyle(color)
-                    .accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("\(interaction.drugA) + \(interaction.drugB)")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Editorial.ink(colorScheme))
                 Spacer()
-                StatusPill(text: interaction.severity.displayName, color: color)
+                EditorialTag(verbatim: interaction.severity.displayName, kind: tagKind)
             }
             Text(interaction.explanation)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Label(interaction.recommendation, systemImage: "arrow.turn.down.right")
-                .font(.caption)
-                .foregroundStyle(color)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(Editorial.muted(colorScheme))
+            Text(interaction.recommendation)
+                .font(.system(size: 11, weight: .regular))
+                .foregroundStyle(Editorial.muted(colorScheme))
         }
-        .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
     }
 }
@@ -155,26 +165,29 @@ struct InteractionRow: View {
 struct MedicationRow: View {
     let medication: Medication
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(medication.name)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Editorial.ink(colorScheme))
                 if medication.isActive, medication.reminderEnabled, let time = medication.reminderTime {
                     Label(time.formatted(date: .omitted, time: .shortened), systemImage: "bell.fill")
                         .font(.caption2)
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(Editorial.accent(colorScheme))
                 }
             }
             if !medication.dosage.isEmpty || !medication.frequency.isEmpty {
                 Text([medication.dosage, medication.frequency].filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(Editorial.muted(colorScheme))
             }
             if !medication.purpose.isEmpty {
                 Text(medication.purpose)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(Editorial.muted(colorScheme))
             }
             HStack(spacing: 4) {
                 Text("Since \(medication.startDate.formatted(date: .abbreviated, time: .omitted))")
@@ -182,10 +195,9 @@ struct MedicationRow: View {
                     Text("– \(endDate.formatted(date: .abbreviated, time: .omitted))")
                 }
             }
-            .font(.caption2)
-            .foregroundStyle(.tertiary)
+            .font(.system(size: 11, weight: .regular))
+            .foregroundStyle(Editorial.muted(colorScheme))
         }
-        .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
     }
 }
@@ -450,6 +462,8 @@ private struct SuggestionChip: View {
     let isSelected: Bool
     let action: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         Button {
             SheetHaptics.selection()
@@ -460,14 +474,14 @@ private struct SuggestionChip: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
                 .background(.ultraThinMaterial, in: Capsule())
-                .background(isSelected ? Color.accentColor.opacity(0.22) : Color.clear, in: Capsule())
+                .background(isSelected ? Editorial.accent(colorScheme).opacity(0.22) : Color.clear, in: Capsule())
                 .overlay(
                     Capsule().strokeBorder(
-                        isSelected ? Color.accentColor.opacity(0.7) : Color.primary.opacity(0.12),
+                        isSelected ? Editorial.accent(colorScheme).opacity(0.7) : Editorial.controlBorder(colorScheme),
                         lineWidth: 1
                     )
                 )
-                .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                .foregroundStyle(isSelected ? Editorial.accent(colorScheme) : Editorial.ink(colorScheme))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)

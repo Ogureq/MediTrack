@@ -27,6 +27,7 @@ struct ProfileView: View {
 private struct ProfileForm: View {
     @Bindable var profile: HealthProfile
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     @AppStorage("appLockEnabled") private var appLockEnabled = false
     @AppStorage("lastHealthImportAt") private var lastHealthImportAt: Double = 0
     @AppStorage("health.writeBackEnabled") private var healthWriteBackEnabled = false
@@ -113,21 +114,23 @@ private struct ProfileForm: View {
                     }
                 }
             } header: {
-                Text("About You")
+                MicroLabel("About You")
             } footer: {
                 Text("Biological sex is used to pick the correct reference ranges for lab tests. Height enables BMI calculation.")
             }
             .listRowBackground(GlassRowBackground())
-            .listRowSeparator(.hidden)
+            .listRowSeparatorTint(Editorial.hairline(colorScheme))
 
-            Section("Medical Background") {
+            Section {
                 TextField("Allergies", text: $profile.allergies, axis: .vertical)
                     .lineLimit(1...3)
                 TextField("Existing conditions", text: $profile.conditions, axis: .vertical)
                     .lineLimit(1...3)
+            } header: {
+                MicroLabel("Medical Background")
             }
             .listRowBackground(GlassRowBackground())
-            .listRowSeparator(.hidden)
+            .listRowSeparatorTint(Editorial.hairline(colorScheme))
 
             Section {
                 TextField("Contact name", text: $profile.emergencyContactName)
@@ -140,12 +143,12 @@ private struct ProfileForm: View {
                     Text("No").tag("no")
                 }
             } header: {
-                Text("Emergency")
+                MicroLabel("Emergency")
             } footer: {
                 Text("Shown on your Medical ID card for quick reference in an emergency.")
             }
             .listRowBackground(GlassRowBackground())
-            .listRowSeparator(.hidden)
+            .listRowSeparatorTint(Editorial.hairline(colorScheme))
 
             Section {
                 Picker("Weight", selection: $weightUnitRaw) {
@@ -164,12 +167,12 @@ private struct ProfileForm: View {
                     }
                 }
             } header: {
-                Text("Units")
+                MicroLabel("Units")
             } footer: {
                 Text("Values are stored in metric and converted for display and entry.")
             }
             .listRowBackground(GlassRowBackground())
-            .listRowSeparator(.hidden)
+            .listRowSeparatorTint(Editorial.hairline(colorScheme))
 
             Section {
                 Picker("Theme", selection: $settings.themeChoice) {
@@ -183,12 +186,12 @@ private struct ProfileForm: View {
                     }
                 }
             } header: {
-                Text("Appearance & Language")
+                MicroLabel("Appearance & Language")
             } footer: {
                 Text("Language changes apply immediately to most screens; restart the app to apply everywhere.")
             }
             .listRowBackground(GlassRowBackground())
-            .listRowSeparator(.hidden)
+            .listRowSeparatorTint(Editorial.hairline(colorScheme))
 
             Section {
                 SecureField("Anthropic API key", text: $anthropicAPIKey)
@@ -198,12 +201,12 @@ private struct ProfileForm: View {
                         AISummaryService.apiKey = newValue
                     }
             } header: {
-                Text("AI Summary (Optional)")
+                MicroLabel("AI Summary (Optional)")
             } footer: {
                 Text("Add your own Anthropic API key to enable plain-language AI summaries of your Health Review. When you tap Generate, only the review text is sent to Anthropic — never your documents or database. The key is stored in the device Keychain. Leave empty to keep Gemocode fully offline.")
             }
             .listRowBackground(GlassRowBackground())
-            .listRowSeparator(.hidden)
+            .listRowSeparatorTint(Editorial.hairline(colorScheme))
 
             Section {
                 Button {
@@ -217,29 +220,32 @@ private struct ProfileForm: View {
                         } else {
                             Image(systemName: "chevron.right")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Editorial.muted(colorScheme))
                         }
                     }
                 }
-                .foregroundStyle(.primary)
+                .foregroundStyle(Editorial.ink(colorScheme))
                 if !premiumStore.isPremium {
                     HStack {
                         Label("Free AI reports used", systemImage: "sparkles")
                         Spacer()
                         Text("\(AIReportQuota.usedCount(defaults: .standard)) of \(AIReportQuota.freeLifetimeLimit)")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Editorial.muted(colorScheme))
                             .monospacedDigit()
                     }
                     .accessibilityElement(children: .combine)
                 }
+            } header: {
+                MicroLabel("Premium")
             } footer: {
                 Text("Unlimited AI health reports and future AI features. All core tracking stays free forever.")
             }
             .listRowBackground(GlassRowBackground())
-            .listRowSeparator(.hidden)
+            .listRowSeparatorTint(Editorial.hairline(colorScheme))
 
             Section {
                 Toggle("Require login", isOn: $appLockEnabled)
+                    .tint(Editorial.tagGood(colorScheme))
                 if appLockEnabled {
                     Button {
                         showingPasscodeSetup = true
@@ -256,8 +262,10 @@ private struct ProfileForm: View {
                     }
                     if AppLock.biometricsAvailable {
                         Toggle("Use \(AppLock.biometryLabel)", isOn: $biometricsEnabled)
+                            .tint(Editorial.tagGood(colorScheme))
                     }
                     Toggle("Stay signed in (Remember me)", isOn: $rememberMe)
+                        .tint(Editorial.tagGood(colorScheme))
                     Button {
                         lock.signOut()
                     } label: {
@@ -265,12 +273,12 @@ private struct ProfileForm: View {
                     }
                 }
             } header: {
-                Text("Login & Security")
+                MicroLabel("Login & Security")
             } footer: {
                 Text(securityFooter)
             }
             .listRowBackground(GlassRowBackground())
-            .listRowSeparator(.hidden)
+            .listRowSeparatorTint(Editorial.hairline(colorScheme))
 
             Section {
                 Button {
@@ -287,6 +295,7 @@ private struct ProfileForm: View {
                 }
                 .disabled(!HealthKitService.isAvailable || isImportingHealth)
                 Toggle("Save new vitals to Apple Health", isOn: $healthWriteBackEnabled)
+                    .tint(Editorial.tagGood(colorScheme))
                     .disabled(!HealthKitService.isAvailable)
                     .onChange(of: healthWriteBackEnabled) { _, isEnabled in
                         guard isEnabled else { return }
@@ -295,6 +304,7 @@ private struct ProfileForm: View {
                         }
                     }
                 Toggle("Automatic Sync from Apple Health", isOn: $automaticSyncEnabled)
+                    .tint(Editorial.tagGood(colorScheme))
                     .disabled(!HealthKitService.isAvailable)
                     .onChange(of: automaticSyncEnabled) { _, isEnabled in
                         Task {
@@ -334,12 +344,12 @@ private struct ProfileForm: View {
                     Label("Erase All Data", systemImage: "trash")
                 }
             } header: {
-                Text("Data")
+                MicroLabel("Data")
             } footer: {
                 Text("Health import copies your recent readings from Apple Health. When \"Save new vitals to Apple Health\" is on, vitals you log in Gemocode are also written to the Health app. Backups are a single passphrase-encrypted JSON file containing everything — including attachments — that you can store anywhere and restore later (reminders need re-enabling after a restore). Erasing removes all data from this device.")
             }
             .listRowBackground(GlassRowBackground())
-            .listRowSeparator(.hidden)
+            .listRowSeparatorTint(Editorial.hairline(colorScheme))
 
             Section {
                 NavigationLink {
@@ -350,12 +360,12 @@ private struct ProfileForm: View {
                 LabeledContent("Version", value: "1.0")
                 Text(HealthReview.disclaimer)
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Editorial.muted(colorScheme))
             } header: {
-                Text("About")
+                MicroLabel("About")
             }
             .listRowBackground(GlassRowBackground())
-            .listRowSeparator(.hidden)
+            .listRowSeparatorTint(Editorial.hairline(colorScheme))
         }
         .onAppear {
             anthropicAPIKey = AISummaryService.apiKey ?? ""
@@ -553,6 +563,7 @@ private struct ProfileForm: View {
 /// Requests and confirms a new passphrase before exporting a backup.
 private struct BackupExportPassphraseSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     let onExport: (String) async -> Void
 
     @State private var passphrase = ""
@@ -594,13 +605,13 @@ private struct BackupExportPassphraseSheet: View {
                     }
                 } footer: {
                     if let error {
-                        Text(error).foregroundStyle(.red)
+                        Text(error).foregroundStyle(Editorial.tagBad(colorScheme))
                     } else {
                         Text("Choose a passphrase of at least \(Self.minimumLength) characters. You'll need it to restore this backup — Gemocode can't recover it if you forget it.")
                     }
                 }
                 .listRowBackground(GlassRowBackground())
-                .listRowSeparator(.hidden)
+                .listRowSeparatorTint(Editorial.hairline(colorScheme))
             }
             .ambientScreen()
             .navigationTitle("Encrypt Backup")
@@ -644,6 +655,7 @@ private struct BackupExportPassphraseSheet: View {
 /// staying open) on a wrong passphrase so the user can retry.
 private struct BackupRestorePassphraseSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     /// Returns an error message on failure, or `nil` on success.
     let attemptRestore: (String) async -> String?
 
@@ -676,13 +688,13 @@ private struct BackupRestorePassphraseSheet: View {
                     }
                 } footer: {
                     if let error {
-                        Text(error).foregroundStyle(.red)
+                        Text(error).foregroundStyle(Editorial.tagBad(colorScheme))
                     } else {
                         Text("Enter the passphrase you used when this backup was exported. Older, unencrypted backups don't need one — leave this blank and tap Restore.")
                     }
                 }
                 .listRowBackground(GlassRowBackground())
-                .listRowSeparator(.hidden)
+                .listRowSeparatorTint(Editorial.hairline(colorScheme))
             }
             .ambientScreen()
             .navigationTitle("Restore Backup")

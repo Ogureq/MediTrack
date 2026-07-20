@@ -4,9 +4,25 @@ import UIKit
 
 struct SymptomsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     @Query(sort: \SymptomEntry.date, order: .reverse) private var symptoms: [SymptomEntry]
 
     @State private var showingAdd = false
+
+    /// Splits the journal into "This Week" and "Earlier" the way 7o's ledger
+    /// is laid out — both derived from the entries' own `date`, nothing new
+    /// is computed or inferred about them.
+    private var recentCutoff: Date {
+        Calendar.current.date(byAdding: .day, value: -7, to: .now) ?? .now
+    }
+
+    private var thisWeekSymptoms: [SymptomEntry] {
+        symptoms.filter { $0.date >= recentCutoff }
+    }
+
+    private var earlierSymptoms: [SymptomEntry] {
+        symptoms.filter { $0.date < recentCutoff }
+    }
 
     var body: some View {
         Group {
@@ -22,17 +38,44 @@ struct SymptomsView: View {
                 }
             } else {
                 List {
-                    Section {
-                        ForEach(symptoms) { entry in
-                            SymptomLogRow(entry: entry)
+                    if !thisWeekSymptoms.isEmpty {
+                        Section {
+                            ForEach(thisWeekSymptoms) { entry in
+                                SymptomLogRow(entry: entry)
+                                    .ledgerRow()
+                            }
+                            .onDelete { offsets in
+                                delete(offsets, from: thisWeekSymptoms)
+                            }
+                        } header: {
+                            MicroLabel("This Week")
+                        } footer: {
+                            if earlierSymptoms.isEmpty {
+                                Text("Severity is your own 1–10 rating. Entries from the last two weeks feed into your Health Review.")
+                            }
                         }
-                        .onDelete(perform: delete)
-                    } footer: {
-                        Text("Severity is your own 1–10 rating. Entries from the last two weeks feed into your Health Review.")
+                        .listRowBackground(GlassRowBackground())
+                        .listRowSeparator(.hidden)
                     }
-                    .listRowBackground(GlassRowBackground())
-                    .listRowSeparator(.hidden)
+                    if !earlierSymptoms.isEmpty {
+                        Section {
+                            ForEach(earlierSymptoms) { entry in
+                                SymptomLogRow(entry: entry)
+                                    .ledgerRow()
+                            }
+                            .onDelete { offsets in
+                                delete(offsets, from: earlierSymptoms)
+                            }
+                        } header: {
+                            MicroLabel("Earlier")
+                        } footer: {
+                            Text("Severity is your own 1–10 rating. Entries from the last two weeks feed into your Health Review.")
+                        }
+                        .listRowBackground(GlassRowBackground())
+                        .listRowSeparator(.hidden)
+                    }
                 }
+                .listStyle(.plain)
             }
         }
         .ambientScreen()
@@ -42,15 +85,19 @@ struct SymptomsView: View {
                 showingAdd = true
             } label: {
                 Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                    .frame(width: 28, height: 28)
+                    .overlay(Circle().strokeBorder(Editorial.controlBorder(colorScheme), lineWidth: 1))
             }
             .accessibilityLabel("Log symptom")
         }
         .sheet(isPresented: $showingAdd) { AddSymptomSheet() }
     }
 
-    private func delete(at offsets: IndexSet) {
+    private func delete(_ offsets: IndexSet, from list: [SymptomEntry]) {
         for index in offsets {
-            modelContext.delete(symptoms[index])
+            modelContext.delete(list[index])
         }
     }
 }
@@ -71,7 +118,31 @@ func severityColor(_ severity: Int) -> Color {
 private struct SymptomLogRow: View {
     let entry: SymptomEntry
 
-    private var color: Color { severityColor(entry.severity) }
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var tagKind: TagKind {
+        switch entry.severity {
+        case ..<4: .good
+        case 4...6: .warn
+        default: .bad
+        }
+    }
+
+    private var barColor: Color {
+        switch tagKind {
+        case .good: Editorial.tagGood(colorScheme)
+        case .warn: Editorial.tagWarn(colorScheme)
+        case .bad: Editorial.tagBad(colorScheme)
+        }
+    }
+
+    private var severityLabel: LocalizedStringKey {
+        switch tagKind {
+        case .good: "Mild"
+        case .warn: "Moderate"
+        case .bad: "Severe"
+        }
+    }
 
     private var accessibilityText: String {
         var parts = ["\(entry.name), severity \(entry.severity) out of 10"]
@@ -81,35 +152,36 @@ private struct SymptomLogRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline) {
                 Text(entry.name)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Editorial.ink(colorScheme))
                 Spacer()
-                StatusPill(text: "\(entry.severity) / 10", color: color)
+                EditorialTag(severityLabel, kind: tagKind)
             }
-            HStack(spacing: 3) {
-                ForEach(0..<10, id: \.self) { dot in
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Editorial.hairline(colorScheme))
                     Capsule()
-                        .fill(dot < entry.severity ? color : Color.primary.opacity(0.1))
-                        .frame(height: 4)
+                        .fill(barColor)
+                        .frame(width: geometry.size.width * CGFloat(entry.severity) / 10)
                 }
             }
+            .frame(height: 4)
+            .accessibilityHidden(true)
             HStack(alignment: .firstTextBaseline) {
                 if !entry.notes.isEmpty {
                     Text(entry.notes)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 8)
                 Text(entry.date.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
+            .font(.system(size: 12, weight: .regular))
+            .foregroundStyle(Editorial.muted(colorScheme))
         }
-        .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityText)
     }
@@ -169,7 +241,7 @@ struct AddSymptomSheet: View {
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         Text("\(Int(severity))")
-                            .font(.system(size: 52, weight: .bold, design: .rounded))
+                            .font(.system(size: 52, weight: .bold))
                             .foregroundStyle(severityColor(Int(severity)))
                             .contentTransition(.numericText())
                             .accessibilityHidden(true)
@@ -293,6 +365,8 @@ private struct SuggestionChip: View {
     let isSelected: Bool
     let action: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         Button {
             SheetHaptics.selection()
@@ -303,14 +377,14 @@ private struct SuggestionChip: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
                 .background(.ultraThinMaterial, in: Capsule())
-                .background(isSelected ? Color.accentColor.opacity(0.22) : Color.clear, in: Capsule())
+                .background(isSelected ? Editorial.accent(colorScheme).opacity(0.22) : Color.clear, in: Capsule())
                 .overlay(
                     Capsule().strokeBorder(
-                        isSelected ? Color.accentColor.opacity(0.7) : Color.primary.opacity(0.12),
+                        isSelected ? Editorial.accent(colorScheme).opacity(0.7) : Editorial.controlBorder(colorScheme),
                         lineWidth: 1
                     )
                 )
-                .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                .foregroundStyle(isSelected ? Editorial.accent(colorScheme) : Editorial.ink(colorScheme))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)

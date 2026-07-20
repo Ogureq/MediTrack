@@ -7,6 +7,7 @@ import SwiftData
 /// when `QuarterlyReview.isDue(...)` is true.
 struct QuarterlyReviewView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
 
     @Query(sort: \ScoreSnapshot.date) private var snapshots: [ScoreSnapshot]
     @Query private var vitals: [VitalSample]
@@ -114,8 +115,7 @@ struct QuarterlyReviewView: View {
     private var scoreTrajectoryCard: some View {
         if let startScore = summary.startScore, let endScore = summary.endScore {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Score Trajectory")
-                    .font(.headline)
+                MicroLabel("Score Trajectory")
                 HStack(spacing: 14) {
                     scoreBubble(label: "Then", value: startScore)
                     Image(systemName: deltaSystemImage)
@@ -138,8 +138,7 @@ struct QuarterlyReviewView: View {
             .accessibilityLabel(scoreTrajectoryAccessibilityLabel(startScore: startScore, endScore: endScore))
         } else if let onlyScore = summary.startScore ?? summary.endScore {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Score Trajectory")
-                    .font(.headline)
+                MicroLabel("Score Trajectory")
                 Text("Only one score reading this quarter (\(onlyScore)) — trends will show once there's another to compare.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -162,14 +161,17 @@ struct QuarterlyReviewView: View {
         }
         .frame(width: 64, height: 64)
         .background(.ultraThinMaterial, in: Circle())
-        .overlay(Circle().strokeBorder(Glass.bevelStroke, lineWidth: 1))
+        .overlay(Circle().strokeBorder(Glass.bevelStroke(for: colorScheme), lineWidth: 1))
     }
 
+    /// Non-alarming by design (see `ChangeRow` below): a worsened score
+    /// reads as `tagWarn`, never `tagBad` — this is a wellness recap, not a
+    /// medical alert.
     private var deltaColor: Color {
-        guard let scoreDelta = summary.scoreDelta else { return .secondary }
-        if scoreDelta > 0 { return .teal }
-        if scoreDelta < 0 { return .orange }
-        return .secondary
+        guard let scoreDelta = summary.scoreDelta else { return Editorial.muted(colorScheme) }
+        if scoreDelta > 0 { return Editorial.tagGood(colorScheme) }
+        if scoreDelta < 0 { return Editorial.tagWarn(colorScheme) }
+        return Editorial.muted(colorScheme)
     }
 
     private var deltaSystemImage: String {
@@ -197,29 +199,25 @@ struct QuarterlyReviewView: View {
     private var whatChangedSection: some View {
         if !summary.vitalChanges.isEmpty || !summary.labChanges.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("What Changed")
-                    .font(.headline)
-                VStack(spacing: 10) {
-                    ForEach(Array(summary.vitalChanges.enumerated()), id: \.offset) { index, change in
-                        if index > 0 { Divider() }
+                MicroLabel("What Changed")
+                VStack(spacing: 0) {
+                    ForEach(Array(summary.vitalChanges.enumerated()), id: \.offset) { _, change in
                         ChangeRow(
                             title: change.type.displayName,
                             fromText: Units.formatted(change.firstValue, for: change.type),
                             toText: Units.formatted(change.lastValue, for: change.type),
                             direction: change.direction
                         )
+                        .ledgerRow()
                     }
-                    if !summary.vitalChanges.isEmpty && !summary.labChanges.isEmpty {
-                        Divider()
-                    }
-                    ForEach(Array(summary.labChanges.enumerated()), id: \.offset) { index, change in
-                        if index > 0 { Divider() }
+                    ForEach(Array(summary.labChanges.enumerated()), id: \.offset) { _, change in
                         ChangeRow(
                             title: change.name,
                             fromText: "\(change.previousValue.compactFormatted) \(change.unit)",
                             toText: "\(change.latestValue.compactFormatted) \(change.unit)",
                             direction: change.direction
                         )
+                        .ledgerRow()
                     }
                 }
                 .padding()
@@ -237,8 +235,7 @@ struct QuarterlyReviewView: View {
         let symptomFree = summary.symptomCount == 0
         if hasStreak || hasGoals || symptomFree {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Wins")
-                    .font(.headline)
+                MicroLabel("Wins")
                 VStack(alignment: .leading, spacing: 10) {
                     if hasStreak {
                         WinRow(
@@ -255,7 +252,7 @@ struct QuarterlyReviewView: View {
                 }
             }
             .padding()
-            .tintedGlassCard(.teal, cornerRadius: Glass.cardRadius)
+            .tintedGlassCard(Editorial.tagGood(colorScheme), cornerRadius: Glass.cardRadius)
         }
     }
 
@@ -265,13 +262,13 @@ struct QuarterlyReviewView: View {
     private var doctorQuestionsCard: some View {
         if !summary.doctorQuestions.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Questions for Your Doctor")
-                    .font(.headline)
-                VStack(alignment: .leading, spacing: 10) {
+                MicroLabel("Questions for Your Doctor")
+                VStack(spacing: 0) {
                     ForEach(summary.doctorQuestions, id: \.self) { question in
                         Label(question, systemImage: "checkmark.circle")
                             .font(.subheadline)
                             .accessibilityElement(children: .combine)
+                            .ledgerRow()
                     }
                 }
                 Text("These are prompts drawn from your own tracked numbers, not a diagnosis — bring them to your next visit.")
@@ -287,8 +284,8 @@ struct QuarterlyReviewView: View {
 
     private var disclaimerCard: some View {
         Text(QuarterlyReviewSummary.disclaimer)
-            .font(.footnote)
-            .foregroundStyle(.secondary)
+            .font(.system(size: 11))
+            .foregroundStyle(Editorial.muted(colorScheme))
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
             .glassCard(cornerRadius: 16)
@@ -311,51 +308,55 @@ struct QuarterlyReviewView: View {
 // MARK: - Rows
 
 /// One "what changed" row: a metric name, its before → after values, and a
-/// direction pill. Colors stay non-alarming — improved is teal, worsened is
-/// orange (never red), and a metric with no clear better/worse semantic
-/// (like weight) renders as a neutral "Changed" in secondary color.
+/// direction badge. Colors stay non-alarming — improved is `tagGood`,
+/// worsened is `tagWarn` (never `tagBad`/red), and a metric with no clear
+/// better/worse semantic (like weight) renders as a neutral "Changed" in
+/// muted text, with no tag at all.
 private struct ChangeRow: View {
     let title: String
     let fromText: String
     let toText: String
     let direction: Direction
 
-    private var color: Color {
-        switch direction {
-        case .improved: .teal
-        case .worsened: .orange
-        case .steady: .secondary
-        }
-    }
-
-    private var systemImage: String {
-        switch direction {
-        case .improved: "checkmark.circle.fill"
-        case .worsened: "exclamationmark.triangle.fill"
-        case .steady: "minus.circle.fill"
-        }
-    }
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: systemImage)
-                .foregroundStyle(color)
-                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Editorial.ink(colorScheme))
                 Text("\(fromText) → \(toText)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Editorial.muted(colorScheme))
             }
             Spacer()
-            Text(direction.label)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(color)
+            directionBadge
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title), \(fromText) to \(toText), \(direction.label)")
+    }
+
+    /// Non-alarming by design: `.improved` is the only tag-worthy state
+    /// (`.good`). `.worsened` still never renders as `.bad`/red — this is a
+    /// wellness recap, not a medical alert — so it gets `.warn` instead,
+    /// same as the original orange. `.steady` (a metric with no clear
+    /// better/worse semantic, like weight) stays plain muted text, matching
+    /// the "no forced tag for a neutral state" rule used elsewhere in this
+    /// redesign.
+    @ViewBuilder
+    private var directionBadge: some View {
+        switch direction {
+        case .improved:
+            EditorialTag(verbatim: direction.label, kind: .good)
+        case .worsened:
+            EditorialTag(verbatim: direction.label, kind: .warn)
+        case .steady:
+            Text(direction.label)
+                .font(.system(size: 12))
+                .foregroundStyle(Editorial.muted(colorScheme))
+        }
     }
 }
 

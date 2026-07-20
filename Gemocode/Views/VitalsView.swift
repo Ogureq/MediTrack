@@ -5,19 +5,46 @@ import UIKit
 
 struct VitalsView: View {
     @Query(sort: \VitalSample.date, order: .reverse) private var vitals: [VitalSample]
+    @Query private var profiles: [HealthProfile]
+
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var showingAdd = false
     @State private var cards: [VitalCardSummary] = []
     /// False until the first `.task(id:)` pass has populated `cards`. Gates
     /// the empty state so a brief, genuinely-empty `cards` array on first
-    /// appearance (before the cache is built) renders a blank grid instead
+    /// appearance (before the cache is built) renders a blank screen instead
     /// of flashing "No Vitals Logged" for a screen that actually has data.
     @State private var hasLoaded = false
+    /// The vital type the add sheet opens to. Defaults to `initialType`, but
+    /// the blood-pressure hero's own "Log blood pressure" button overrides it
+    /// to `.bloodPressure` regardless of what this view was constructed with.
+    @State private var sheetType: VitalType
 
     let initialType: VitalType
 
     init(initialType: VitalType = .weight) {
         self.initialType = initialType
+        _sheetType = State(initialValue: initialType)
+    }
+
+    private var bpCard: VitalCardSummary? {
+        cards.first { $0.type == .bloodPressure }
+    }
+
+    private var otherCards: [VitalCardSummary] {
+        cards.filter { $0.type != .bloodPressure }
+    }
+
+    /// BMI computed from the latest logged weight and the profile's stored
+    /// height — a pure, on-the-fly derivation (nothing new is stored) using
+    /// `AnalysisEngine.bmi`/`bmiCategory`, the same functions the health
+    /// review already relies on.
+    private var bmiSummary: (value: Double, category: (name: String, severity: Severity))? {
+        guard let heightCm = profiles.first?.heightCm, heightCm > 0,
+              let weightKg = vitals.first(where: { $0.type == .weight })?.value,
+              let bmi = AnalysisEngine.bmi(weightKg: weightKg, heightCm: heightCm) else { return nil }
+        return (bmi, AnalysisEngine.bmiCategory(bmi))
     }
 
     var body: some View {
@@ -34,17 +61,32 @@ struct VitalsView: View {
                 }
             } else {
                 ScrollView {
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                        ForEach(cards) { card in
-                            NavigationLink {
-                                VitalTypeDetailView(type: card.type)
-                            } label: {
-                                VitalMetricCard(card: card)
+                    VStack(alignment: .leading, spacing: 24) {
+                        if let bpCard {
+                            bloodPressureHero(bpCard)
+                        }
+
+                        if !otherCards.isEmpty || bmiSummary != nil {
+                            VStack(alignment: .leading, spacing: 0) {
+                                MicroLabel("Other Vitals")
+                                    .padding(.bottom, 8)
+                                ForEach(otherCards) { card in
+                                    NavigationLink {
+                                        VitalTypeDetailView(type: card.type)
+                                    } label: {
+                                        VitalLedgerRow(card: card)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                if let bmiSummary {
+                                    bmiRow(bmiSummary)
+                                }
                             }
-                            .buttonStyle(.plain)
                         }
                     }
-                    .padding(16)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 28)
                 }
             }
         }
@@ -52,6 +94,7 @@ struct VitalsView: View {
         .navigationTitle("Vitals")
         .toolbar {
             Button {
+                sheetType = initialType
                 showingAdd = true
             } label: {
                 Image(systemName: "plus")
@@ -59,7 +102,7 @@ struct VitalsView: View {
             .accessibilityLabel("Add vital")
         }
         .sheet(isPresented: $showingAdd) {
-            AddVitalSheet(initialType: initialType)
+            AddVitalSheet(initialType: sheetType)
         }
         .task(id: vitals.count) {
             cards = Self.buildCards(from: vitals)
@@ -85,9 +128,147 @@ struct VitalsView: View {
             )
         }
     }
+
+    // MARK: - Blood pressure hero
+
+    /// Featured blood-pressure block: the latest reading, its ACC/AHA
+    /// category tag, a zone `RangeBar` positioned by systolic pressure, and
+    /// the one prominent filled CTA on this screen ("Log blood pressure").
+    @ViewBuilder
+    private func bloodPressureHero(_ card: VitalCardSummary) -> some View {
+        let systolic = card.latest.value
+        let diastolic = card.latest.secondaryValue ?? systolic
+        let category = AnalysisEngine.bloodPressureCategory(systolic: systolic, diastolic: diastolic)
+        let bar = bpZones(systolic: systolic)
+        let whenText = card.latest.date.formatted(.relative(presentation: .named))
+
+        VStack(alignment: .leading, spacing: 10) {
+            MicroLabel(verbatim: String(format: String(localized: "%@ · %@"), VitalType.bloodPressure.displayName, whenText))
+
+            HStack(alignment: .lastTextBaseline, spacing: 10) {
+                HStack(alignment: .top, spacing: 0) {
+                    Text("\(Int(systolic.rounded()))")
+                    Text("/\(Int(diastolic.rounded()))")
+                        .foregroundStyle(Editorial.muted(colorScheme))
+                }
+                .font(.system(size: 44, weight: .regular))
+                .foregroundStyle(Editorial.ink(colorScheme))
+
+                EditorialTag(verbatim: category.displayName, kind: tagKind(for: category))
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                RangeBar(
+                    zones: bar.zones,
+                    marker: bar.marker,
+                    accessibilityLabel: Text(
+                        "\(VitalType.bloodPressure.displayName) \(Int(systolic.rounded()))/\(Int(diastolic.rounded())) \(VitalType.bloodPressure.unit), \(category.displayName)"
+                    )
+                )
+                HStack {
+                    Text("normal")
+                    Spacer()
+                    Text("elevated")
+                    Spacer()
+                    Text("stage 1")
+                    Spacer()
+                    Text("stage 2")
+                }
+                .font(.system(size: 10))
+                .foregroundStyle(Editorial.muted(colorScheme))
+            }
+
+            Text("ACC/AHA categories")
+                .font(.system(size: 11))
+                .foregroundStyle(Editorial.muted(colorScheme))
+
+            Button {
+                sheetType = .bloodPressure
+                showingAdd = true
+            } label: {
+                Text("Log blood pressure")
+            }
+            .buttonStyle(GlassProminentButtonStyle())
+            .padding(.top, 4)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Zone widths derived from the real ACC/AHA systolic thresholds (120,
+    /// 130, 140 mmHg) over a 90–180 mmHg axis, rather than eyeballed
+    /// percentages — keeps the bar's proportions medically meaningful. Only
+    /// three `RangeZoneKind` colors exist, so elevated/stage 1/stage 2 all
+    /// render as the same "out of range" tone; the marker position and the
+    /// axis captions below still make the finer distinction clear.
+    private func bpZones(systolic: Double) -> (zones: [(fraction: CGFloat, kind: RangeZoneKind)], marker: CGFloat) {
+        let axisMin = 90.0
+        let axisMax = 180.0
+        let span = axisMax - axisMin
+        func fraction(_ value: Double) -> CGFloat {
+            CGFloat(min(1, max(0, (value - axisMin) / span)))
+        }
+        let normalEnd = fraction(120)
+        let elevatedEnd = fraction(130)
+        let stage1End = fraction(140)
+        let zones: [(fraction: CGFloat, kind: RangeZoneKind)] = [
+            (normalEnd, .inRange),
+            (elevatedEnd - normalEnd, .out),
+            (stage1End - elevatedEnd, .out),
+            (1 - stage1End, .out),
+        ]
+        return (zones, fraction(systolic))
+    }
+
+    /// Matches the token spec: normal is the good tag, elevated/stage 1 read
+    /// as the cautionary amber tag, and stage 2/crisis read as the urgent
+    /// red tag.
+    private func tagKind(for category: BloodPressureCategory) -> TagKind {
+        switch category {
+        case .normal: .good
+        case .elevated, .stage1: .warn
+        case .stage2, .crisis: .bad
+        }
+    }
+
+    // MARK: - BMI row
+
+    private func tagKind(for severity: Severity) -> TagKind {
+        switch severity {
+        case .info: .good
+        case .attention: .warn
+        case .critical: .bad
+        }
+    }
+
+    private func bmiRow(_ summary: (value: Double, category: (name: String, severity: Severity))) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("BMI")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                Spacer()
+                HStack(spacing: 8) {
+                    Text(summary.value.compactFormatted)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Editorial.ink(colorScheme))
+                    EditorialTag(verbatim: summary.category.name, kind: tagKind(for: summary.category.severity))
+                }
+            }
+            RangeBar(
+                lower: 18.5,
+                upper: 25,
+                min: 15,
+                max: 40,
+                value: summary.value,
+                accessibilityLabel: Text("\(String(localized: "BMI")) \(summary.value.compactFormatted), \(summary.category.name)")
+            )
+        }
+        .ledgerRow()
+        .accessibilityElement(children: .combine)
+    }
 }
 
-// MARK: - Vital grid card
+// MARK: - Vital summary (pure model)
 
 /// Pure summary of one vital type's latest reading, previous reading (for
 /// the delta), and a short recent history (for the sparkline). Kept
@@ -102,28 +283,12 @@ private struct VitalCardSummary: Identifiable {
     var id: VitalType { type }
 }
 
-/// Per-vital-type tint used for the card label, sparkline stroke, and (when
-/// unambiguous) the delta. Distinct hue per type so a dense 2-column grid
-/// stays scannable.
-private func vitalTint(for type: VitalType) -> Color {
-    switch type {
-    case .bloodPressure: Color(red: 0x40 / 255, green: 0xC8 / 255, blue: 0xE0 / 255)
-    case .heartRate: Color(red: 0xFF / 255, green: 0x7A / 255, blue: 0x88 / 255)
-    case .oxygenSaturation: Color(red: 0x78 / 255, green: 0xBE / 255, blue: 0xFF / 255)
-    case .weight: Color(red: 0x7E / 255, green: 0xE8 / 255, blue: 0xB0 / 255)
-    case .temperature: Color(red: 0xFF / 255, green: 0xB2 / 255, blue: 0x66 / 255)
-    case .bloodGlucose: Color(red: 0xA8 / 255, green: 0x96 / 255, blue: 0xFF / 255)
-    case .respiratoryRate: Color(red: 0x63 / 255, green: 0xE6 / 255, blue: 0xBE / 255)
-    case .sleepHours: Color(red: 0x8E / 255, green: 0x8C / 255, blue: 0xFF / 255)
-    }
-}
-
-/// Change vs. the previous reading, colored conservatively: green only when
-/// the value moved from outside the type's healthy range measurably closer
-/// to (or into) it. Types with no defined healthy range — weight chief among
-/// them, since "lower" isn't inherently better or worse — and any reading
-/// that was already inside its range stay neutral gray rather than guessing
-/// at a value judgment `AnalysisEngine` doesn't make either.
+/// Change vs. the previous reading, colored conservatively: the good tag
+/// color only when the value moved from outside the type's healthy range
+/// measurably closer to (or into) it. Types with no defined healthy range —
+/// weight chief among them, since "lower" isn't inherently better or worse —
+/// and any reading that was already inside its range stay muted rather than
+/// guessing at a value judgment `AnalysisEngine` doesn't make either.
 private struct VitalDelta {
     let symbol: String
     let magnitude: String
@@ -131,7 +296,7 @@ private struct VitalDelta {
     let directionWord: String
 }
 
-private func vitalDelta(for card: VitalCardSummary) -> VitalDelta? {
+private func vitalDelta(for card: VitalCardSummary, colorScheme: ColorScheme) -> VitalDelta? {
     guard let previous = card.previous else { return nil }
     let latestDisplay = Units.display(card.latest.value, for: card.type)
     let previousDisplay = Units.display(previous.value, for: card.type)
@@ -153,13 +318,13 @@ private func vitalDelta(for card: VitalCardSummary) -> VitalDelta? {
     return VitalDelta(
         symbol: symbol,
         magnitude: abs(diff).compactFormatted,
-        color: deltaColor(type: card.type, previous: previous.value, latest: card.latest.value),
+        color: deltaColor(type: card.type, previous: previous.value, latest: card.latest.value, colorScheme: colorScheme),
         directionWord: directionWord
     )
 }
 
-private func deltaColor(type: VitalType, previous: Double, latest: Double) -> Color {
-    guard let range = type.healthyRange else { return .secondary }
+private func deltaColor(type: VitalType, previous: Double, latest: Double, colorScheme: ColorScheme) -> Color {
+    guard let range = type.healthyRange else { return Editorial.muted(colorScheme) }
 
     func distanceOutsideRange(_ value: Double) -> Double {
         if value < range.lowerBound { return range.lowerBound - value }
@@ -169,19 +334,23 @@ private func deltaColor(type: VitalType, previous: Double, latest: Double) -> Co
 
     let previousDistance = distanceOutsideRange(previous)
     let latestDistance = distanceOutsideRange(latest)
-    guard previousDistance > 1e-9, latestDistance < previousDistance - 1e-9 else { return .secondary }
-    return .green
+    guard previousDistance > 1e-9, latestDistance < previousDistance - 1e-9 else { return Editorial.muted(colorScheme) }
+    return Editorial.tagGood(colorScheme)
 }
 
-/// One metric card in the Vitals grid: uppercase tinted label, delta vs. the
-/// previous reading, big value + unit, a 6-point sparkline, and a relative
-/// "when" caption. Tapping the card (via the enclosing `NavigationLink`)
-/// drills into `VitalTypeDetailView` for that type's full history.
-private struct VitalMetricCard: View {
+// MARK: - Vital ledger row
+
+/// One flat ledger row in the "Other Vitals" list: type name, a muted
+/// caption combining the delta since the previous reading with a relative
+/// "updated" time, a small ink sparkline, and the value + unit. Tapping the
+/// row (via the enclosing `NavigationLink`) drills into
+/// `VitalTypeDetailView` for that type's full history.
+private struct VitalLedgerRow: View {
     let card: VitalCardSummary
 
-    private var tint: Color { vitalTint(for: card.type) }
-    private var delta: VitalDelta? { vitalDelta(for: card) }
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var delta: VitalDelta? { vitalDelta(for: card, colorScheme: colorScheme) }
 
     private var valueText: String {
         if card.type == .bloodPressure, let secondary = card.latest.secondaryValue {
@@ -198,6 +367,11 @@ private struct VitalMetricCard: View {
         "Updated \(card.latest.date.formatted(.relative(presentation: .named)))"
     }
 
+    private var secondaryCaption: String {
+        guard let delta else { return whenText }
+        return "\(delta.symbol) \(delta.magnitude) \(unitText) · \(whenText)"
+    }
+
     private var accessibilityText: String {
         var parts = ["\(card.type.displayName), \(valueText) \(unitText)"]
         if let delta {
@@ -208,45 +382,39 @@ private struct VitalMetricCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top) {
-                Text(card.type.displayName.uppercased())
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(tint)
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(card.type.displayName)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Editorial.ink(colorScheme))
                     .lineLimit(1)
-                Spacer(minLength: 4)
-                if let delta {
-                    Text("\(delta.symbol) \(delta.magnitude)")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(delta.color)
-                        .lineLimit(1)
-                }
-            }
-            HStack(alignment: .lastTextBaseline, spacing: 4) {
-                Text(valueText)
-                    .font(.system(size: 26, weight: .heavy, design: .rounded))
+                Text(secondaryCaption)
+                    .font(.system(size: 11))
+                    .foregroundStyle(delta?.color ?? Editorial.muted(colorScheme))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                Text(unitText)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
             }
+            Spacer(minLength: 8)
             sparkline
-                .frame(height: 26)
-            Text(whenText)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .lineLimit(1)
+                .frame(width: 60, height: 24)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(valueText)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text(unitText)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Editorial.muted(colorScheme))
+            }
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(cornerRadius: 16)
+        .ledgerRow()
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityText)
     }
 
     /// Decorative recent-history sparkline — hidden from accessibility since
-    /// the card's combined label already conveys value, delta, and date.
+    /// the row's own accessibility label already conveys value, delta, and
+    /// date.
     @ViewBuilder
     private var sparkline: some View {
         if card.sparklinePoints.count >= 2 {
@@ -256,9 +424,9 @@ private struct VitalMetricCard: View {
                     y: .value("Value", Units.display(sample.value, for: card.type))
                 )
                 .interpolationMethod(.monotone)
-                .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
+                .lineStyle(StrokeStyle(lineWidth: 1.4, lineCap: .round))
             }
-            .foregroundStyle(tint)
+            .foregroundStyle(Editorial.ink(colorScheme))
             .chartXAxis(.hidden)
             .chartYAxis(.hidden)
             .chartYScale(domain: .automatic(includesZero: false))
@@ -272,12 +440,10 @@ private struct VitalMetricCard: View {
 // MARK: - Per-type history (drill-down)
 
 /// Full history for one vital type: the trend chart and every logged
-/// reading with delete, reached by tapping a card in the `VitalsView` grid.
-/// This is the pre-redesign `VitalsView` body, scoped to a single `type`
-/// instead of driven by a picker, so no existing capability (chart, history,
-/// delete, add) is lost by the grid becoming the top-level browse screen.
+/// reading with delete, reached by tapping a row in the `VitalsView` ledger.
 private struct VitalTypeDetailView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     @Query private var allVitals: [VitalSample]
 
     let type: VitalType
@@ -314,31 +480,36 @@ private struct VitalTypeDetailView: View {
                         .padding(.vertical, 8)
                         .listRowSeparator(.hidden)
                 }
-                .listRowBackground(GlassRowBackground())
+                .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
             }
 
-            Section("History") {
+            Section {
                 ForEach(samples) { sample in
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(sample.date.formatted(date: .abbreviated, time: .shortened))
-                                .font(.subheadline)
+                                .font(.system(size: 14))
+                                .foregroundStyle(Editorial.ink(colorScheme))
                             if !sample.note.isEmpty {
                                 Text(sample.note)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(Editorial.muted(colorScheme))
                             }
                         }
                         Spacer()
                         Text(sample.formattedValue)
-                            .font(.subheadline.weight(.semibold))
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(Editorial.ink(colorScheme))
                     }
+                    .ledgerRow()
                     .accessibilityElement(children: .combine)
                 }
                 .onDelete { offsets in deleteSamples(samples, at: offsets) }
+            } header: {
+                MicroLabel("History")
             }
-            .listRowBackground(GlassRowBackground())
+            .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
         }
         .ambientScreen()
@@ -366,7 +537,7 @@ private struct VitalTypeDetailView: View {
                     yStart: .value("Range low", range.lowerBound),
                     yEnd: .value("Range high", range.upperBound)
                 )
-                .foregroundStyle(.green.opacity(0.08))
+                .foregroundStyle(Editorial.zoneIn(colorScheme).opacity(0.5))
             }
             ForEach(ascending) { sample in
                 LineMark(
@@ -375,10 +546,12 @@ private struct VitalTypeDetailView: View {
                     series: .value("Series", "primary")
                 )
                 .interpolationMethod(.monotone)
+                .foregroundStyle(Editorial.ink(colorScheme))
                 PointMark(
                     x: .value("Date", sample.date),
                     y: .value("Value", Units.display(sample.value, for: type))
                 )
+                .foregroundStyle(Editorial.ink(colorScheme))
             }
             if type == .bloodPressure {
                 ForEach(ascending.filter { $0.secondaryValue != nil }) { sample in
@@ -387,9 +560,23 @@ private struct VitalTypeDetailView: View {
                         y: .value("Diastolic", sample.secondaryValue ?? 0),
                         series: .value("Series", "secondary")
                     )
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Editorial.muted(colorScheme))
                     .lineStyle(StrokeStyle(lineWidth: 2, dash: [4, 3]))
                 }
+            }
+        }
+        .chartXAxis {
+            AxisMarks { _ in
+                AxisGridLine().foregroundStyle(Editorial.hairline(colorScheme))
+                AxisTick().foregroundStyle(Editorial.muted(colorScheme))
+                AxisValueLabel().foregroundStyle(Editorial.muted(colorScheme))
+            }
+        }
+        .chartYAxis {
+            AxisMarks { _ in
+                AxisGridLine().foregroundStyle(Editorial.hairline(colorScheme))
+                AxisTick().foregroundStyle(Editorial.muted(colorScheme))
+                AxisValueLabel().foregroundStyle(Editorial.muted(colorScheme))
             }
         }
         .chartYAxisLabel(Units.label(for: type))
@@ -619,6 +806,8 @@ private struct VitalTypeChip: View {
     let isSelected: Bool
     let action: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         Button(action: action) {
             VStack(spacing: 6) {
@@ -629,7 +818,7 @@ private struct VitalTypeChip: View {
                     .background(
                         Circle().fill(isSelected ? AnyShapeStyle(Glass.accentGradient) : AnyShapeStyle(.ultraThinMaterial))
                     )
-                    .overlay(Circle().strokeBorder(Glass.bevelStroke, lineWidth: 1))
+                    .overlay(Circle().strokeBorder(Glass.bevelStroke(for: colorScheme), lineWidth: 1))
                 Text(type.displayName)
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(isSelected ? .primary : .secondary)

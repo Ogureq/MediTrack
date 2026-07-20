@@ -6,6 +6,8 @@ struct MedicalIDView: View {
     @Query(sort: \Medication.startDate, order: .reverse) private var medications: [Medication]
     @Query(sort: \VitalSample.date, order: .reverse) private var vitals: [VitalSample]
 
+    @Environment(\.colorScheme) private var colorScheme
+
     private var profile: HealthProfile? { profiles.first }
 
     private var activeMedications: [Medication] {
@@ -26,12 +28,13 @@ struct MedicalIDView: View {
         ScrollView {
             VStack(spacing: 16) {
                 heroCard
-                infoRowsCard
                 allergiesSection
+                medicationsSection
+                conditionsSection
                 emergencyContactCard
                 Text("Keep this at hand in an emergency — and consider adding it to Apple Health's Medical ID, which can appear on your Lock Screen.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Editorial.muted(colorScheme))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 8)
             }
@@ -60,38 +63,74 @@ struct MedicalIDView: View {
         return String(letters).uppercased()
     }
 
+    /// Small identity facts rendered as outlined pills below the name —
+    /// blood type, a combined height/weight reading, and organ-donor status
+    /// (shown only when it's an affirmative "yes", matching how the
+    /// allergies list only ever states what *does* apply).
+    private var identityChips: [String] {
+        var chips: [String] = []
+        if let bloodType = profile?.bloodType, !bloodType.isEmpty {
+            chips.append(String(localized: "\(bloodType) blood"))
+        }
+        let heightPart = profile?.heightCm.map { "\($0.compactFormatted) cm" }
+        let weightPart = latestWeightSample?.formattedValue
+        let bodyParts = [heightPart, weightPart].compactMap { $0 }
+        if !bodyParts.isEmpty {
+            chips.append(bodyParts.joined(separator: " · "))
+        }
+        if profile?.organDonorStatus == "yes" {
+            chips.append(String(localized: "Organ donor"))
+        }
+        return chips
+    }
+
     private var heroCard: some View {
-        HStack(spacing: 14) {
-            avatarView
-            VStack(alignment: .leading, spacing: 2) {
-                if let profile, !profile.name.isEmpty {
-                    Text(profile.name)
-                        .font(.title3.weight(.bold))
-                } else {
-                    Text("Add your name in Profile")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-                if let dateOfBirth = profile?.dateOfBirth {
-                    Group {
-                        if let age = profile?.age {
-                            Text("\(dateOfBirth.formatted(date: .abbreviated, time: .omitted)) · \(age) years old")
-                        } else {
-                            Text(dateOfBirth.formatted(date: .abbreviated, time: .omitted))
-                        }
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 14) {
+                avatarView
+                VStack(alignment: .leading, spacing: 2) {
+                    if let profile, !profile.name.isEmpty {
+                        Text(profile.name)
+                            .font(.system(size: 18, weight: .medium))
+                            .tracking(-0.2)
+                            .foregroundStyle(Editorial.ink(colorScheme))
+                    } else {
+                        Text("Add your name in Profile")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Editorial.muted(colorScheme))
                     }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    if let dateOfBirth = profile?.dateOfBirth {
+                        Group {
+                            if let age = profile?.age {
+                                Text("\(dateOfBirth.formatted(date: .abbreviated, time: .omitted)) · \(age) years old")
+                            } else {
+                                Text(dateOfBirth.formatted(date: .abbreviated, time: .omitted))
+                            }
+                        }
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(Editorial.muted(colorScheme))
+                    }
                 }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 8)
-            if let bloodType = profile?.bloodType, !bloodType.isEmpty {
-                bloodTypeChip(bloodType)
+
+            if !identityChips.isEmpty {
+                FlowLayout(spacing: 8) {
+                    ForEach(identityChips, id: \.self) { chip in
+                        Text(chip)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Editorial.ink(colorScheme))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Editorial.canvas(colorScheme), in: Capsule())
+                            .overlay(Capsule().strokeBorder(Editorial.controlBorder(colorScheme), lineWidth: 1))
+                    }
+                }
             }
         }
-        .padding()
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard()
+        .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .accessibilityElement(children: .combine)
     }
 
@@ -109,7 +148,7 @@ struct MedicalIDView: View {
                         endPoint: .bottomTrailing
                     )
                 )
-                .frame(width: 56, height: 56)
+                .frame(width: 52, height: 52)
             if let initials, !initials.isEmpty {
                 Text(initials)
                     .font(.system(size: 18, weight: .bold))
@@ -121,70 +160,6 @@ struct MedicalIDView: View {
             }
         }
         .accessibilityHidden(true)
-    }
-
-    private func bloodTypeChip(_ value: String) -> some View {
-        VStack(spacing: 2) {
-            Text(value)
-                .font(.system(size: 26, weight: .heavy))
-                .foregroundStyle(.red)
-            Text("BLOOD")
-                .font(.system(size: 9, weight: .bold))
-                .tracking(0.8)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .tintedGlassCard(.red, cornerRadius: 14)
-    }
-
-    // MARK: - Info rows
-
-    private var infoRows: [(label: String, value: String)] {
-        var rows: [(String, String)] = []
-        if let heightCm = profile?.heightCm {
-            rows.append((String(localized: "Height"), "\(heightCm.compactFormatted) cm"))
-        }
-        if let latestWeightSample {
-            rows.append((String(localized: "Weight"), latestWeightSample.formattedValue))
-        }
-        if let conditions = profile?.conditions, !conditions.isEmpty {
-            rows.append((String(localized: "Conditions"), conditions))
-        }
-        if !activeMedicationNames.isEmpty {
-            rows.append((String(localized: "Medications"), activeMedicationNames))
-        }
-        if let status = profile?.organDonorStatus, !status.isEmpty {
-            rows.append((String(localized: "Organ donor"), status == "yes" ? String(localized: "Yes") : String(localized: "No")))
-        }
-        return rows
-    }
-
-    @ViewBuilder
-    private var infoRowsCard: some View {
-        if !infoRows.isEmpty {
-            VStack(spacing: 0) {
-                ForEach(Array(infoRows.enumerated()), id: \.offset) { index, row in
-                    if index > 0 {
-                        Divider().opacity(0.3)
-                    }
-                    HStack {
-                        Text(row.label)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text(row.value)
-                            .font(.subheadline.weight(.semibold))
-                            .multilineTextAlignment(.trailing)
-                    }
-                    .padding(.vertical, 8)
-                    .accessibilityElement(children: .combine)
-                }
-            }
-            .padding()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .glassCard()
-        }
     }
 
     // MARK: - Allergies
@@ -201,26 +176,98 @@ struct MedicalIDView: View {
     private var allergiesSection: some View {
         if !allergyChips.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
+                // Deliberately not the shared `MicroLabel` component: allergies
+                // are the one section that reads as urgent/red rather than the
+                // usual muted section-header color, matching the emergency-card
+                // mockup's red "Allergies" header.
                 Text("ALLERGIES")
-                    .font(.system(size: 13, weight: .semibold))
-                    .tracking(0.4)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 10, weight: .semibold))
+                    .kerning(1.6)
+                    .textCase(.uppercase)
+                    .foregroundStyle(Editorial.tagBad(colorScheme))
                 FlowLayout(spacing: 8) {
                     ForEach(allergyChips, id: \.self) { allergy in
-                        Text(allergy)
-                            .font(.system(size: 12.5, weight: .semibold))
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                            .padding(.horizontal, 13)
-                            .padding(.vertical, 7)
-                            .foregroundStyle(.orange)
-                            .background(Color.orange.opacity(0.14), in: Capsule())
-                            .overlay(Capsule().strokeBorder(Color.orange.opacity(0.3), lineWidth: 1))
+                        EditorialTag(verbatim: allergy, kind: .bad)
                     }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Allergies: \(allergyChips.joined(separator: ", "))")
+        }
+    }
+
+    // MARK: - Medications
+
+    @ViewBuilder
+    private var medicationsSection: some View {
+        if !activeMedications.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                MicroLabel("Medications")
+                    .padding(.bottom, 6)
+                ForEach(activeMedications) { medication in
+                    medicationRow(medication)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func medicationRow(_ medication: Medication) -> some View {
+        let title = [medication.name, medication.dosage]
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        let sinceText = String(localized: "since \(medication.startDate.formatted(.dateTime.month(.abbreviated).year()))")
+        let subtitle = [medication.frequency, sinceText]
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+
+        return HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(Editorial.muted(colorScheme))
+                }
+            }
+            Spacer(minLength: 8)
+        }
+        .ledgerRow()
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - Conditions
+
+    private var conditionChips: [String] {
+        guard let conditions = profile?.conditions, !conditions.isEmpty else { return [] }
+        return conditions
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
+    @ViewBuilder
+    private var conditionsSection: some View {
+        if !conditionChips.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                MicroLabel("Conditions")
+                FlowLayout(spacing: 8) {
+                    ForEach(conditionChips, id: \.self) { condition in
+                        Text(condition)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Editorial.ink(colorScheme))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
+                            .overlay(Capsule().strokeBorder(Editorial.controlBorder(colorScheme), lineWidth: 1))
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Conditions: \(conditionChips.joined(separator: ", "))")
         }
     }
 
@@ -237,21 +284,19 @@ struct MedicalIDView: View {
     private var emergencyContactCard: some View {
         if let profile, !profile.emergencyContactName.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("EMERGENCY CONTACT")
-                    .font(.system(size: 13, weight: .semibold))
-                    .tracking(0.4)
-                    .foregroundStyle(.secondary)
+                MicroLabel("EMERGENCY CONTACT")
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(profile.emergencyContactName)
-                            .font(.subheadline.weight(.bold))
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(Editorial.ink(colorScheme))
                         let caption = [profile.emergencyContactRelation, profile.emergencyContactPhone]
                             .filter { !$0.isEmpty }
                             .joined(separator: " · ")
                         if !caption.isEmpty {
                             Text(caption)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(.system(size: 12, weight: .regular))
+                                .foregroundStyle(Editorial.muted(colorScheme))
                         }
                     }
                     Spacer()
@@ -259,31 +304,28 @@ struct MedicalIDView: View {
                         Link(destination: emergencyContactPhoneURL) {
                             Image(systemName: "phone.fill")
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.green)
-                                .frame(width: 40, height: 40)
-                                .background(Color.green.opacity(0.16), in: Circle())
-                                .overlay(Circle().strokeBorder(Color.green.opacity(0.35), lineWidth: 1))
+                                .foregroundStyle(.white)
+                                .frame(width: 34, height: 34)
+                                .background(Editorial.tagGood(colorScheme), in: Circle())
                         }
                         .accessibilityLabel("Call \(profile.emergencyContactName)")
                     }
                 }
                 .accessibilityElement(children: .combine)
             }
-            .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
-            .glassCard()
+            .ledgerRow()
         } else {
             HStack(spacing: 10) {
                 Image(systemName: "person.crop.circle.badge.plus")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Editorial.muted(colorScheme))
                     .accessibilityHidden(true)
                 Text("Add an emergency contact in Profile → Emergency")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Editorial.muted(colorScheme))
             }
-            .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
-            .glassCard()
+            .ledgerRow()
         }
     }
 

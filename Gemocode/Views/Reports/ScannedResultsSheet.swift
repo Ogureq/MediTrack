@@ -1,9 +1,12 @@
 import SwiftUI
+import SwiftData
 
 /// Lets the user review lab values recognized by `LabScanService` before
 /// adding them to the report being edited.
 struct ScannedResultsSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+    @Query private var profiles: [HealthProfile]
 
     let values: [ScannedLabValue]
     let onAdd: ([ScannedLabValue]) -> Void
@@ -29,38 +32,17 @@ struct ScannedResultsSheet: View {
                     List {
                         Section {
                             ForEach(values) { scanned in
-                                Button {
-                                    toggle(scanned.id)
-                                } label: {
-                                    HStack(spacing: 10) {
-                                        Image(systemName: selectedIDs.contains(scanned.id) ? "checkmark.circle.fill" : "circle")
-                                            .foregroundStyle(selectedIDs.contains(scanned.id) ? Color.accentColor : Color.secondary)
-                                            .accessibilityHidden(true)
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(scanned.reference.name)
-                                                .foregroundStyle(.primary)
-                                            Text("“\(scanned.sourceLine)”")
-                                                .font(.caption2)
-                                                .foregroundStyle(.tertiary)
-                                                .lineLimit(1)
-                                        }
-                                        Spacer()
-                                        Text("\(scanned.value.compactFormatted) \(scanned.reference.unit)")
-                                            .font(.subheadline.weight(.semibold))
-                                            .foregroundStyle(.primary)
-                                    }
-                                }
-                                .accessibilityElement(children: .combine)
-                                .accessibilityAddTraits(selectedIDs.contains(scanned.id) ? .isSelected : [])
+                                scannedValueRow(scanned)
                             }
                         } header: {
-                            Text("Detected Lab Values")
+                            MicroLabel("Detected Lab Values")
                         } footer: {
                             Text("Review each value against the original document before adding — text recognition can make mistakes.")
                         }
                         .listRowBackground(GlassRowBackground())
                         .listRowSeparator(.hidden)
                     }
+                    .listStyle(.plain)
                 }
             }
             .ambientScreen()
@@ -81,6 +63,72 @@ struct ScannedResultsSheet: View {
         }
     }
 
+    /// One ledger row per scanned value: selection indicator, name + value +
+    /// (when out of range) status tag on the first line, the range-bar
+    /// beneath it, and the original OCR line as a quoted caption — the same
+    /// "name, value, tag, bar" grammar used everywhere a lab value appears.
+    private func scannedValueRow(_ scanned: ScannedLabValue) -> some View {
+        let isSelected = selectedIDs.contains(scanned.id)
+        let sex = profiles.first?.sex
+        let range = scanned.reference.referenceRange(for: sex)
+        let status = AnalysisEngine.status(
+            value: scanned.value,
+            range: range,
+            criticalLow: scanned.reference.criticalLow,
+            criticalHigh: scanned.reference.criticalHigh
+        )
+
+        return Button {
+            toggle(scanned.id)
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 17))
+                    .foregroundStyle(isSelected ? Editorial.accent(colorScheme) : Editorial.controlBorder(colorScheme))
+                    .accessibilityHidden(true)
+                    .padding(.top, 1)
+
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(scanned.reference.name)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(Editorial.ink(colorScheme))
+                        Spacer(minLength: 8)
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text("\(scanned.value.compactFormatted) \(scanned.reference.unit)")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(Editorial.ink(colorScheme))
+                            if status.isOutOfRange {
+                                StatusPill(text: status.label, color: status.color)
+                            }
+                        }
+                    }
+
+                    if let range {
+                        let axis = rangeBarAxis(range: range, value: scanned.value)
+                        RangeBar(
+                            lower: range.lowerBound,
+                            upper: range.upperBound,
+                            min: axis.min,
+                            max: axis.max,
+                            value: scanned.value,
+                            accessibilityLabel: Text("\(scanned.reference.name) \(scanned.value.compactFormatted) \(scanned.reference.unit), \(status.label)")
+                        )
+                    }
+
+                    Text("“\(scanned.sourceLine)”")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Editorial.muted(colorScheme))
+                        .lineLimit(1)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .ledgerRow()
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
     private func toggle(_ id: UUID) {
         if selectedIDs.contains(id) {
             selectedIDs.remove(id)
@@ -88,4 +136,20 @@ struct ScannedResultsSheet: View {
             selectedIDs.insert(id)
         }
     }
+}
+
+/// Axis bounds for a `RangeBar` built around a reference range: padded on
+/// both sides so the out-of-range zones read clearly, and widened further
+/// whenever the value itself sits outside that padding so the marker is
+/// never clipped to the bar's edge. `private` and intentionally duplicated
+/// (rather than shared) in every file that needs it — `Support
+/// /EditorialComponents.swift` isn't owned by this pass, and a file-private
+/// helper can't collide with another agent's same-named helper elsewhere in
+/// the module.
+private func rangeBarAxis(range: ClosedRange<Double>, value: Double) -> (min: Double, max: Double) {
+    let width = range.upperBound - range.lowerBound
+    let pad = width > 0 ? width * 0.35 : max(abs(range.upperBound), 1) * 0.2
+    let lower = Swift.min(range.lowerBound - pad, value - pad * 0.15)
+    let upper = Swift.max(range.upperBound + pad, value + pad * 0.15)
+    return (lower, upper)
 }

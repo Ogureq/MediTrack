@@ -71,7 +71,7 @@ struct QuickAddView: View {
                             text: $text,
                             axis: .vertical
                         )
-                        .font(.system(.title3, design: .rounded, weight: .semibold))
+                        .font(.system(.title3, weight: .semibold))
                         .lineLimit(1...4)
                         .focused($isFieldFocused)
                         .submitLabel(.done)
@@ -138,9 +138,14 @@ struct QuickAddView: View {
     @ViewBuilder
     private var batchSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ForEach(batchDrafts) { item in
-                QuickAddBatchPreviewCard(draft: item.draft) {
-                    removeBatchItem(item.id)
+            MicroLabel("Will Be Added")
+
+            VStack(spacing: 0) {
+                ForEach(batchDrafts) { item in
+                    QuickAddBatchPreviewCard(draft: item.draft) {
+                        removeBatchItem(item.id)
+                    }
+                    .ledgerRow()
                 }
             }
 
@@ -363,17 +368,20 @@ private struct QuickAddExampleChip: View {
     let label: String
     let action: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         Button {
             QuickAddHaptics.selection()
             action()
         } label: {
             Text(label)
-                .font(.subheadline.weight(.semibold))
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Editorial.ink(colorScheme))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay(Capsule().strokeBorder(Glass.bevelStroke, lineWidth: 1))
+                .background(Editorial.insetCard(colorScheme), in: Capsule())
+                .overlay(Capsule().strokeBorder(Editorial.controlBorder(colorScheme), lineWidth: 1))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Fill example: \(label)")
@@ -391,6 +399,8 @@ private enum QuickAddHaptics {
 // MARK: - AI fill button style
 
 private struct QuickAddAIButtonStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var colorScheme
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.subheadline.weight(.semibold))
@@ -402,8 +412,8 @@ private struct QuickAddAIButtonStyle: ButtonStyle {
                     .fill(Glass.accentGradient)
                     .opacity(configuration.isPressed ? 0.8 : 1)
             )
-            .overlay(Capsule().strokeBorder(Glass.bevelStroke, lineWidth: 1))
-            .shadow(color: .blue.opacity(0.3), radius: 8, x: 0, y: 4)
+            .overlay(Capsule().strokeBorder(Glass.bevelStroke(for: colorScheme), lineWidth: 1))
+            .shadow(color: Editorial.accent(colorScheme).opacity(0.3), radius: 8, x: 0, y: 4)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.spring(duration: 0.2), value: configuration.isPressed)
     }
@@ -415,49 +425,32 @@ private struct QuickAddPreviewCard: View {
     let draft: QuickAddDraft
     let isAIFilled: Bool
 
+    @Environment(\.colorScheme) private var colorScheme
     private var display: QuickAddPreviewDisplay { QuickAddPreviewDisplay(draft: draft) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: display.icon)
-                    // Fixed point size, not `.headline` (which would grow
-                    // with Dynamic Type and clip inside this fixed 42×42
-                    // badge) — 17pt semibold matches `.headline`'s default
-                    // rendered size, so this looks identical at the standard
-                    // content size category.
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 42, height: 42)
-                    .background(display.tint.gradient, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
-                    StatusPill(text: display.typeLabel, color: display.tint)
-                    Text(display.primaryText)
-                        .font(.title3.bold())
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(display.primaryText)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                Spacer(minLength: 8)
+                if let statusTag = display.statusTag {
+                    EditorialTag(statusTag.label, kind: statusTag.kind)
                 }
-                Spacer(minLength: 0)
             }
 
-            if !display.detailLines.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(display.detailLines, id: \.self) { line in
-                        Text(line)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
+            Text(([display.typeLabel] + display.detailLines).joined(separator: " · "))
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(Editorial.muted(colorScheme))
 
             if isAIFilled {
                 Label("AI-filled — please double-check. Educational, not diagnostic.", systemImage: "sparkles")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundStyle(Editorial.muted(colorScheme))
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard()
+        .ledgerRow()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             display.accessibilitySummary + (isAIFilled ? String(localized: ". AI filled, please double-check.") : "")
@@ -478,55 +471,44 @@ private struct QuickAddBatchPreviewCard: View {
     let draft: QuickAddDraft
     let onRemove: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
     private var display: QuickAddPreviewDisplay { QuickAddPreviewDisplay(draft: draft) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: display.icon)
-                    // Fixed point size, not `.headline` (which would grow
-                    // with Dynamic Type and clip inside this fixed 42×42
-                    // badge) — 17pt semibold matches `.headline`'s default
-                    // rendered size, so this looks identical at the standard
-                    // content size category.
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 42, height: 42)
-                    .background(display.tint.gradient, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    StatusPill(text: display.typeLabel, color: display.tint)
-                    Text(display.primaryText)
-                        .font(.title3.bold())
-                    ForEach(display.detailLines, id: \.self) { line in
-                        Text(line)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(display.primaryText)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(Editorial.ink(colorScheme))
+                        if let statusTag = display.statusTag {
+                            EditorialTag(statusTag.label, kind: statusTag.kind)
+                        }
                     }
+                    Text(([display.typeLabel] + display.detailLines).joined(separator: " · "))
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(Editorial.muted(colorScheme))
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(display.accessibilitySummary + String(localized: ". AI filled, please double-check."))
 
-                Spacer(minLength: 0)
+                Spacer(minLength: 8)
 
                 Button(action: onRemove) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 18))
+                        .foregroundStyle(Editorial.muted(colorScheme))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Remove \(display.typeLabel) item")
             }
 
             Label("AI-filled — please double-check. Educational, not diagnostic.", systemImage: "sparkles")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .font(.system(size: 10, weight: .regular))
+                .foregroundStyle(Editorial.muted(colorScheme))
                 .accessibilityHidden(true)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard()
     }
 }
 
@@ -541,6 +523,12 @@ private struct QuickAddPreviewDisplay {
     let primaryText: String
     let detailLines: [String]
     let accessibilitySummary: String
+    /// Only set for symptoms, whose severity is real data the app already
+    /// grades elsewhere (`SymptomsView`'s tag mapping). Every other draft
+    /// kind has no reliable normal/high/low verdict to show before it's even
+    /// saved, so showing a colored status tag for it would be inventing a
+    /// medical read the app can't actually back up.
+    let statusTag: (label: LocalizedStringKey, kind: TagKind)?
 
     init(draft: QuickAddDraft) {
         switch draft {
@@ -554,6 +542,7 @@ private struct QuickAddPreviewDisplay {
             accessibilitySummary = parts.isEmpty
                 ? String(localized: "Medication: \(name)")
                 : String(localized: "Medication: \(name), \(parts.joined(separator: ", "))")
+            statusTag = nil
 
         case let .vital(type, value, secondary):
             icon = type.systemImage
@@ -562,6 +551,7 @@ private struct QuickAddPreviewDisplay {
             primaryText = Self.vitalValueText(type: type, value: value, secondary: secondary)
             detailLines = []
             accessibilitySummary = String(localized: "Vital, \(type.displayName): \(primaryText)")
+            statusTag = nil
 
         case let .symptom(name, severity):
             icon = "bandage.fill"
@@ -570,6 +560,7 @@ private struct QuickAddPreviewDisplay {
             primaryText = name
             detailLines = [String(localized: "Severity \(severity) of 10")]
             accessibilitySummary = String(localized: "Symptom: \(name), severity \(severity) out of 10")
+            statusTag = (label: Self.severityLabel(severity), kind: Self.severityTagKind(severity))
 
         case let .appointment(title, date):
             icon = "calendar"
@@ -579,6 +570,7 @@ private struct QuickAddPreviewDisplay {
             let formattedDate = date.formatted(date: .abbreviated, time: .shortened)
             detailLines = [formattedDate]
             accessibilitySummary = String(localized: "Appointment: \(title), \(formattedDate)")
+            statusTag = nil
 
         case let .reminder(title, time):
             icon = "bell.fill"
@@ -593,6 +585,26 @@ private struct QuickAddPreviewDisplay {
                 detailLines = []
                 accessibilitySummary = String(localized: "Reminder: \(title)")
             }
+            statusTag = nil
+        }
+    }
+
+    /// Mirrors `SymptomsView`'s severity → tag mapping (<4 mild, 4–6
+    /// moderate, else severe) so the same rating reads identically whether
+    /// it's being previewed here or already saved to the journal.
+    private static func severityTagKind(_ severity: Int) -> TagKind {
+        switch severity {
+        case ..<4: .good
+        case 4...6: .warn
+        default: .bad
+        }
+    }
+
+    private static func severityLabel(_ severity: Int) -> LocalizedStringKey {
+        switch severityTagKind(severity) {
+        case .good: "Mild"
+        case .warn: "Moderate"
+        case .bad: "Severe"
         }
     }
 

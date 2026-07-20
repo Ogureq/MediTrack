@@ -10,9 +10,17 @@ import StoreKit
 /// fail to resolve — expected in this build, since no Apple Developer
 /// account is connected yet — the sheet says so plainly instead of showing
 /// broken purchase buttons.
+///
+/// Presentation follows the editorial "two ledger columns" grammar: an
+/// "Always Free" list and a "Premium Adds" list stand side by side in
+/// reading order, then the real `store.products` render as price rows
+/// (the best-value plan filled with the one accent color, everything else
+/// outlined) — restyled only; the StoreKit calls, product IDs, and
+/// double-tap/double-purchase guards below are unchanged.
 struct PaywallView: View {
     @ObservedObject private var store = PremiumStore.shared
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var purchasingProductID: String?
     @State private var purchaseErrorMessage: String?
@@ -21,7 +29,7 @@ struct PaywallView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
+            VStack(alignment: .leading, spacing: 22) {
                 PaywallHeader()
 
                 if store.isPremium {
@@ -37,7 +45,8 @@ struct PaywallView: View {
                         .transaction { $0.animation = nil }
                 }
 
-                featureList
+                freeLedger
+                premiumLedger
 
                 if store.loadState == .unavailable {
                     unavailableCard
@@ -49,8 +58,6 @@ struct PaywallView: View {
 
                 restoreButton
 
-                freeTierFootnote
-
                 footerLinks
             }
             .padding()
@@ -59,7 +66,7 @@ struct PaywallView: View {
         .overlay(alignment: .topTrailing) { closeButton }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .presentationBackground(.ultraThinMaterial)
+        .presentationBackground(Editorial.canvas(colorScheme))
         .task {
             await store.loadProducts()
         }
@@ -84,7 +91,7 @@ struct PaywallView: View {
     private var activeCard: some View {
         HStack(spacing: 10) {
             Image(systemName: "checkmark.seal.fill")
-                .foregroundStyle(.green)
+                .foregroundStyle(Editorial.tagGood(colorScheme))
                 .accessibilityHidden(true)
             Text("Premium is active on this device. Thank you for supporting Gemocode.")
                 .font(.subheadline.weight(.medium))
@@ -95,45 +102,71 @@ struct PaywallView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var featureList: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            PaywallFeatureRow(
-                icon: "doc.viewfinder",
+    /// "Always Free" ledger — everything Gemocode's local, on-device
+    /// tracking already gives away for free, stated up front so the
+    /// comparison below reads as an honest add-on, not a lock.
+    private var freeLedger: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            MicroLabel("Always Free")
+                .padding(.bottom, 6)
+            PaywallLedgerRow(marker: "✓", markerColor: Editorial.tagGood(colorScheme), title: "Tracking, health score, trends & backups")
+            PaywallLedgerRow(marker: "✓", markerColor: Editorial.tagGood(colorScheme), title: "Retest schedule & reminders")
+            PaywallLedgerRow(marker: "✓", markerColor: Editorial.tagGood(colorScheme), title: "Your first AI scan & report")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// "Premium Adds" ledger — the same four features the old icon-card
+    /// feature list described, reflowed as ledger rows. Each row's fuller
+    /// `detail` copy survives as an accessibility hint rather than a second
+    /// visible line, so VoiceOver users still get the complete explanation.
+    private var premiumLedger: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Premium Adds")
+                .font(.system(size: 10, weight: .semibold))
+                .kerning(1.6)
+                .textCase(.uppercase)
+                .foregroundStyle(Editorial.accent(colorScheme))
+                .padding(.bottom, 6)
+            PaywallLedgerRow(
+                marker: "+",
+                markerColor: Editorial.accent(colorScheme),
                 title: "Scan & decode lab reports",
                 detail: "Photograph any lab report — values extracted and organized automatically."
             )
-            PaywallFeatureRow(
-                icon: "doc.text.magnifyingglass",
+            PaywallLedgerRow(
+                marker: "+",
+                markerColor: Editorial.accent(colorScheme),
                 title: "Unlimited AI health reports",
                 detail: "Plain-language narration of your health score and findings, any time."
             )
-            PaywallFeatureRow(
-                icon: "wand.and.stars",
+            PaywallLedgerRow(
+                marker: "+",
+                markerColor: Editorial.accent(colorScheme),
                 title: "AI-assisted Quick Add and future AI features",
                 detail: "New AI tools land here first as Gemocode grows."
             )
-            PaywallFeatureRow(
-                icon: "heart.fill",
+            PaywallLedgerRow(
+                marker: "+",
+                markerColor: Editorial.accent(colorScheme),
                 title: "Support ongoing development",
                 detail: "Gemocode has no ads and sells no data — premium is what keeps it going."
             )
         }
-        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard()
     }
 
     private var unavailableCard: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "info.circle.fill")
-                .foregroundStyle(.orange)
+                .foregroundStyle(Editorial.tagWarn(colorScheme))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Purchases aren't available in this build yet.")
                     .font(.subheadline.weight(.semibold))
                 Text("This preview isn't connected to the App Store yet, so premium plans can't be shown or purchased here. Everything else in Gemocode works normally.")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Editorial.muted(colorScheme))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -176,6 +209,7 @@ struct PaywallView: View {
             if isRestoring {
                 HStack(spacing: 8) {
                     ProgressView()
+                        .controlSize(.small)
                     Text("Restoring…")
                 }
                 .frame(maxWidth: .infinity)
@@ -184,36 +218,33 @@ struct PaywallView: View {
                     .frame(maxWidth: .infinity)
             }
         }
-        .buttonStyle(GlassButtonStyle())
+        .buttonStyle(.plain)
+        .font(.system(size: 12, weight: .regular))
+        .foregroundStyle(Editorial.muted(colorScheme))
+        .underline()
         .disabled(isRestoring)
-    }
-
-    private var freeTierFootnote: some View {
-        Text("Tracking vitals, medications, symptoms, and goals — with your health score, trends, and backups — stays free. Your first AI scan and health report is included free; Premium unlocks unlimited lab report scanning, AI reports, chat, and AI-assisted entry.")
-            .font(.footnote)
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.center)
-            .frame(maxWidth: .infinity)
+        .padding(.top, 2)
     }
 
     private var footerLinks: some View {
-        HStack(spacing: 6) {
-            Button {
-                presentedLegalDocument = .termsOfService
-            } label: {
-                Text("Terms of Service").underline()
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                Button {
+                    presentedLegalDocument = .termsOfService
+                } label: {
+                    Text("Terms of Service").underline()
+                }
+                Text("•")
+                Button {
+                    presentedLegalDocument = .privacyPolicy
+                } label: {
+                    Text("Privacy Policy").underline()
+                }
             }
-            Text("•")
-                .foregroundStyle(.tertiary)
-            Button {
-                presentedLegalDocument = .privacyPolicy
-            } label: {
-                Text("Privacy Policy").underline()
-            }
+            .font(.caption2)
+            .buttonStyle(.plain)
         }
-        .font(.caption2)
-        .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(Editorial.muted(colorScheme))
         .frame(maxWidth: .infinity)
     }
 
@@ -221,16 +252,11 @@ struct PaywallView: View {
         Button {
             dismiss()
         } label: {
-            Image(systemName: "xmark.circle.fill")
-                .font(.title2)
-                .foregroundStyle(.secondary, .ultraThinMaterial)
-                .symbolRenderingMode(.palette)
+            Text("Close")
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(Editorial.muted(colorScheme))
         }
-        // Extra inset (vs. the usual 12pt) so this can't crowd
-        // PaywallHeader's crown/sparkle badge, which sits close to the top
-        // of the scroll content right below this overlay.
         .padding(20)
-        .accessibilityLabel("Close")
     }
 
     // MARK: Actions
@@ -268,65 +294,70 @@ struct PaywallView: View {
 // MARK: - Header
 
 private struct PaywallHeader: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
-        VStack(spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(Glass.accentGradient)
-                    .frame(width: 68, height: 68)
-                Image(systemName: "crown.fill")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(.white)
-                // Fixed-point font keeps this glyph's rendered size stable
-                // at accessibility Dynamic Type sizes, so the fixed `.offset`
-                // below can't drift it into colliding with the crown or
-                // spilling outside the 68×68 circle.
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 5) {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.white)
-                    .offset(x: 20, y: -20)
+                    .font(.system(size: 9, weight: .semibold))
+                Text("Premium")
+                    .font(.system(size: 10, weight: .medium))
+                    .kerning(1.2)
+                    .textCase(.uppercase)
             }
-            .accessibilityHidden(true)
+            .foregroundStyle(Editorial.accent(colorScheme))
+            .padding(.vertical, 4)
+            .padding(.horizontal, 10)
+            .overlay(
+                Capsule().strokeBorder(Editorial.accent(colorScheme), lineWidth: 1)
+            )
+            .accessibilityElement(children: .combine)
 
             Text("Gemocode Premium")
-                .font(.title2.bold())
-                .fontDesign(.rounded)
+                .font(.system(size: 28, weight: .regular))
+                .tracking(-0.5)
+                .foregroundStyle(Editorial.ink(colorScheme))
 
             Text("More AI narration of your health data. Nothing you track today ever gets locked away.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(Editorial.muted(colorScheme))
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, 8)
     }
 }
 
-// MARK: - Feature row
+// MARK: - Ledger row
 
-private struct PaywallFeatureRow: View {
-    let icon: String
+/// One line of the "Always Free" / "Premium Adds" comparison: a colored
+/// marker glyph (✓ or +) followed by the feature title. `detail`, when
+/// given, isn't shown as a second line — it rides along as an
+/// accessibility hint so VoiceOver users still get the fuller explanation
+/// the old icon-card layout used to show everyone.
+private struct PaywallLedgerRow: View {
+    let marker: String
+    let markerColor: Color
     let title: LocalizedStringKey
-    let detail: LocalizedStringKey
+    var detail: LocalizedStringKey?
+
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 32, height: 32)
-                .background(Glass.accentGradient, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                Text(detail)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(marker)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(markerColor)
+                .frame(width: 14, alignment: .leading)
+            Text(title)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(Editorial.ink(colorScheme))
             Spacer(minLength: 0)
         }
-        .accessibilityElement(children: .combine)
+        .ledgerRow()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(detail.map { Text(title) + Text(verbatim: ". ") + Text($0) } ?? Text(title))
     }
 }
 
@@ -339,6 +370,8 @@ private struct PaywallProductCard: View {
     let isPurchasing: Bool
     let isDisabled: Bool
     let action: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
 
     private var planName: String {
         if product.displayName.isEmpty {
@@ -360,37 +393,52 @@ private struct PaywallProductCard: View {
         }
     }
 
+    private var labelColor: Color {
+        isYearly ? .white : Editorial.ink(colorScheme)
+    }
+
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Text(planName)
-                            .font(.subheadline.weight(.semibold))
-                        if isYearly {
-                            StatusPill(text: String(localized: "Best value"), color: .green)
-                        } else if isLifetime {
-                            StatusPill(text: String(localized: "One-time"), color: .teal)
-                        }
-                    }
-                    Text("\(product.displayPrice)\(periodSuffix)")
-                        .font(.title3.weight(.bold))
-                        .fontDesign(.rounded)
-                }
-                Spacer(minLength: 0)
+            HStack(spacing: 10) {
+                Text("\(planName) — \(product.displayPrice)\(periodSuffix)")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(labelColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Spacer(minLength: 8)
                 if isPurchasing {
                     ProgressView()
-                } else {
-                    Image(systemName: "chevron.right")
-                        .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
+                } else if isYearly {
+                    Text("Best value")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .lineLimit(1)
+                } else if isLifetime {
+                    Text("One-time")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(Editorial.muted(colorScheme))
+                        .lineLimit(1)
                 }
             }
-            .padding(16)
+            .padding(.vertical, isYearly ? 16 : 14)
+            .padding(.horizontal, 22)
             .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .fill(isYearly ? Editorial.accent(colorScheme) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .strokeBorder(isYearly ? Color.clear : Editorial.controlBorder(colorScheme), lineWidth: 1)
+            )
+            .shadow(
+                color: isYearly ? Editorial.accent(colorScheme).opacity(0.30) : .clear,
+                radius: isYearly ? 20 : 0,
+                x: 0,
+                y: isYearly ? 14 : 0
+            )
         }
         .buttonStyle(.plain)
-        .glassCard(cornerRadius: Glass.chipRadius)
         .opacity(isDisabled && !isPurchasing ? 0.5 : 1)
         .disabled(isDisabled)
         .accessibilityElement(children: .combine)

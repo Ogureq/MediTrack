@@ -12,6 +12,8 @@ struct HealthTimelineView: View {
     @Query private var medications: [Medication]
     @Query private var profiles: [HealthProfile]
 
+    @Environment(\.colorScheme) private var colorScheme
+
     @State private var selectedCategory: TimelineCategory?
 
     /// Cached instead of recomputed on each of the ~3 accesses this screen
@@ -47,33 +49,29 @@ struct HealthTimelineView: View {
                     description: Text("As you add reports, lab results, vitals, and medications, Gemocode builds a timeline of the notable changes.")
                 )
             } else {
-                List {
-                    Section {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
                         filterChips
-                    }
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets())
 
-                    if filteredEvents.isEmpty {
-                        Section {
+                        if filteredEvents.isEmpty {
                             Text("No events in this category yet.")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                        .listRowBackground(GlassRowBackground())
-                        .listRowSeparator(.hidden)
-                    } else {
-                        ForEach(groupedByMonth, id: \.month) { group in
-                            Section(monthTitle(group.month)) {
-                                ForEach(group.events) { event in
-                                    TimelineRow(event: event)
+                                .font(.system(size: 13))
+                                .foregroundStyle(Editorial.muted(colorScheme))
+                        } else {
+                            ForEach(groupedByMonth, id: \.month) { group in
+                                VStack(alignment: .leading, spacing: 0) {
+                                    MicroLabel(verbatim: monthTitle(group.month))
+                                        .padding(.bottom, 6)
+                                    ForEach(group.events) { event in
+                                        TimelineRow(event: event)
+                                    }
                                 }
                             }
-                            .listRowBackground(GlassRowBackground())
-                            .listRowSeparator(.hidden)
                         }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 28)
                 }
             }
         }
@@ -107,23 +105,24 @@ struct HealthTimelineView: View {
         }
     }
 
+    /// Quiet outlined capsule — no filled background, matching the
+    /// editorial system's restrained treatment of secondary controls.
     private func chip(title: LocalizedStringKey, category: TimelineCategory?) -> some View {
         let isSelected = selectedCategory == category
         return Button {
             selectedCategory = category
         } label: {
             Text(title)
-                .font(.caption.weight(.semibold))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(.ultraThinMaterial, in: Capsule())
+                .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
+                .foregroundStyle(isSelected ? Editorial.ink(colorScheme) : Editorial.muted(colorScheme))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
                 .overlay(
                     Capsule().strokeBorder(
-                        isSelected ? Color.accentColor.opacity(0.7) : Color.primary.opacity(0.1),
+                        isSelected ? Editorial.ink(colorScheme) : Editorial.controlBorder(colorScheme),
                         lineWidth: 1
                     )
                 )
-                .foregroundStyle(isSelected ? Color.accentColor : .primary)
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
@@ -133,11 +132,13 @@ struct HealthTimelineView: View {
 // MARK: - Row
 
 private extension TimelineSignificance {
-    var color: Color {
+    /// The small leading dot's color: muted for routine events, and the
+    /// editorial tag colors for the two levels worth calling out.
+    func dotColor(_ colorScheme: ColorScheme) -> Color {
         switch self {
-        case .routine: .blue
-        case .notable: .orange
-        case .important: .red
+        case .routine: Editorial.muted(colorScheme)
+        case .notable: Editorial.tagWarn(colorScheme)
+        case .important: Editorial.tagBad(colorScheme)
         }
     }
 
@@ -153,6 +154,8 @@ private extension TimelineSignificance {
 private struct TimelineRow: View {
     let event: TimelineEvent
 
+    @Environment(\.colorScheme) private var colorScheme
+
     private var accessibilityText: String {
         "\(event.significance.displayName): \(event.title). \(event.detail). \(event.date.formatted(date: .abbreviated, time: .omitted))."
     }
@@ -160,28 +163,29 @@ private struct TimelineRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Circle()
-                .fill(event.significance.color)
-                .frame(width: 10, height: 10)
+                .fill(event.significance.dotColor(colorScheme))
+                .frame(width: 6, height: 6)
                 .padding(.top, 6)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Image(systemName: event.systemImage)
-                        .foregroundStyle(event.significance.color)
+                        .foregroundStyle(Editorial.muted(colorScheme))
                         .accessibilityHidden(true)
                     Text(event.title)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Editorial.ink(colorScheme))
                     Spacer()
                     Text(event.date, format: .relative(presentation: .named))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Editorial.muted(colorScheme))
                 }
                 Text(event.detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Editorial.muted(colorScheme))
             }
         }
-        .padding(.vertical, 2)
+        .ledgerRow()
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityText)
     }

@@ -159,6 +159,7 @@ enum DocumentLibrary {
 /// recency and filterable by category. Pushed from the More tab.
 struct DocumentsView: View {
     @Query(sort: \MedicalReport.date, order: .reverse) private var reports: [MedicalReport]
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var searchText = ""
     @State private var selectedCategory: ReportCategory?
@@ -229,14 +230,10 @@ struct DocumentsView: View {
 
     private func sectionView(_ section: DocumentSection) -> some View {
         VStack(alignment: .leading, spacing: 9) {
-            Text(section.label)
-                .font(.system(size: 13, weight: .semibold))
-                .tracking(0.4)
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
+            MicroLabel(verbatim: section.label)
                 .accessibilityAddTraits(.isHeader)
 
-            VStack(spacing: 9) {
+            VStack(spacing: 0) {
                 ForEach(section.items) { item in
                     NavigationLink {
                         destination(for: item)
@@ -284,33 +281,27 @@ struct DocumentsView: View {
         }
     }
 
-    /// Matches `TrendsView.metricChipsRow`'s selected-chip treatment exactly
-    /// (accent-gradient fill + dark ink text when selected, plain glass pill
-    /// otherwise) so the chip language reads as one system across screens.
+    /// Selected = solid ink fill / canvas text; unselected = hairline
+    /// `controlBorder` outline / muted text — the same category-pill
+    /// language used in `ReportsListView`.
     private func categoryChip(title: String, category: ReportCategory?) -> some View {
         let isSelected = selectedCategory == category
         return Button {
             selectedCategory = category
         } label: {
             Text(title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(isSelected ? Self.selectedChipTextColor : Color.primary)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(isSelected ? Editorial.canvas(colorScheme) : Editorial.muted(colorScheme))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background {
-                    if isSelected {
-                        Capsule().fill(Glass.accentGradient)
-                    } else {
-                        Capsule().fill(.ultraThinMaterial)
-                    }
-                }
-                .overlay(Capsule().strokeBorder(Glass.bevelStroke, lineWidth: 1))
+                .background(isSelected ? Editorial.ink(colorScheme) : Color.clear, in: Capsule())
+                .overlay(
+                    Capsule().strokeBorder(isSelected ? Color.clear : Editorial.controlBorder(colorScheme), lineWidth: 1)
+                )
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
-
-    private static let selectedChipTextColor = Color(red: 0x0B / 255.0, green: 0x12 / 255.0, blue: 0x20 / 255.0)
 }
 
 // MARK: - List row
@@ -325,6 +316,8 @@ private struct DocumentRow: View {
     /// blob, and only once per row identity (mirrors `DocumentIconChip`'s
     /// `image` state below).
     @State private var byteCount: Int?
+
+    @Environment(\.colorScheme) private var colorScheme
 
     private var sizeText: String {
         guard let byteCount else { return "—" }
@@ -341,22 +334,22 @@ private struct DocumentRow: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.filename)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Editorial.ink(colorScheme))
                     .lineLimit(1)
                 Text("\(item.reportTitle) · \(sizeText)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Editorial.muted(colorScheme))
                     .lineLimit(1)
             }
 
             Spacer(minLength: 8)
 
             Text(dateText)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .font(.system(size: 11))
+                .foregroundStyle(Editorial.muted(colorScheme))
         }
-        .padding(12)
-        .glassCard(cornerRadius: Glass.chipRadius)
+        .ledgerRow()
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
             "\(item.filename), \(item.reportTitle), \(sizeText), \(item.reportDate.formatted(date: .long, time: .omitted))"
@@ -378,8 +371,10 @@ private struct DocumentRow: View {
 
 // MARK: - Icon chip
 
-/// Tinted, per-category icon chip leading each row. Image attachments show
-/// a real downsampled preview (decoded once, off the main thread, via
+/// Hairline-framed icon chip leading each row — the editorial "original as
+/// a first-class object" treatment: a flat `insetCard` tile with a
+/// `controlBorder` hairline, no per-category color tint. Image attachments
+/// show a real downsampled preview (decoded once, off the main thread, via
 /// ImageIO and memoized by attachment id in `ThumbnailCache` — never a
 /// full-resolution `UIImage(data:)`, and never redecoded on re-scroll); PDFs
 /// and anything else show a document glyph. Either way a small format badge
@@ -392,33 +387,32 @@ private struct DocumentIconChip: View {
     let resolveAttachment: (PersistentIdentifier) -> ReportAttachment?
 
     @State private var image: UIImage?
+    @Environment(\.colorScheme) private var colorScheme
 
     private let size: CGFloat = 44
 
-    private var tint: Color { DocumentLibrary.tint(for: item.reportCategory) }
-
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(tint.opacity(0.16))
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(tint.opacity(0.32), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Editorial.insetCard(colorScheme))
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Editorial.controlBorder(colorScheme), lineWidth: 1)
 
             switch item.kind {
             case .pdf:
                 Image(systemName: "doc.richtext")
                     .font(.system(size: 17))
-                    .foregroundStyle(tint)
+                    .foregroundStyle(Editorial.ink(colorScheme))
             case .image:
                 if let image {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
                         .frame(width: size, height: size)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 } else {
                     ProgressView()
-                        .tint(tint)
+                        .tint(Editorial.ink(colorScheme))
                 }
             }
         }
@@ -426,10 +420,10 @@ private struct DocumentIconChip: View {
         .overlay(alignment: .bottomTrailing) {
             Text(DocumentLibrary.fileExtension(for: item.filename))
                 .font(.system(size: 7.5, weight: .heavy))
-                .foregroundStyle(tint)
+                .foregroundStyle(.white)
                 .padding(.horizontal, 3)
                 .padding(.vertical, 1.5)
-                .background(.black.opacity(0.55), in: Capsule())
+                .background(Editorial.ink(colorScheme).opacity(0.75), in: Capsule())
                 .offset(x: 4, y: 4)
         }
         .accessibilityHidden(true)

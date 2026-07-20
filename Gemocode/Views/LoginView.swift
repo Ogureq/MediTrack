@@ -10,27 +10,35 @@ struct LoginView: View {
     @State private var passcode = ""
     @State private var shake = false
     @FocusState private var passcodeFocused: Bool
+    @Environment(\.colorScheme) private var colorScheme
 
     private var canSubmit: Bool { passcode.count >= 4 }
 
     var body: some View {
         ZStack {
             AmbientBackground()
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .ignoresSafeArea()
 
             VStack(spacing: 20) {
-                VStack(spacing: 10) {
-                    Image(systemName: "cross.case.fill")
-                        .font(.system(size: 40))
-                        .foregroundStyle(Glass.accentGradient)
+                VStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .strokeBorder(Editorial.controlBorder(colorScheme), lineWidth: 1.5)
+                            .frame(width: 76, height: 76)
+                        Image(systemName: "cross.case.fill")
+                            .font(.system(size: 32, weight: .medium))
+                            .foregroundStyle(Editorial.ink(colorScheme))
+                    }
+                    .accessibilityHidden(true)
+
                     Text("Welcome Back")
-                        .font(.title2.bold())
+                        .font(.system(size: 26, weight: .regular))
+                        .tracking(-0.4)
+                        .foregroundStyle(Editorial.ink(colorScheme))
                     Text("Sign in to view your medical data.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(Editorial.muted(colorScheme))
                         .multilineTextAlignment(.center)
+                        .frame(maxWidth: 250)
                 }
 
                 if lock.hasPasscode {
@@ -46,12 +54,12 @@ struct LoginView: View {
                     if remaining > 0 {
                         Text("Too many attempts. Try again in \(remaining)s.")
                             .font(.caption)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(Editorial.tagBad(colorScheme))
                             .transition(.opacity)
                     } else if let error = lock.lastError {
                         Text(error)
                             .font(.caption)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(Editorial.tagBad(colorScheme))
                             .transition(.opacity)
                     }
 
@@ -59,7 +67,7 @@ struct LoginView: View {
                         Label("Remember me", systemImage: "checkmark.shield")
                             .font(.subheadline)
                     }
-                    .tint(.teal)
+                    .tint(Editorial.tagGood(colorScheme))
 
                     if lock.hasPasscode {
                         Button {
@@ -67,7 +75,7 @@ struct LoginView: View {
                         } label: {
                             Label("Unlock", systemImage: "lock.open.fill")
                         }
-                        .buttonStyle(GlassProminentButtonStyle())
+                        .buttonStyle(GlassButtonStyle())
                         .disabled(!canSubmit || remaining > 0)
                     }
                 }
@@ -81,13 +89,11 @@ struct LoginView: View {
                             systemImage: AppLock.biometryLabel == "Touch ID" ? "touchid" : "faceid"
                         )
                     }
-                    .buttonStyle(lock.hasPasscode ? AnyButtonStyle(GlassButtonStyle()) : AnyButtonStyle(GlassProminentButtonStyle()))
+                    .buttonStyle(GlassButtonStyle())
                 }
             }
             .padding(24)
             .frame(maxWidth: 340)
-            .glassCard()
-            .padding()
             .offset(x: shake ? -8 : 0)
             .animation(.default, value: lock.lastError != nil)
         }
@@ -112,10 +118,10 @@ struct LoginView: View {
             .focused($passcodeFocused)
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Glass.bevelStroke, lineWidth: 1)
+                    .strokeBorder(Glass.bevelStroke(for: colorScheme), lineWidth: 1)
             )
             .onSubmit(submitPasscode)
     }
@@ -133,25 +139,12 @@ struct LoginView: View {
     }
 }
 
-/// Type-erased button style so the biometric button can switch between the
-/// prominent and plain glass styles depending on whether a passcode exists.
-struct AnyButtonStyle: ButtonStyle {
-    private let makeBodyClosure: (Configuration) -> AnyView
-
-    init<S: ButtonStyle>(_ style: S) {
-        makeBodyClosure = { AnyView(style.makeBody(configuration: $0)) }
-    }
-
-    func makeBody(configuration: Configuration) -> some View {
-        makeBodyClosure(configuration)
-    }
-}
-
 // MARK: - Passcode setup
 
 /// Set or change the numeric passcode. Requires the code to be entered twice.
 struct PasscodeSetupSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     let lock: AppLock
 
     @State private var passcode = ""
@@ -174,13 +167,13 @@ struct PasscodeSetupSheet: View {
                         .keyboardType(.numberPad)
                 } footer: {
                     if let error {
-                        Text(error).foregroundStyle(.red)
+                        Text(error).foregroundStyle(Editorial.tagBad(colorScheme))
                     } else {
                         Text("Choose a 4–8 digit passcode. It is stored securely in the device Keychain and never leaves your device.")
                     }
                 }
                 .listRowBackground(GlassRowBackground())
-                .listRowSeparator(.hidden)
+                .listRowSeparatorTint(Editorial.hairline(colorScheme))
             }
             .ambientScreen()
             .navigationTitle(lock.hasPasscode ? "Change Passcode" : "Set Passcode")

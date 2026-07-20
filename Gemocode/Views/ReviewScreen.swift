@@ -12,6 +12,7 @@ struct ReviewScreen: View {
     @Query private var symptoms: [SymptomEntry]
     @Query(sort: \Appointment.date) private var appointments: [Appointment]
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var aiReport: AIHealthReport?
     @State private var isGeneratingSummary = false
@@ -68,6 +69,8 @@ struct ReviewScreen: View {
                         // a transaction-borne `withAnimation`.
                         headerCard(review: review)
                             .transaction { $0.animation = nil }
+                        categoryBreakdown(review: review)
+                            .transaction { $0.animation = nil }
                         // Also nulled, like every other card here — the
                         // generating-report pulse below is intentionally
                         // rebuilt on a TimelineView so it animates every
@@ -76,11 +79,11 @@ struct ReviewScreen: View {
                         // this modifier would otherwise cancel.
                         aiSummaryCard(review: review)
                             .transaction { $0.animation = nil }
-                        findingsGroup("Critical", severity: .critical, findings: review.criticalFindings)
+                        findingsGroup(String(localized: "Critical"), severity: .critical, findings: review.criticalFindings)
                             .transaction { $0.animation = nil }
-                        findingsGroup("Needs Attention", severity: .attention, findings: review.attentionFindings)
+                        findingsGroup(String(localized: "Needs Attention"), severity: .attention, findings: review.attentionFindings)
                             .transaction { $0.animation = nil }
-                        findingsGroup("Informational", severity: .info, findings: review.infoFindings)
+                        findingsGroup(String(localized: "Informational"), severity: .info, findings: review.infoFindings)
                             .transaction { $0.animation = nil }
                         trendsCard(review: review)
                             .transaction { $0.animation = nil }
@@ -176,27 +179,139 @@ struct ReviewScreen: View {
 
     // MARK: Cards
 
+    /// Flat score header: a large tight-tracking number and a status tag —
+    /// no ring, no card. Matches the mockup's flush treatment; the score
+    /// header is deliberately the one section on this screen without a
+    /// bordered container.
     private func headerCard(review: HealthReview) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 16) {
-                ScoreRing(score: review.score)
-                    .frame(width: 92, height: 92)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(review.scoreLabel)
-                        .font(.headline)
-                    Text("Generated \(review.generatedAt.formatted(date: .abbreviated, time: .shortened))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text("\(review.score)")
+                    .font(.system(size: 64, weight: .regular))
+                    .tracking(-2.56)
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                EditorialTag(verbatim: review.scoreLabel, kind: scoreTagKind(review.score))
             }
             Text(review.summary)
-                .font(.subheadline)
+                .font(.system(size: 13))
+                .foregroundStyle(Editorial.muted(colorScheme))
+            Text("Generated \(review.generatedAt.formatted(date: .abbreviated, time: .shortened))")
+                .font(.system(size: 11))
+                .foregroundStyle(Editorial.muted(colorScheme))
         }
-        .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard()
         .accessibilityElement(children: .combine)
+    }
+
+    /// Maps the engine's numeric score to a tag color using the exact same
+    /// tier boundaries `HealthReview.scoreLabel` already uses — purely a
+    /// presentation choice, no new scoring logic.
+    private func scoreTagKind(_ score: Int) -> TagKind {
+        switch score {
+        case 75...100: .good
+        case 40..<75: .warn
+        default: .bad
+        }
+    }
+
+    /// Category breakdown ledger: `Finding.category` grouping (already
+    /// computed by the engine, just never surfaced in the UI before) shown
+    /// as ledger rows — name, worst-severity tag, and a bar whose fill
+    /// tracks the share of that category's findings that need attention.
+    /// There's no per-category numeric score in `HealthReview` (only one
+    /// overall `score`), so unlike the mockup's illustrative 0–100 numbers,
+    /// this bar is a "how much of this category is flagged" fraction, not a
+    /// sub-score — the closest honest analog available from real data.
+    @ViewBuilder
+    private func categoryBreakdown(review: HealthReview) -> some View {
+        let groups = categoryGroups(for: review)
+        if !groups.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                MicroLabel("By Category")
+                VStack(spacing: 0) {
+                    ForEach(groups, id: \.category.rawValue) { group in
+                        categoryRow(group)
+                    }
+                }
+            }
+        }
+    }
+
+    private struct FindingCategoryGroup {
+        let category: FindingCategory
+        let findings: [Finding]
+    }
+
+    private func categoryGroups(for review: HealthReview) -> [FindingCategoryGroup] {
+        let order: [FindingCategory] = [.labs, .vitals, .trends, .medications, .general]
+        return order.compactMap { category in
+            let matches = review.findings.filter { $0.category == category }
+            return matches.isEmpty ? nil : FindingCategoryGroup(category: category, findings: matches)
+        }
+    }
+
+    private func categoryDisplayName(_ category: FindingCategory) -> String {
+        switch category {
+        case .labs: String(localized: "Lab Results")
+        case .vitals: String(localized: "Vitals")
+        case .trends: String(localized: "Trends")
+        case .medications: String(localized: "Medications")
+        case .general: String(localized: "General")
+        }
+    }
+
+    private func tagKind(for severity: Severity) -> TagKind {
+        switch severity {
+        case .critical: .bad
+        case .attention: .warn
+        case .info: .good
+        }
+    }
+
+    private func categoryRow(_ group: FindingCategoryGroup) -> some View {
+        let worst = group.findings.map(\.severity).max() ?? .info
+        let concerningCount = group.findings.filter { $0.severity != .info }.count
+        let fraction: CGFloat = group.findings.isEmpty ? 0 : CGFloat(concerningCount) / CGFloat(group.findings.count)
+        let zones: [(fraction: CGFloat, kind: RangeZoneKind)] = {
+            if fraction <= 0 { return [(fraction: 1, kind: .inRange)] }
+            if fraction >= 1 { return [(fraction: 1, kind: .out)] }
+            return [(fraction: fraction, kind: .out), (fraction: 1 - fraction, kind: .inRange)]
+        }()
+        let topFinding = group.findings.max(by: { $0.severity < $1.severity })
+
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(verbatim: categoryDisplayName(group.category))
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                Spacer()
+                EditorialTag(verbatim: worst.displayName, kind: tagKind(for: worst))
+            }
+            RangeBar(zones: zones, marker: fraction)
+                .background(Capsule().fill(Editorial.hairline(colorScheme)))
+            if let topFinding {
+                Text(verbatim: categoryDetailText(topFinding, totalCount: group.findings.count))
+                    .font(.system(size: 11))
+                    .foregroundStyle(Editorial.muted(colorScheme))
+                    .lineLimit(2)
+            }
+        }
+        .ledgerRow()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(categoryAccessibilityLabel(group, worst: worst, detail: topFinding))
+    }
+
+    private func categoryDetailText(_ finding: Finding, totalCount: Int) -> String {
+        guard totalCount > 1 else { return finding.detail }
+        return "\(finding.detail) \(String(format: String(localized: "and %lld more"), totalCount - 1))"
+    }
+
+    private func categoryAccessibilityLabel(_ group: FindingCategoryGroup, worst: Severity, detail: Finding?) -> String {
+        var text = "\(categoryDisplayName(group.category)), \(worst.displayName)"
+        if let detail {
+            text += ". \(detail.detail)"
+        }
+        return text
     }
 
     @ViewBuilder
@@ -231,7 +346,7 @@ struct ReviewScreen: View {
                 } else if let aiError {
                     Text(aiError)
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Editorial.tagBad(colorScheme))
                 }
                 if aiReport == nil && !isGeneratingSummary {
                     if AIReportQuota.canGenerate(isPremium: premiumStore.isPremium, defaults: .standard) {
@@ -240,7 +355,7 @@ struct ReviewScreen: View {
                         } label: {
                             Label("Generate AI Health Analyst Report", systemImage: "sparkles")
                         }
-                        .buttonStyle(GlassButtonStyle())
+                        .buttonStyle(GlassProminentButtonStyle())
                         .disabled(isGeneratingSummary)
                         if !premiumStore.isPremium {
                             Text("Your first AI report is free — Premium unlocks unlimited.")
@@ -253,7 +368,7 @@ struct ReviewScreen: View {
                         } label: {
                             Label("Unlock unlimited AI reports", systemImage: "crown")
                         }
-                        .buttonStyle(GlassButtonStyle())
+                        .buttonStyle(GlassProminentButtonStyle())
                         Text("You've used your free AI report. Every tracking feature stays free forever.")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
@@ -265,14 +380,14 @@ struct ReviewScreen: View {
                     } label: {
                         Label("Ask about this report", systemImage: "bubble.left.and.text.bubble.right")
                     }
-                    .buttonStyle(GlassButtonStyle())
+                    .buttonStyle(OutlinedPillButtonStyle())
                 } else {
                     Button {
                         showingPaywall = true
                     } label: {
                         Label("Ask about this report", systemImage: "lock.fill")
                     }
-                    .buttonStyle(GlassButtonStyle())
+                    .buttonStyle(OutlinedPillButtonStyle())
                     .accessibilityHint("Chat about your report is a Premium feature. Opens the upgrade screen.")
                 }
             }
@@ -385,17 +500,15 @@ struct ReviewScreen: View {
     }
 
     @ViewBuilder
-    private func findingsGroup(_ title: LocalizedStringKey, severity: Severity, findings: [Finding]) -> some View {
+    private func findingsGroup(_ title: String, severity: Severity, findings: [Finding]) -> some View {
         if !findings.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Label(title, systemImage: severity.systemImage)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(severity.color)
-                ForEach(findings) { finding in
-                    FindingRow(finding: finding)
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .tintedGlassCard(severity.color)
+                MicroLabel(verbatim: "\(title) · \(findings.count)")
+                VStack(spacing: 0) {
+                    ForEach(findings) { finding in
+                        FindingRow(finding: finding)
+                            .ledgerRow()
+                    }
                 }
             }
         }
@@ -405,39 +518,52 @@ struct ReviewScreen: View {
     private func trendsCard(review: HealthReview) -> some View {
         if !review.trends.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Trends")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                VStack(spacing: 10) {
-                    ForEach(Array(review.trends.enumerated()), id: \.element.id) { index, trend in
-                        if index > 0 {
-                            Divider()
-                        }
-                        HStack(alignment: .top, spacing: 10) {
-                            Image(systemName: trend.direction.systemImage)
-                                .foregroundStyle(trend.direction.color)
-                                .accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack {
-                                    Text(trend.metricName)
-                                        .font(.subheadline.weight(.semibold))
-                                    Spacer()
-                                    Text(trend.direction.displayName)
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(trend.direction.color)
-                                }
-                                Text(trend.detail)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityElement(children: .combine)
+                MicroLabel("Trends")
+                VStack(spacing: 0) {
+                    ForEach(Array(review.trends.enumerated()), id: \.element.id) { _, trend in
+                        trendRow(trend)
+                            .ledgerRow()
                     }
                 }
                 .padding()
                 .glassCard()
             }
+        }
+    }
+
+    private func trendRow(_ trend: TrendInsight) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(trend.metricName)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                Spacer()
+                trendTag(trend.direction)
+            }
+            Text(trend.detail)
+                .font(.system(size: 12))
+                .foregroundStyle(Editorial.muted(colorScheme))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Only `.improving`/`.worsening` read as clearly good/bad, so only
+    /// those get a colored tag; `.stable`/`.rising`/`.falling` are
+    /// direction-neutral and render as plain muted text instead (same
+    /// "no forced tag for a neutral state" rule the schedule's Upcoming
+    /// rows use).
+    @ViewBuilder
+    private func trendTag(_ direction: TrendDirection) -> some View {
+        switch direction {
+        case .improving:
+            EditorialTag(verbatim: direction.displayName, kind: .good)
+        case .worsening:
+            EditorialTag(verbatim: direction.displayName, kind: .bad)
+        case .stable, .rising, .falling:
+            Text(direction.displayName)
+                .font(.system(size: 12))
+                .foregroundStyle(Editorial.muted(colorScheme))
         }
     }
 
@@ -445,39 +571,11 @@ struct ReviewScreen: View {
     private func labValuesCard(review: HealthReview) -> some View {
         if !review.labSnapshots.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Latest Lab Values")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                VStack(spacing: 10) {
-                    ForEach(Array(review.labSnapshots.enumerated()), id: \.element.id) { index, snapshot in
-                        if index > 0 {
-                            Divider()
-                        }
-                        NavigationLink {
-                            LabDetailView(seriesKey: snapshot.id)
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(snapshot.name)
-                                        .font(.subheadline)
-                                    Text(snapshot.date.formatted(date: .abbreviated, time: .omitted))
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                VStack(alignment: .trailing, spacing: 3) {
-                                    Text("\(snapshot.value.compactFormatted) \(snapshot.unit)")
-                                        .font(.subheadline.weight(.semibold))
-                                    StatusPill(text: snapshot.status.label, color: snapshot.status.color)
-                                }
-                                Image(systemName: "chevron.right")
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.tertiary)
-                                    .accessibilityHidden(true)
-                            }
-                            .accessibilityElement(children: .combine)
-                        }
-                        .buttonStyle(.plain)
+                MicroLabel("Latest Lab Values")
+                VStack(spacing: 0) {
+                    ForEach(Array(review.labSnapshots.enumerated()), id: \.element.id) { _, snapshot in
+                        labRow(snapshot)
+                            .ledgerRow()
                     }
                 }
                 .padding()
@@ -486,10 +584,79 @@ struct ReviewScreen: View {
         }
     }
 
+    private func labRow(_ snapshot: LabSnapshot) -> some View {
+        NavigationLink {
+            LabDetailView(seriesKey: snapshot.id)
+        } label: {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(snapshot.name)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(Editorial.ink(colorScheme))
+                        Text(snapshot.date.formatted(date: .abbreviated, time: .omitted))
+                            .font(.system(size: 11))
+                            .foregroundStyle(Editorial.muted(colorScheme))
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 3) {
+                        Text("\(snapshot.value.compactFormatted) \(snapshot.unit)")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(Editorial.ink(colorScheme))
+                        labStatusBadge(snapshot.status)
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Editorial.muted(colorScheme))
+                        .accessibilityHidden(true)
+                }
+                labRangeBar(snapshot)
+            }
+            .accessibilityElement(children: .combine)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// A colored tag for a definite status, plain muted text for
+    /// `.unknown` (no reference range to judge against — not a "good"
+    /// result, just an unjudged one, so it doesn't get a green tag).
+    @ViewBuilder
+    private func labStatusBadge(_ status: LabStatus) -> some View {
+        switch status {
+        case .criticalLow, .criticalHigh:
+            EditorialTag(verbatim: status.label, kind: .bad)
+        case .low, .high:
+            EditorialTag(verbatim: status.label, kind: .warn)
+        case .normal:
+            EditorialTag(verbatim: status.label, kind: .good)
+        case .unknown:
+            Text(status.label)
+                .font(.system(size: 11))
+                .foregroundStyle(Editorial.muted(colorScheme))
+        }
+    }
+
+    /// The lab row's range bar: the reference range as the in-range zone,
+    /// padded on both sides for the out-of-range zones, with the marker at
+    /// the latest value. Omitted when there's no reference range to plot
+    /// against (nothing invented in its place).
+    @ViewBuilder
+    private func labRangeBar(_ snapshot: LabSnapshot) -> some View {
+        if let range = snapshot.range, range.upperBound > range.lowerBound {
+            let span = range.upperBound - range.lowerBound
+            let padding = span * 0.4
+            var axisMin = range.lowerBound - padding
+            var axisMax = range.upperBound + padding
+            if snapshot.value < axisMin { axisMin = snapshot.value - padding * 0.2 }
+            if snapshot.value > axisMax { axisMax = snapshot.value + padding * 0.2 }
+            RangeBar(lower: range.lowerBound, upper: range.upperBound, min: axisMin, max: axisMax, value: snapshot.value)
+        }
+    }
+
     private var disclaimerCard: some View {
         Text(HealthReview.disclaimer)
-            .font(.footnote)
-            .foregroundStyle(.secondary)
+            .font(.system(size: 11))
+            .foregroundStyle(Editorial.muted(colorScheme))
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
             .glassCard(cornerRadius: 16)
@@ -499,6 +666,8 @@ struct ReviewScreen: View {
 struct FindingRow: View {
     let finding: Finding
 
+    @Environment(\.colorScheme) private var colorScheme
+
     private var accessibilitySummary: String {
         var text = "\(finding.severity.displayName): \(finding.title). \(finding.detail)"
         if let recommendation = finding.recommendation {
@@ -507,21 +676,36 @@ struct FindingRow: View {
         return text
     }
 
+    private var tagKind: TagKind {
+        switch finding.severity {
+        case .critical: .bad
+        case .attention: .warn
+        case .info: .good
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
-                Image(systemName: finding.severity.systemImage)
-                    .foregroundStyle(finding.severity.color)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(finding.title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                Spacer()
+                EditorialTag(verbatim: finding.severity.displayName, kind: tagKind)
             }
             Text(finding.detail)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 13))
+                .foregroundStyle(Editorial.muted(colorScheme))
             if let recommendation = finding.recommendation {
-                Label(recommendation, systemImage: "arrow.turn.down.right")
-                    .font(.caption)
-                    .foregroundStyle(finding.severity.color)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: "arrow.turn.down.right")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Editorial.muted(colorScheme))
+                        .accessibilityHidden(true)
+                    Text(recommendation)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Editorial.ink(colorScheme))
+                }
             }
         }
         .accessibilityElement(children: .ignore)

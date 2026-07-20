@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import Charts
 
 // MARK: - Biomarker series (pure model)
 
@@ -70,11 +69,10 @@ enum BiomarkerGrouping {
 
 // MARK: - Carousel section
 
-/// Horizontally scrolling row of compact biomarker cards, one per lab test
-/// the user has results for. Self-contained — queries its own data and
-/// renders nothing when there is nothing to show — so a single inserted
-/// `BiomarkerCarouselSection()` line works inside the dashboard's scrolling
-/// `VStack`.
+/// Flat ledger of the lab tests the user has results for, one row per test.
+/// Self-contained — queries its own data and renders nothing when there is
+/// nothing to show — so a single inserted `BiomarkerCarouselSection()` line
+/// works inside the dashboard's scrolling `VStack`.
 struct BiomarkerCarouselSection: View {
     @Query private var labResults: [LabResult]
     @Query private var profiles: [HealthProfile]
@@ -90,23 +88,16 @@ struct BiomarkerCarouselSection: View {
                 EmptyView()
             } else {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Biomarkers")
-                        .font(.headline)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(alignment: .top, spacing: 12) {
-                            ForEach(series) { item in
-                                NavigationLink {
-                                    LabDetailView(seriesKey: item.id)
-                                } label: {
-                                    BiomarkerCard(series: item, sex: profiles.first?.sex)
-                                }
-                                .buttonStyle(.plain)
+                    MicroLabel("Biomarkers")
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(series) { item in
+                            NavigationLink {
+                                LabDetailView(seriesKey: item.id)
+                            } label: {
+                                BiomarkerRow(series: item, sex: profiles.first?.sex)
                             }
+                            .buttonStyle(.plain)
                         }
-                        // Small inset so each card's drop shadow doesn't clip
-                        // against the scroll view's edge.
-                        .padding(.horizontal, 2)
-                        .padding(.vertical, 2)
                     }
                 }
             }
@@ -124,18 +115,21 @@ struct BiomarkerCarouselSection: View {
     }
 }
 
-// MARK: - Card
+// MARK: - Row
 
-/// One compact card: test name, latest value, status pill, mini sparkline,
-/// and a relative date caption. The enclosing `NavigationLink` (in
+/// One flat ledger row: test name, relative "updated" caption, latest value,
+/// status tag, and a `RangeBar` showing where the value sits inside its
+/// reference range. The enclosing `NavigationLink` (in
 /// `BiomarkerCarouselSection`) opens `LabDetailView` exactly the way
 /// `ReviewScreen` and `ReportDetailView` already do.
-private struct BiomarkerCard: View {
+private struct BiomarkerRow: View {
     let series: BiomarkerSeries
     let sex: BiologicalSex?
 
+    @Environment(\.colorScheme) private var colorScheme
+
     /// Nil for a manually entered test that isn't in the built-in catalog —
-    /// those fall back to a neutral pill instead of an invented range.
+    /// those fall back to a neutral tag instead of an invented range.
     private var reference: LabReference? {
         LabCatalog.reference(for: series.id)
     }
@@ -145,9 +139,9 @@ private struct BiomarkerCard: View {
     }
 
     /// Reuses `AnalysisEngine.status`, the same classification `LabDetailView`
-    /// and `ReviewScreen` use for this test, so the pill here never disagrees
+    /// and `ReviewScreen` use for this test, so the tag here never disagrees
     /// with the detail screen. A nil reference/range resolves to `.unknown`
-    /// ("No Range"), which is the neutral pill for custom tests.
+    /// ("No Range"), which is the neutral tag for custom tests.
     private var status: LabStatus {
         AnalysisEngine.status(
             value: series.latest,
@@ -157,59 +151,69 @@ private struct BiomarkerCard: View {
         )
     }
 
-    private var sparklinePoints: [BiomarkerSeries.Point] {
-        Array(series.points.suffix(12))
+    /// Maps a lab status to the editorial tag palette. Matches the token
+    /// spec exactly: "High" reads as the cautionary amber tag, "Low" (and
+    /// any critical flag) reads as the more urgent red tag.
+    private var tagKind: TagKind {
+        switch status {
+        case .normal: .good
+        case .high: .warn
+        case .low, .criticalLow, .criticalHigh: .bad
+        case .unknown: .warn
+        }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(series.name)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(series.name)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Editorial.ink(colorScheme))
+                        .lineLimit(1)
+                    Text("Updated \(series.latestDate.formatted(.relative(presentation: .named)))")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Editorial.muted(colorScheme))
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("\(series.latest.compactFormatted) \(series.unit)")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Editorial.ink(colorScheme))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    EditorialTag(verbatim: status.label, kind: tagKind)
+                }
+            }
 
-            Text("\(series.latest.compactFormatted) \(series.unit)")
-                .font(.system(size: 20, weight: .bold, design: .rounded))
-                .foregroundStyle(status.isOutOfRange ? status.color : .primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-
-            StatusPill(text: status.label, color: status.color)
-
-            sparkline
-                .frame(height: 40)
-
-            Text("Updated \(series.latestDate.formatted(.relative(presentation: .named)))")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .lineLimit(1)
+            if let range {
+                let bounds = axisBounds(range: range, value: series.latest)
+                RangeBar(
+                    lower: range.lowerBound,
+                    upper: range.upperBound,
+                    min: bounds.min,
+                    max: bounds.max,
+                    value: series.latest,
+                    accessibilityLabel: Text(
+                        "\(series.name) \(series.latest.compactFormatted) \(series.unit), \(status.label)"
+                    )
+                )
+            }
         }
-        .padding(12)
-        .frame(width: 160, alignment: .leading)
-        .glassCard(cornerRadius: 16)
+        .ledgerRow()
         .accessibilityElement(children: .combine)
     }
 
-    /// Decorative history sparkline — hidden from accessibility since the
-    /// combined card label already conveys name, value, status, and date.
-    @ViewBuilder
-    private var sparkline: some View {
-        if sparklinePoints.count >= 2 {
-            Chart(Array(sparklinePoints.enumerated()), id: \.offset) { entry in
-                LineMark(
-                    x: .value("Date", entry.element.date),
-                    y: .value("Value", entry.element.value)
-                )
-                .interpolationMethod(.monotone)
-                .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .round))
-            }
-            .foregroundStyle(Glass.accentGradient)
-            .chartXAxis(.hidden)
-            .chartYAxis(.hidden)
-            .chartYScale(domain: .automatic(includesZero: false))
-            .accessibilityHidden(true)
-        } else {
-            Color.clear.accessibilityHidden(true)
-        }
+    /// Extends the reference range with padding on both sides so the
+    /// `RangeBar` axis has visual breathing room, while still keeping the
+    /// current value's marker safely inside the drawn bounds even when the
+    /// reading is far outside the reference range.
+    private func axisBounds(range: ClosedRange<Double>, value: Double) -> (min: Double, max: Double) {
+        let span = Swift.max(range.upperBound - range.lowerBound, 0.0001)
+        let pad = span * 0.6
+        let lower = Swift.min(range.lowerBound - pad, value - span * 0.05)
+        let upper = Swift.max(range.upperBound + pad, value + span * 0.05)
+        return (lower, upper)
     }
 }

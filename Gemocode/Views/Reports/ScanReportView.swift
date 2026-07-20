@@ -25,6 +25,7 @@ enum PremiumGates {
 struct ScanReportView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject private var premiumStore = PremiumStore.shared
 
     // Deliberately NOT @Query: this sheet is shown while the user is
@@ -265,6 +266,7 @@ struct ScanReportView: View {
 
             if !confirmedLabs.isEmpty {
                 confirmedLabsSection
+                saveValuesButton
             }
 
             if !scannedValues.isEmpty {
@@ -354,25 +356,128 @@ struct ScanReportView: View {
         .glassCard()
     }
 
+    /// Every confirmed value gets the shared "name, value, tag, bar" ledger
+    /// grammar, grouped into an "Out of Range" ledger (full row: tag + bar +
+    /// range caption) and an "In Range" ledger (a quieter, compact row) —
+    /// exactly the two-tier layout the scan-result mockups use.
     private var confirmedLabsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Detected Lab Values", systemImage: "testtube.2")
-                .font(.subheadline.weight(.semibold))
-            ForEach(confirmedLabs) { scanned in
-                HStack {
-                    Text(scanned.reference.name)
-                        .font(.subheadline)
-                    Spacer()
-                    Text("\(scanned.value.compactFormatted) \(scanned.reference.unit)")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
+        let sex = fetchProfile()?.sex
+        let evaluated = confirmedLabs.map { scanned -> (scanned: ScannedLabValue, status: LabStatus, range: ClosedRange<Double>?) in
+            let range = scanned.reference.referenceRange(for: sex)
+            let status = AnalysisEngine.status(
+                value: scanned.value,
+                range: range,
+                criticalLow: scanned.reference.criticalLow,
+                criticalHigh: scanned.reference.criticalHigh
+            )
+            return (scanned, status, range)
+        }
+        let outOfRange = evaluated.filter { $0.status.isOutOfRange }
+        let inRangeList = evaluated.filter { !$0.status.isOutOfRange }
+
+        return VStack(alignment: .leading, spacing: 4) {
+            if !outOfRange.isEmpty {
+                MicroLabel("Out of range · \(outOfRange.count)")
+                VStack(spacing: 0) {
+                    ForEach(outOfRange, id: \.scanned.id) { entry in
+                        confirmedLabRow(entry, compact: false)
+                    }
+                }
+            }
+            if !inRangeList.isEmpty {
+                MicroLabel("In range · \(inRangeList.count)")
+                    .padding(.top, outOfRange.isEmpty ? 0 : 16)
+                VStack(spacing: 0) {
+                    ForEach(inRangeList, id: \.scanned.id) { entry in
+                        confirmedLabRow(entry, compact: true)
+                    }
                 }
             }
         }
-        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard()
-        .accessibilityElement(children: .combine)
+    }
+
+    /// A single confirmed-value row. The full (`compact: false`) form shows
+    /// name + value + tag on one line and the range bar beneath it — used
+    /// for out-of-range values. The compact form drops the tag (the section
+    /// header already says "In Range") and shows a slimmer inline bar next
+    /// to the value, matching the quieter in-range ledger in the mockups.
+    @ViewBuilder
+    private func confirmedLabRow(
+        _ entry: (scanned: ScannedLabValue, status: LabStatus, range: ClosedRange<Double>?),
+        compact: Bool
+    ) -> some View {
+        if compact {
+            HStack(spacing: 12) {
+                Text(entry.scanned.reference.name)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                if let range = entry.range {
+                    let axis = rangeBarAxis(range: range, value: entry.scanned.value)
+                    RangeBar(
+                        lower: range.lowerBound,
+                        upper: range.upperBound,
+                        min: axis.min,
+                        max: axis.max,
+                        value: entry.scanned.value
+                    )
+                    .frame(width: 70)
+                }
+                Text("\(entry.scanned.value.compactFormatted) \(entry.scanned.reference.unit)")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Editorial.muted(colorScheme))
+            }
+            .ledgerRow()
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(entry.scanned.reference.name), \(entry.scanned.value.compactFormatted) \(entry.scanned.reference.unit), \(entry.status.label)")
+        } else {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(entry.scanned.reference.name)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Editorial.ink(colorScheme))
+                    Spacer(minLength: 8)
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("\(entry.scanned.value.compactFormatted) \(entry.scanned.reference.unit)")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(Editorial.ink(colorScheme))
+                        StatusPill(text: entry.status.label, color: entry.status.color)
+                    }
+                }
+                if let range = entry.range {
+                    let axis = rangeBarAxis(range: range, value: entry.scanned.value)
+                    RangeBar(
+                        lower: range.lowerBound,
+                        upper: range.upperBound,
+                        min: axis.min,
+                        max: axis.max,
+                        value: entry.scanned.value,
+                        accessibilityLabel: Text("\(entry.scanned.reference.name) \(entry.scanned.value.compactFormatted) \(entry.scanned.reference.unit), \(entry.status.label)")
+                    )
+                }
+            }
+            .ledgerRow()
+        }
+    }
+
+    /// The prominent, full-width "Save N values" confirmation — the one
+    /// filled-accent CTA for this screen, mirroring the scan-result mockups'
+    /// bottom button. Wired to the exact same `save()`/`canSave` gating as
+    /// the toolbar Save button; this is purely an additional, more
+    /// discoverable affordance for the same action.
+    private var saveValuesButton: some View {
+        Button {
+            save()
+        } label: {
+            Text(confirmedLabs.count == 1
+                ? String(localized: "Save \(confirmedLabs.count) Value")
+                : String(localized: "Save \(confirmedLabs.count) Values"))
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(GlassProminentButtonStyle())
+        .disabled(!canSave)
     }
 
     private var reviewButton: some View {
@@ -421,11 +526,10 @@ struct ScanReportView: View {
     private var lockedCard: some View {
         VStack(spacing: 14) {
             Image(systemName: "lock.fill")
-                .font(.system(size: 28, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 56, height: 56)
-                .background(Glass.accentGradient, in: Circle())
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(Editorial.ink(colorScheme))
                 .accessibilityHidden(true)
+            MicroLabel("Premium")
             Text("Scan Lab Reports with Premium")
                 .font(.headline)
             Text("Photograph or import a lab report and Gemocode extracts your results automatically — no manual typing.")
@@ -458,10 +562,8 @@ struct ScanReportView: View {
     private var aiStageBody: some View {
         VStack(spacing: 10) {
             Image(systemName: "sparkles")
-                .font(.system(size: 28, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 60, height: 60)
-                .background(Glass.accentGradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(Editorial.ink(colorScheme))
                 .accessibilityHidden(true)
             Text("AI Health Analyst")
                 .font(.title2.bold())
@@ -517,7 +619,7 @@ struct ScanReportView: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("AI Health Analyst", systemImage: "sparkles")
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Glass.accentGradient)
+                .foregroundStyle(Editorial.ink(colorScheme))
 
             Text(report.overview)
                 .font(.subheadline)
@@ -1035,16 +1137,31 @@ struct ScanReportView: View {
     }
 }
 
+/// Axis bounds for a `RangeBar` built around a reference range: padded on
+/// both sides so the out-of-range zones read clearly, and widened further
+/// whenever the value itself sits outside that padding so the marker is
+/// never clipped to the bar's edge. `private` and intentionally duplicated
+/// per file (see the identical helper in `ScannedResultsSheet.swift`) rather
+/// than lifted into `Support/EditorialComponents.swift`, which this agent
+/// doesn't own.
+private func rangeBarAxis(range: ClosedRange<Double>, value: Double) -> (min: Double, max: Double) {
+    let width = range.upperBound - range.lowerBound
+    let pad = width > 0 ? width * 0.35 : max(abs(range.upperBound), 1) * 0.2
+    let lower = Swift.min(range.lowerBound - pad, value - pad * 0.15)
+    let upper = Swift.max(range.upperBound + pad, value + pad * 0.15)
+    return (lower, upper)
+}
+
 // MARK: - Header
 
 private struct ScanReportHeader: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         VStack(spacing: 10) {
             Image(systemName: "doc.text.viewfinder")
-                .font(.system(size: 28, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 60, height: 60)
-                .background(Glass.accentGradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(Editorial.ink(colorScheme))
                 .accessibilityHidden(true)
             Text("Scan a Report")
                 .font(.title2.bold())
@@ -1059,34 +1176,41 @@ private struct ScanReportHeader: View {
 
 // MARK: - Action card
 
+/// One scan action, styled as an inset-card row (leading ink icon, title +
+/// subtitle, trailing chevron) rather than a floating glass card — the
+/// editorial system's "one featured block" treatment, used here for the two
+/// top-level scan entry points.
 private struct ScanActionCard: View {
     let icon: String
     let title: LocalizedStringKey
     let subtitle: LocalizedStringKey
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         HStack(spacing: 14) {
             Image(systemName: icon)
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 50, height: 50)
-                .background(Glass.accentGradient, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Editorial.ink(colorScheme))
+                .frame(width: 24)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.headline)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Editorial.ink(colorScheme))
                 Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Editorial.muted(colorScheme))
             }
             Spacer(minLength: 0)
             Image(systemName: "chevron.right")
-                .foregroundStyle(.secondary)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Editorial.muted(colorScheme))
                 .accessibilityHidden(true)
         }
         .padding(16)
         .frame(maxWidth: .infinity)
-        .glassCard()
+        .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
 
@@ -1097,17 +1221,21 @@ private struct CategoryChip: View {
     let isSelected: Bool
     let action: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         Button(action: action) {
             Label(category.displayName, systemImage: category.systemImage)
                 .font(.subheadline.weight(.semibold))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
-                .foregroundStyle(isSelected ? .white : .primary)
+                .foregroundStyle(isSelected ? Editorial.canvas(colorScheme) : Editorial.muted(colorScheme))
                 .background(
-                    Capsule().fill(isSelected ? AnyShapeStyle(Glass.accentGradient) : AnyShapeStyle(.ultraThinMaterial))
+                    Capsule().fill(isSelected ? Editorial.ink(colorScheme) : Color.clear)
                 )
-                .overlay(Capsule().strokeBorder(Glass.bevelStroke, lineWidth: 1))
+                .overlay(
+                    Capsule().strokeBorder(isSelected ? Color.clear : Editorial.controlBorder(colorScheme), lineWidth: 1)
+                )
         }
         .buttonStyle(.plain)
         .accessibilityLabel(category.displayName)

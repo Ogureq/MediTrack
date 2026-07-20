@@ -39,6 +39,8 @@ struct TrendsView: View {
     @Query private var vitals: [VitalSample]
     @Query private var profiles: [HealthProfile]
 
+    @Environment(\.colorScheme) private var colorScheme
+
     @State private var selectedSeriesID: String?
     @State private var timeRange: TrendTimeRange = .all
     @State private var selectedDate: Date?
@@ -160,8 +162,21 @@ struct TrendsView: View {
                         systemImage: "chart.line.uptrend.xyaxis",
                         description: Text("Add at least two entries of the same lab test or vital to see its trend over time.")
                     )
-                } else if let series = selectedSeries {
-                    trendsList(for: series)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(allSeries) { series in
+                                ledgerRow(series)
+                            }
+
+                            if let series = selectedSeries {
+                                detailSection(for: series)
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 6)
+                        .padding(.bottom, 28)
+                    }
                 }
             }
             .ambientScreen()
@@ -181,117 +196,182 @@ struct TrendsView: View {
         }
     }
 
-    private func trendsList(for series: MetricSeries) -> some View {
-        let points = visiblePoints(for: series)
-        return List {
-            Section {
-                metricChipsRow(selectedID: series.id)
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-            }
-            .listRowSeparator(.hidden)
+    // MARK: - Ledger
 
-            Section {
-                rangeChipsRow
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-            }
-            .listRowSeparator(.hidden)
+    /// One flat ledger row per metric: a small filled/hollow dot marking
+    /// whether this is the metric currently expanded below, the name plus a
+    /// muted trend caption ("Rising · 5.6 → 5.9"), a small ink sparkline of
+    /// its most recent points, and a status tag. Tapping selects the metric,
+    /// swapping the interactive chart + stats shown underneath the ledger.
+    private func ledgerRow(_ series: MetricSeries) -> some View {
+        let isSelected = series.id == (selectedSeries?.id ?? "")
+        return Button {
+            selectedSeriesID = series.id
+        } label: {
+            HStack(spacing: 12) {
+                Circle()
+                    .fill(isSelected ? Editorial.ink(colorScheme) : Color.clear)
+                    .overlay(
+                        Circle().strokeBorder(Editorial.controlBorder(colorScheme), lineWidth: isSelected ? 0 : 1)
+                    )
+                    .frame(width: 6, height: 6)
+                    .accessibilityHidden(true)
 
-            Section {
-                if points.count >= 2 {
-                    chart(for: series, points: points)
-                        .frame(height: 240)
-                        .padding(.vertical, 8)
-                        .listRowSeparator(.hidden)
-                } else {
-                    Text("Not enough entries in this time range.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(series.name)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Editorial.ink(colorScheme))
+                        .lineLimit(1)
+                    if let trend = trendCaption(for: series) {
+                        HStack(spacing: 4) {
+                            Image(systemName: trend.symbol)
+                            Text(trend.text)
+                        }
+                        .font(.system(size: 11))
+                        .foregroundStyle(Editorial.muted(colorScheme))
+                        .lineLimit(1)
+                    }
+                }
+
+                Spacer(minLength: 8)
+
+                rowSparkline(series)
+
+                tagView(for: series)
+            }
+        }
+        .buttonStyle(.plain)
+        .ledgerRow()
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])
+    }
+
+    /// Small ink sparkline (last 12 points) with an accent dot marking the
+    /// most recent reading — matches the mini-chart used in the row grammar
+    /// throughout the editorial system (see `BiomarkerRow`).
+    @ViewBuilder
+    private func rowSparkline(_ series: MetricSeries) -> some View {
+        let recent = Array(series.points.suffix(12))
+        if recent.count >= 2 {
+            Chart {
+                ForEach(Array(recent.enumerated()), id: \.offset) { entry in
+                    LineMark(
+                        x: .value("Index", entry.offset),
+                        y: .value("Value", entry.element.value)
+                    )
+                    .interpolationMethod(.monotone)
+                    .lineStyle(StrokeStyle(lineWidth: 1.4, lineCap: .round))
+                }
+                .foregroundStyle(Editorial.ink(colorScheme))
+
+                if let lastIndex = recent.indices.last {
+                    PointMark(
+                        x: .value("Index", lastIndex),
+                        y: .value("Value", recent[lastIndex].value)
+                    )
+                    .symbolSize(24)
+                    .foregroundStyle(Editorial.accent(colorScheme))
                 }
             }
-            .listRowBackground(GlassRowBackground())
-            .listRowSeparator(.hidden)
+            .chartXAxis(.hidden)
+            .chartYAxis(.hidden)
+            .chartYScale(domain: .automatic(includesZero: false))
+            .accessibilityHidden(true)
+            .frame(width: 90, height: 30)
+        } else {
+            Color.clear.frame(width: 90, height: 30).accessibilityHidden(true)
+        }
+    }
 
-            Section("Statistics") {
+    @ViewBuilder
+    private func tagView(for series: MetricSeries) -> some View {
+        if let latest = series.points.last {
+            let status = AnalysisEngine.status(value: latest.value, range: series.range)
+            EditorialTag(verbatim: status.label, kind: tagKind(for: status))
+        }
+    }
+
+    /// Maps a lab/vital status to the editorial tag palette. Matches the
+    /// token spec exactly: "High" reads as the cautionary amber tag, "Low"
+    /// (and any critical flag) reads as the more urgent red tag.
+    private func tagKind(for status: LabStatus) -> TagKind {
+        switch status {
+        case .normal: .good
+        case .high: .warn
+        case .low, .criticalLow, .criticalHigh: .bad
+        case .unknown: .warn
+        }
+    }
+
+    /// Trend caption built from the metric's full history (not the visible
+    /// time-range window), matching the ledger grammar's "↗ rising · 5.6 →
+    /// 5.9" summary line. `nil` when there aren't enough points to classify
+    /// a trend.
+    private func trendCaption(for series: MetricSeries) -> (symbol: String, text: String)? {
+        guard series.points.count >= 3,
+              let first = series.points.first,
+              let last = series.points.last,
+              let (direction, _) = AnalysisEngine.trend(
+                  points: series.points.map { (date: $0.date, value: $0.value) },
+                  range: series.range
+              ) else { return nil }
+        let text = "\(direction.displayName) · \(first.value.compactFormatted) → \(last.value.compactFormatted)"
+        return (direction.systemImage, text)
+    }
+
+    // MARK: - Detail (range picker + chart + stats)
+
+    @ViewBuilder
+    private func detailSection(for series: MetricSeries) -> some View {
+        let points = visiblePoints(for: series)
+        VStack(alignment: .leading, spacing: 14) {
+            rangePicker
+                .padding(.top, 18)
+
+            if points.count >= 2 {
+                chart(for: series, points: points)
+                    .frame(height: 240)
+                    .padding(.vertical, 4)
+            } else {
+                Text("Not enough entries in this time range.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Editorial.muted(colorScheme))
+            }
+
+            MicroLabel("Statistics")
+                .padding(.top, 4)
+
+            VStack(alignment: .leading, spacing: 0) {
                 statsRows(for: series, points: points)
             }
-            .listRowBackground(GlassRowBackground())
-            .listRowSeparator(.hidden)
         }
     }
 
-    /// Horizontally scrolling metric-selection chips. The active metric
-    /// gets the accent-gradient fill with dark ink text — legible against
-    /// the bright gradient in either light or dark mode; every other chip is
-    /// a plain glass pill, matching the chip rows used elsewhere in the app
-    /// (see `HealthTimelineView.chip`, `DocumentsView.categoryChip`).
-    private func metricChipsRow(selectedID: String) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(allSeries) { candidate in
-                    let isSelected = candidate.id == selectedID
-                    Button {
-                        selectedSeriesID = candidate.id
-                    } label: {
-                        Text(candidate.name)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(isSelected ? Self.selectedChipTextColor : Color.primary)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background {
-                                if isSelected {
-                                    Capsule().fill(Glass.accentGradient)
-                                } else {
-                                    Capsule().fill(.ultraThinMaterial)
-                                }
-                            }
-                            .overlay(Capsule().strokeBorder(Glass.bevelStroke, lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-                }
-            }
-            .padding(.vertical, 2)
-        }
-    }
-
-    /// Segmented range control (3M/6M/1Y/All): the active range gets a
-    /// subtle translucent white highlight over the glass track, matching the
-    /// prototype's range chips.
-    private var rangeChipsRow: some View {
-        HStack(spacing: 2) {
+    /// Quiet text segmented control for the 3M/6M/1Y/All window — no pill
+    /// backgrounds, just weight/color contrast between the active and
+    /// inactive labels.
+    private var rangePicker: some View {
+        HStack(spacing: 0) {
             ForEach(TrendTimeRange.allCases) { range in
                 let isSelected = range == timeRange
                 Button {
                     timeRange = range
                 } label: {
-                    Text(range.rawValue)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(isSelected ? Color.primary : Color.secondary)
+                    // Deliberately verbatim: these are short abbreviations
+                    // ("3M", "1Y", "All") rather than translated phrases —
+                    // matches their pre-redesign display, which passed the
+                    // raw `rawValue` straight to `Text`.
+                    Text(verbatim: range.rawValue)
+                        .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                        .foregroundStyle(isSelected ? Editorial.ink(colorScheme) : Editorial.muted(colorScheme))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 7)
-                        .background(
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .fill(isSelected ? Color.white.opacity(0.16) : Color.clear)
-                        )
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(isSelected ? [.isSelected] : [])
             }
         }
-        .padding(2)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .strokeBorder(Glass.bevelStroke, lineWidth: 1)
-        )
     }
-
-    /// Dark ink (`#0B1220`-equivalent) used for text sitting directly on the
-    /// accent gradient — always legible regardless of light/dark mode,
-    /// matching the prototype's selected-chip treatment.
-    private static let selectedChipTextColor = Color(red: 0x0B / 255.0, green: 0x12 / 255.0, blue: 0x20 / 255.0)
 
     private func visiblePoints(for series: MetricSeries) -> [MetricPoint] {
         guard let months = timeRange.months,
@@ -342,6 +422,13 @@ struct TrendsView: View {
         let minPoint = periodMinPoint(points)
         let maxPoint = periodMaxPoint(points)
         let maxDiffersFromMin = maxPoint?.id != minPoint?.id
+        // Empty when `pair` is nil — the single-series branch below styles
+        // its line directly rather than through `foregroundStyle(by:)`, so
+        // this scale is only consulted for the dual-series blood-pressure
+        // case, mapping systolic to ink and diastolic to muted.
+        let foregroundScale: [String: Color] = pair.map {
+            [$0.systolic.name: Editorial.ink(colorScheme), $0.diastolic.name: Editorial.muted(colorScheme)]
+        } ?? [:]
 
         Chart {
             if let range = series.range {
@@ -349,7 +436,7 @@ struct TrendsView: View {
                     yStart: .value("Range low", range.lowerBound),
                     yEnd: .value("Range high", range.upperBound)
                 )
-                .foregroundStyle(.green.opacity(0.1))
+                .foregroundStyle(Editorial.zoneIn(colorScheme).opacity(0.5))
             }
 
             if let pair {
@@ -390,7 +477,7 @@ struct TrendsView: View {
                     .interpolationMethod(.monotone)
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [Color.teal.opacity(0.30), Color.teal.opacity(0)],
+                            colors: [Editorial.ink(colorScheme).opacity(0.14), Editorial.ink(colorScheme).opacity(0)],
                             startPoint: .top,
                             endPoint: .bottom
                         )
@@ -402,12 +489,12 @@ struct TrendsView: View {
                         y: .value(series.name, point.value)
                     )
                     .interpolationMethod(.monotone)
-                    .foregroundStyle(Glass.accentGradient)
+                    .foregroundStyle(Editorial.ink(colorScheme))
                     PointMark(
                         x: .value("Date", point.date),
                         y: .value(series.name, point.value)
                     )
-                    .foregroundStyle(Glass.accentGradient)
+                    .foregroundStyle(Editorial.ink(colorScheme))
                 }
             }
 
@@ -419,7 +506,7 @@ struct TrendsView: View {
             // keeps them inside the chart instead of letting them overflow.
             if let average {
                 RuleMark(y: .value("Average", average))
-                    .foregroundStyle(.orange.opacity(0.55))
+                    .foregroundStyle(Editorial.muted(colorScheme).opacity(0.7))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 4]))
                     .annotation(
                         position: .top,
@@ -427,10 +514,10 @@ struct TrendsView: View {
                     ) {
                         Text("avg \(average.compactFormatted)")
                             .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(Editorial.muted(colorScheme))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 3)
-                            .background(.ultraThinMaterial, in: Capsule())
+                            .background(Editorial.insetCard(colorScheme), in: Capsule())
                     }
             }
 
@@ -440,14 +527,14 @@ struct TrendsView: View {
                     y: .value(series.name, minPoint.value)
                 )
                 .symbolSize(90)
-                .foregroundStyle(.purple)
+                .foregroundStyle(Editorial.accent(colorScheme))
                 .annotation(
                     position: .bottom,
                     overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .plot))
                 ) {
                     Text(minPoint.value.compactFormatted)
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(Editorial.accent(colorScheme))
                 }
             }
             if let maxPoint, maxDiffersFromMin {
@@ -456,20 +543,20 @@ struct TrendsView: View {
                     y: .value(series.name, maxPoint.value)
                 )
                 .symbolSize(90)
-                .foregroundStyle(.purple)
+                .foregroundStyle(Editorial.accent(colorScheme))
                 .annotation(
                     position: .topTrailing,
                     overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .plot))
                 ) {
                     Text(maxPoint.value.compactFormatted)
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(Editorial.accent(colorScheme))
                 }
             }
 
             if let selectedDate, let selected = nearestPoint(to: selectedDate, in: points) {
                 RuleMark(x: .value("Selected", selected.date))
-                    .foregroundStyle(.gray.opacity(0.5))
+                    .foregroundStyle(Editorial.muted(colorScheme).opacity(0.6))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
                     .annotation(
                         position: .topLeading,
@@ -478,22 +565,38 @@ struct TrendsView: View {
                         VStack(spacing: 2) {
                             Text(selected.date.formatted(date: .abbreviated, time: .omitted))
                                 .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Editorial.muted(colorScheme))
                             Text("\(selected.value.compactFormatted) \(series.unit)")
                                 .font(.caption.weight(.bold))
+                                .foregroundStyle(Editorial.ink(colorScheme))
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .strokeBorder(Glass.bevelStroke, lineWidth: 1)
+                                .strokeBorder(Editorial.controlBorder(colorScheme), lineWidth: 1)
                         )
                     }
             }
         }
+        .chartForegroundStyleScale(foregroundScale)
         .chartLegend(pair == nil ? .hidden : .visible)
         .chartXSelection(value: $selectedDate)
+        .chartXAxis {
+            AxisMarks { _ in
+                AxisGridLine().foregroundStyle(Editorial.hairline(colorScheme))
+                AxisTick().foregroundStyle(Editorial.muted(colorScheme))
+                AxisValueLabel().foregroundStyle(Editorial.muted(colorScheme))
+            }
+        }
+        .chartYAxis {
+            AxisMarks { _ in
+                AxisGridLine().foregroundStyle(Editorial.hairline(colorScheme))
+                AxisTick().foregroundStyle(Editorial.muted(colorScheme))
+                AxisValueLabel().foregroundStyle(Editorial.muted(colorScheme))
+            }
+        }
         .chartYAxisLabel(series.unit)
         .chartYScale(domain: yDomain(values: domainValues, range: series.range))
         .accessibilityLabel("\(series.name) trend, \(timeRangeDescription)")
@@ -509,12 +612,12 @@ struct TrendsView: View {
     private func statsRows(for series: MetricSeries, points: [MetricPoint]) -> some View {
         let values = points.map(\.value)
         if let latest = points.last, let minValue = values.min(), let maxValue = values.max() {
-            LabeledContent("Latest", value: "\(latest.value.compactFormatted) \(series.unit)")
-            LabeledContent("Lowest", value: "\(minValue.compactFormatted) \(series.unit)")
-            LabeledContent("Highest", value: "\(maxValue.compactFormatted) \(series.unit)")
-            LabeledContent("Entries", value: "\(points.count)")
+            statRow("Latest", value: "\(latest.value.compactFormatted) \(series.unit)")
+            statRow("Lowest", value: "\(minValue.compactFormatted) \(series.unit)")
+            statRow("Highest", value: "\(maxValue.compactFormatted) \(series.unit)")
+            statRow("Entries", value: "\(points.count)")
             if let range = series.range {
-                LabeledContent(
+                statRow(
                     "Typical Range",
                     value: "\(range.lowerBound.compactFormatted)–\(range.upperBound.compactFormatted) \(series.unit)"
                 )
@@ -523,16 +626,44 @@ struct TrendsView: View {
                 points: points.map { (date: $0.date, value: $0.value) },
                 range: series.range
             ) {
-                LabeledContent("Trend") {
+                HStack {
+                    Text("Trend")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Editorial.muted(colorScheme))
+                    Spacer()
                     HStack(spacing: 6) {
                         Image(systemName: direction.systemImage)
-                            .foregroundStyle(direction.color)
                             .accessibilityHidden(true)
                         Text("\(direction.displayName) (\(String(format: "%+.0f%%", percentChange)))")
-                            .foregroundStyle(direction.color)
                     }
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(trendColor(direction))
                 }
+                .ledgerRow()
+                .accessibilityElement(children: .combine)
             }
+        }
+    }
+
+    private func statRow(_ title: LocalizedStringKey, value: String) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 15))
+                .foregroundStyle(Editorial.muted(colorScheme))
+            Spacer()
+            Text(value)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Editorial.ink(colorScheme))
+        }
+        .ledgerRow()
+        .accessibilityElement(children: .combine)
+    }
+
+    private func trendColor(_ direction: TrendDirection) -> Color {
+        switch direction {
+        case .improving: Editorial.tagGood(colorScheme)
+        case .worsening: Editorial.tagBad(colorScheme)
+        case .stable, .rising, .falling: Editorial.muted(colorScheme)
         }
     }
 }
