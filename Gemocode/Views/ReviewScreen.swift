@@ -645,10 +645,10 @@ struct ReviewScreen: View {
         if let range = snapshot.range, range.upperBound > range.lowerBound {
             let span = range.upperBound - range.lowerBound
             let padding = span * 0.4
-            var axisMin = range.lowerBound - padding
-            var axisMax = range.upperBound + padding
-            if snapshot.value < axisMin { axisMin = snapshot.value - padding * 0.2 }
-            if snapshot.value > axisMax { axisMax = snapshot.value + padding * 0.2 }
+            let baseMin = range.lowerBound - padding
+            let baseMax = range.upperBound + padding
+            let axisMin = snapshot.value < baseMin ? snapshot.value - padding * 0.2 : baseMin
+            let axisMax = snapshot.value > baseMax ? snapshot.value + padding * 0.2 : baseMax
             RangeBar(lower: range.lowerBound, upper: range.upperBound, min: axisMin, max: axisMax, value: snapshot.value)
         }
     }
