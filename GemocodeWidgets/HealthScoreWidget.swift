@@ -96,16 +96,83 @@ struct HealthScoreWidget: Widget {
     }
 }
 
-// MARK: - Score color logic
+// MARK: - Editorial tokens (mirrored)
+//
+// The widget extension cannot import the app module, so these mirror the
+// `Editorial` token enum in `Gemocode/Support/Theme.swift` byte-for-byte.
+// If those hex values change, update this table too. Paper-and-ink
+// editorial system: flat canvas, ink typography, one accent, range-bar
+// grammar instead of gauges/gradients.
+private enum WidgetEditorial {
+    static func canvas(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color(wHex: 0x0F1114) : Color(wHex: 0xFFFFFF)
+    }
+    static func ink(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color(wHex: 0xEEF0F2) : Color(wHex: 0x000000)
+    }
+    static func muted(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color(wHex: 0x8D939C) : Color(wHex: 0x8F8F8F)
+    }
+    static func hairline(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color(wHex: 0x282B31) : Color(wHex: 0xF0F0F0)
+    }
+    static func tagGood(_ scheme: ColorScheme) -> Color { Color(wHex: 0x2F8F5B) }
+    static func tagWarn(_ scheme: ColorScheme) -> Color { Color(wHex: 0xB98317) }
+    static func tagBad(_ scheme: ColorScheme) -> Color { Color(wHex: 0xCF3F2F) }
+    static func zoneOut(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color(wHex: 0x4D3D28) : Color(wHex: 0xE8C9A8)
+    }
+    static func zoneIn(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color(wHex: 0x274434) : Color(wHex: 0xBFE3CD)
+    }
+    static func zoneOptimal(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color(wHex: 0x356048) : Color(wHex: 0x9FD4B4)
+    }
+    static func barMarker(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? .white : .black
+    }
+}
 
-private func scoreColor(for score: Int) -> Color {
+private extension Color {
+    /// `0xRRGGBB` convenience initializer used only to key in the mirrored
+    /// editorial hex values above.
+    init(wHex hex: UInt32) {
+        self.init(
+            red: Double((hex >> 16) & 0xFF) / 255,
+            green: Double((hex >> 8) & 0xFF) / 255,
+            blue: Double(hex & 0xFF) / 255
+        )
+    }
+}
+
+// MARK: - Score band text (mirrors AnalysisEngine.scoreLabel wording)
+//
+// Duplicated rather than shared (no app-module import available). Keep the
+// thresholds/wording in sync with `Gemocode/Services/AnalysisEngine.swift`
+// `scoreLabel`. The widget has no strings catalog of its own (see report),
+// so — matching this file's pre-existing behavior — these stay plain,
+// non-localized literals rather than introducing a new catalog.
+private enum WidgetTagKind {
+    case good
+    case warn
+    case bad
+}
+
+private func widgetScoreLabel(for score: Int) -> String {
     switch score {
-    case 80...:
-        return .teal
-    case 60..<80:
-        return .orange
-    default:
-        return .red
+    case 90...100: return "Excellent"
+    case 75..<90: return "Good"
+    case 60..<75: return "Fair"
+    case 40..<60: return "Needs Attention"
+    default: return "Talk to Your Doctor"
+    }
+}
+
+private func widgetScoreTagKind(for score: Int) -> WidgetTagKind {
+    switch score {
+    case 75...100: return .good
+    case 40..<75: return .warn
+    default: return .bad
     }
 }
 
@@ -113,6 +180,7 @@ private func scoreColor(for score: Int) -> Color {
 
 struct HealthScoreWidgetView: View {
     @Environment(\.widgetFamily) private var family
+    @Environment(\.colorScheme) private var colorScheme
     let entry: HealthScoreEntry
 
     var body: some View {
@@ -136,64 +204,106 @@ struct HealthScoreWidgetView: View {
             }
         }
         .containerBackground(for: .widget) {
-            backgroundGradient
+            WidgetEditorial.canvas(colorScheme)
         }
         // Tapping the widget lands on the Review tab (handled in ContentView).
         .widgetURL(URL(string: "gemocode://review"))
     }
+}
 
-    private var backgroundGradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color(red: 0.07, green: 0.11, blue: 0.18),
-                Color(red: 0.03, green: 0.05, blue: 0.10),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+// MARK: - Shared score row (micro-label + number + tag + range bar)
+
+private struct WidgetScoreHeader: View {
+    let score: Int
+    let numberSize: CGFloat
+    let colorScheme: ColorScheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("HEALTH SCORE")
+                .font(.system(size: 8, weight: .semibold))
+                .kerning(0.96)
+                .foregroundStyle(WidgetEditorial.muted(colorScheme))
+
+            HStack(alignment: .lastTextBaseline, spacing: 6) {
+                Text("\(score)")
+                    .font(.system(size: numberSize, weight: .regular))
+                    .kerning(-numberSize * 0.03)
+                    .foregroundStyle(WidgetEditorial.ink(colorScheme))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+
+                WidgetTag(
+                    text: widgetScoreLabel(for: score),
+                    kind: widgetScoreTagKind(for: score),
+                    colorScheme: colorScheme
+                )
+            }
+
+            WidgetScoreRangeBar(score: score, colorScheme: colorScheme)
+        }
     }
 }
 
-// MARK: - Score ring
+/// Status pill mirroring `EditorialTag` from `Support/EditorialComponents.swift`
+/// at widget scale (8pt vs. 9pt) — duplicated locally since the widget
+/// target cannot import that file.
+private struct WidgetTag: View {
+    let text: String
+    let kind: WidgetTagKind
+    let colorScheme: ColorScheme
 
-private struct ScoreRingView: View {
+    var body: some View {
+        Text(text.uppercased())
+            .font(.system(size: 8, weight: .semibold))
+            .kerning(0.48)
+            .foregroundStyle(.white)
+            .padding(.vertical, 2)
+            .padding(.horizontal, 7)
+            .background(fill, in: Capsule())
+    }
+
+    private var fill: Color {
+        switch kind {
+        case .good: WidgetEditorial.tagGood(colorScheme)
+        case .warn: WidgetEditorial.tagWarn(colorScheme)
+        case .bad: WidgetEditorial.tagBad(colorScheme)
+        }
+    }
+}
+
+/// Range-bar strip mirroring `RangeBar` from `Support/EditorialComponents.swift`
+/// at widget scale — a fixed 40/35/25 three-zone split (matching the
+/// dashboard's score bar in the mockups) with the marker at `score`/100.
+/// Decorative: the header text above already states the score and band.
+private struct WidgetScoreRangeBar: View {
     let score: Int
-    var lineWidth: CGFloat = 9
+    let colorScheme: ColorScheme
 
-    private var color: Color { scoreColor(for: score) }
-
-    private var trimFraction: CGFloat {
-        CGFloat(max(0, min(100, score))) / 100
+    private var marker: CGFloat {
+        CGFloat(Swift.min(100, Swift.max(0, score))) / 100
     }
 
     var body: some View {
-        ZStack {
-            Circle()
-                .stroke(Color.white.opacity(0.16), lineWidth: lineWidth)
-            Circle()
-                .trim(from: 0, to: max(0.02, trimFraction))
-                .stroke(
-                    LinearGradient(
-                        colors: [color.opacity(0.55), color],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-                )
-                .rotationEffect(.degrees(-90))
-            VStack(spacing: 1) {
-                Text("\(score)")
-                    .font(.title2.bold())
-                    .foregroundStyle(.white)
-                    .minimumScaleFactor(0.7)
-                    .lineLimit(1)
-                Text("Health Score")
-                    .font(.system(size: 8.5))
-                    .foregroundStyle(.white.opacity(0.65))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let height = geometry.size.height
+            let markerWidth: CGFloat = 2
+
+            ZStack(alignment: .leading) {
+                HStack(spacing: 0) {
+                    WidgetEditorial.zoneOut(colorScheme).frame(width: width * 0.40, height: height)
+                    WidgetEditorial.zoneIn(colorScheme).frame(width: width * 0.35, height: height)
+                    WidgetEditorial.zoneOptimal(colorScheme).frame(width: width * 0.25, height: height)
+                }
+                WidgetEditorial.barMarker(colorScheme)
+                    .frame(width: markerWidth, height: height)
+                    .offset(x: Swift.min(Swift.max(0, width * marker), Swift.max(0, width - markerWidth)))
             }
         }
+        .frame(height: 5)
+        .clipShape(Capsule())
+        .accessibilityHidden(true)
     }
 }
 
@@ -201,11 +311,26 @@ private struct ScoreRingView: View {
 
 private struct SmallHealthScoreView: View {
     let snapshot: WidgetSnapshot
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        ScoreRingView(score: snapshot.score)
-            .padding(10)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        VStack(alignment: .leading, spacing: 0) {
+            WidgetScoreHeader(score: snapshot.score, numberSize: 40, colorScheme: colorScheme)
+
+            Spacer(minLength: 8)
+
+            Text(snapshot.headline)
+                .font(.system(size: 10))
+                .foregroundStyle(WidgetEditorial.muted(colorScheme))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "Health score \(snapshot.score), \(widgetScoreLabel(for: snapshot.score)). \(snapshot.headline)"
+        )
     }
 }
 
@@ -214,37 +339,52 @@ private struct SmallHealthScoreView: View {
 private struct MediumHealthScoreView: View {
     let snapshot: WidgetSnapshot
     let snapshotDate: Date
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var vitals: [WidgetVital] { Array(snapshot.vitals.prefix(3)) }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 16) {
-            ScoreRingView(score: snapshot.score, lineWidth: 8)
-                .frame(width: 74, height: 74)
+        HStack(alignment: .top, spacing: 18) {
+            WidgetScoreHeader(score: snapshot.score, numberSize: 32, colorScheme: colorScheme)
+                .frame(width: 96, alignment: .leading)
 
-            VStack(alignment: .leading, spacing: 5) {
-                Text(snapshot.headline)
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.8)
-
-                ForEach(Array(snapshot.vitals.prefix(3)), id: \.name) { vital in
-                    Label(vital.value, systemImage: vital.systemImage)
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.75))
-                        .lineLimit(1)
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(vitals.enumerated()), id: \.offset) { index, vital in
+                    HStack(spacing: 6) {
+                        Image(systemName: vital.systemImage)
+                            .font(.system(size: 11))
+                            .foregroundStyle(WidgetEditorial.muted(colorScheme))
+                            .accessibilityHidden(true)
+                        Text(vital.name)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(WidgetEditorial.ink(colorScheme))
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text(vital.value)
+                            .font(.system(size: 11))
+                            .foregroundStyle(WidgetEditorial.muted(colorScheme))
+                            .lineLimit(1)
+                    }
+                    .padding(.vertical, 6)
+                    .overlay(alignment: .bottom) {
+                        if index < vitals.count - 1 {
+                            Rectangle()
+                                .fill(WidgetEditorial.hairline(colorScheme))
+                                .frame(height: 0.5)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
                 }
 
-                Spacer(minLength: 0)
+                Spacer(minLength: 4)
 
                 (Text("Updated ") + Text(snapshotDate, style: .relative))
                     .font(.system(size: 9))
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(WidgetEditorial.muted(colorScheme))
                     .lineLimit(1)
             }
-
-            Spacer(minLength: 0)
         }
-        .padding(14)
+        .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 }
@@ -252,17 +392,20 @@ private struct MediumHealthScoreView: View {
 // MARK: - Empty state
 
 private struct EmptyStateView: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: "heart.text.square")
-                .font(.title2)
-                .foregroundStyle(.white.opacity(0.7))
+                .font(.system(size: 20))
+                .foregroundStyle(WidgetEditorial.ink(colorScheme).opacity(0.55))
             Text("Open Gemocode to sync")
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.7))
+                .font(.system(size: 11))
+                .foregroundStyle(WidgetEditorial.muted(colorScheme))
                 .multilineTextAlignment(.center)
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
     }
 }
