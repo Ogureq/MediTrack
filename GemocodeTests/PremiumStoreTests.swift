@@ -14,10 +14,12 @@ final class PremiumStoreTests: XCTestCase {
     override func setUpWithError() throws {
         try super.setUpWithError()
         defaults.removeObject(forKey: AIReportQuota.usedCountKey)
+        defaults.removeObject(forKey: AIReportQuota.reportOwedKey)
     }
 
     override func tearDownWithError() throws {
         defaults.removeObject(forKey: AIReportQuota.usedCountKey)
+        defaults.removeObject(forKey: AIReportQuota.reportOwedKey)
         try super.tearDownWithError()
     }
 
@@ -77,5 +79,36 @@ final class PremiumStoreTests: XCTestCase {
             AIReportQuota.freeLifetimeLimit > 1
         )
         XCTAssertTrue(AIReportQuota.canGenerate(isPremium: true, defaults: defaults))
+    }
+
+    // MARK: Owed-report grace
+
+    func testFreshDefaultsOweNoReport() {
+        XCTAssertFalse(AIReportQuota.isReportOwed(defaults: defaults))
+    }
+
+    func testOwedReportGrantsGenerationAfterExhaustedAllowance() {
+        for _ in 0..<AIReportQuota.freeLifetimeLimit {
+            AIReportQuota.recordUse(defaults: defaults)
+        }
+        XCTAssertFalse(AIReportQuota.canGenerate(isPremium: false, defaults: defaults))
+
+        AIReportQuota.markReportOwed(defaults: defaults)
+
+        XCTAssertTrue(AIReportQuota.isReportOwed(defaults: defaults))
+        XCTAssertTrue(AIReportQuota.canGenerate(isPremium: false, defaults: defaults))
+        // The grace never touches the scan-side allowance.
+        XCTAssertEqual(AIReportQuota.remaining(defaults: defaults), 0)
+    }
+
+    func testClearReportOwedSettlesTheDebt() {
+        for _ in 0..<AIReportQuota.freeLifetimeLimit {
+            AIReportQuota.recordUse(defaults: defaults)
+        }
+        AIReportQuota.markReportOwed(defaults: defaults)
+        AIReportQuota.clearReportOwed(defaults: defaults)
+
+        XCTAssertFalse(AIReportQuota.isReportOwed(defaults: defaults))
+        XCTAssertFalse(AIReportQuota.canGenerate(isPremium: false, defaults: defaults))
     }
 }

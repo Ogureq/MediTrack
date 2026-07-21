@@ -1620,6 +1620,12 @@ struct ScanReportView: View {
             savedReport = report
             generateAIReport(for: report)
         } else {
+            // This flow consumed the credit but can't deliver the report
+            // half (AI unconfigured/unreachable) — record the debt so the
+            // trial report isn't lost with the credit.
+            if aiCreditConsumedThisFlow && !premiumStore.isPremium {
+                AIReportQuota.markReportOwed(defaults: .standard)
+            }
             dismiss()
         }
     }
@@ -1788,6 +1794,10 @@ struct ScanReportView: View {
                 guard !Task.isCancelled else { return }
                 Haptics.success()
                 stage = .aiReport(generated)
+                // A delivered report settles any owed-report debt (from a
+                // prior broken flow or an earlier failed attempt in this
+                // one).
+                AIReportQuota.clearReportOwed(defaults: .standard)
                 // Spend the free credit here too, UNLESS this flow's save()
                 // already spent it for the AI-extraction that fed this same
                 // report (see `aiCreditConsumedThisFlow`) — one credit
@@ -1799,6 +1809,13 @@ struct ScanReportView: View {
             } catch {
                 guard !Task.isCancelled else { return }
                 stage = .aiFailed(error.localizedDescription)
+                // The save already charged this flow's credit but the
+                // report half just failed — record the debt so the trial
+                // report isn't lost with the credit (cleared on any later
+                // successful generation, incl. an in-flow retry).
+                if aiCreditConsumedThisFlow && !premiumStore.isPremium {
+                    AIReportQuota.markReportOwed(defaults: .standard)
+                }
             }
         }
     }

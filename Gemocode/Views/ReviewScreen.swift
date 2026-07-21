@@ -557,6 +557,10 @@ struct ReviewScreen: View {
                 if !premiumStore.isPremium {
                     AIReportQuota.recordUse(defaults: .standard)
                 }
+                // A delivered report settles any owed-report debt from a
+                // scan flow whose report half failed after consuming the
+                // credit (see AIReportQuota.markReportOwed).
+                AIReportQuota.clearReportOwed(defaults: .standard)
             } catch {
                 aiError = error.localizedDescription
             }

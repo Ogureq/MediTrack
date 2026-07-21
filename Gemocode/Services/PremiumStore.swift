@@ -252,15 +252,45 @@ enum AIReportQuota {
         max(0, freeLifetimeLimit - usedCount(defaults: defaults))
     }
 
-    /// Premium users can always generate; free users need remaining > 0.
+    /// Premium users can always generate; free users need remaining > 0 —
+    /// or an owed report (see `markReportOwed`).
     static func canGenerate(isPremium: Bool, defaults: UserDefaults) -> Bool {
-        isPremium || remaining(defaults: defaults) > 0
+        isPremium || remaining(defaults: defaults) > 0 || isReportOwed(defaults: defaults)
     }
 
     /// Records one AI report generation. No cap on the counter itself —
     /// `remaining` clamps at 0 regardless of how high this climbs.
     static func recordUse(defaults: UserDefaults) {
         defaults.set(usedCount(defaults: defaults) + 1, forKey: usedCountKey)
+    }
+
+    // MARK: Owed-report grace
+    //
+    // The scan flow charges the one free credit at save time (the promise
+    // is "one credit covers the whole flow: scan + report"), but the report
+    // half can still fail afterwards — relay outage, network drop, or AI
+    // not configured. Without a grace, that user paid their only credit for
+    // half the flow and is locked out of the half they never received. The
+    // flag below records that debt so `canGenerate` lets a later report
+    // generation through; every successful generation clears it. It
+    // deliberately grants only report generation — scanning stays gated on
+    // `remaining`, so the scan half (which WAS delivered) can't be farmed.
+
+    static let reportOwedKey = "premium.aiReportOwed"
+
+    static func isReportOwed(defaults: UserDefaults) -> Bool {
+        defaults.bool(forKey: reportOwedKey)
+    }
+
+    /// Call when a flow consumed the free credit but ended without a
+    /// successfully generated report.
+    static func markReportOwed(defaults: UserDefaults) {
+        defaults.set(true, forKey: reportOwedKey)
+    }
+
+    /// Call on every successful report generation — settles any owed debt.
+    static func clearReportOwed(defaults: UserDefaults) {
+        defaults.removeObject(forKey: reportOwedKey)
     }
 
     #if DEBUG
