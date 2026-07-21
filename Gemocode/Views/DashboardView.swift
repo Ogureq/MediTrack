@@ -37,7 +37,17 @@ struct DashboardView: View {
     /// plain `Text`, not a button — see that function's prior doc comment).
     @State private var showingBookSheet = false
 
-    private var review: HealthReview {
+    /// The full engine pass, cached like `drawBundle`/`earliestDataDate`
+    /// below and rebuilt via `.task(id: reviewSignature)` — this is by far
+    /// the heaviest of the three computations (flattens every lab result,
+    /// groups, sorts, formats localized finding text, runs trend
+    /// regressions), so rerunning it on every `@State` toggle (opening any
+    /// sheet re-evaluates `body`) is the most expensive wasted work on this
+    /// screen. `body` falls back to a direct compute until the first task
+    /// fires so the score never renders from placeholder data.
+    @State private var cachedReview: HealthReview?
+
+    private func computeReview() -> HealthReview {
         AnalysisEngine.generateReview(
             profile: profiles.first,
             reports: reports,
@@ -46,6 +56,16 @@ struct DashboardView: View {
             symptoms: symptoms,
             appointments: appointments
         )
+    }
+
+    /// Invalidation signature for `cachedReview` — the same `.count`-based
+    /// convention as `retestSignature`/`earliestDataSignature`, over every
+    /// input the engine reads. In-place edits that change no count are
+    /// picked up when the task re-runs on the view's next appearance
+    /// (returning to this tab), matching the tradeoff the other two caches
+    /// already make.
+    private var reviewSignature: String {
+        "\(profiles.count)-\(reports.count)-\(reports.reduce(0) { $0 + $1.labResults.count })-\(vitals.count)-\(medications.count)-\(symptoms.count)-\(appointments.count)"
     }
 
     /// Earliest data point already fetched by this view — reused so the
@@ -156,11 +176,11 @@ struct DashboardView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                // Computed once per render and threaded through explicitly —
-                // `review` re-runs the full `AnalysisEngine` pass on every
-                // access, so every section below takes it as a parameter
-                // instead of reading the computed property directly.
-                let review = self.review
+                // Read once per render and threaded through explicitly so
+                // every section below takes it as a parameter; the cache
+                // means an engine pass only actually runs when
+                // `reviewSignature` changes, not on every body evaluation.
+                let review = cachedReview ?? computeReview()
                 VStack(alignment: .leading, spacing: 16) {
                     editorialHeader
                     if review.hasData {
@@ -215,6 +235,9 @@ struct DashboardView: View {
                     BookDrawSheet(bundle: drawBundle)
                 }
             }
+        }
+        .task(id: reviewSignature) {
+            cachedReview = computeReview()
         }
         .task(id: earliestDataSignature) {
             earliestDataDate = Self.computeEarliestDataDate(reports: reports, vitals: vitals, snapshots: snapshots)
