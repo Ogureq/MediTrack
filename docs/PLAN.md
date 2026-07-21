@@ -227,6 +227,23 @@ This document records the phased plan executed to build Gemocode, a privacy-firs
 - [x] CI-verified after three surgical compile fixes (Charts KeyValuePairs scale overload, a duplicated @ViewBuilder attribute, builder-context assignments in the review range bar)
 - [ ] Follow-ups from the canvas: "Action plan" premium screen (7e), editorial AI-report PDF (7s), Medical ID reachable from the lock screen, remove the now-unused ScoreRing, filled-vs-outlined decision on the lock screen unlock button
 
+## Phase 28 — Canvas Refeature: the Mockups' Features from Real Data
+
+- [x] Action Plan (premium) — pure `ActionPlan` engine: supplement suggestions with typical OTC dose ranges for five low nutrient markers (D3, iron bisglycinate, B12, folate, magnesium), keep-watching list for everything else, interaction-check plumbing via MedicationInteractions, retest dates; `ActionPlanView` with one-tap plan→medications+reminders, always-visible educational disclaimer; entries from Review and the scan flow
+- [x] Draw bundling & money math — `RetestSchedule.nextDraw` bundles, fasting flags in the lab catalog, estimated self-pay price table with an honest avoided-visit savings model, "Not due — don't pay yet" early-testing waste; Schedule/Dashboard cards updated
+- [x] Care links — medication→monitoring-lab map with working/check-overdue status lines, symptom→lab hints gated on actually out-of-range data, prescription scanning (OCR → known drug names → medication records)
+- [x] Appointments — computed fasting/med-timing prep checklist, calendar export via EventKit write-only (+ pure .ics fallback), countdown tags
+- [x] Widget due tests — backward-compatible snapshot contract extension (optional dueTests/nextDraw), medium widget shows the next draw; goals auto-checked by their lab/vital; AI chat context header + suggestion chips; quick add "understood" caption; Medical ID reachable from the lock screen; settings regrouped; canvas paywall copy
+- [x] Multilingual lab scanning — Cyrillic OCR recognition, Russian/Turkish names for 42 tests, mmol/L / µmol/L / g/L conversion to canonical units with per-analyte chemistry factors
+
+## Phase 29 — AI-First Metered Scanning, Columnar OCR & "Bloodwork"
+
+- [x] AI scan — relay endpoint `/v1/extract-labs` (server-owned extraction-only prompt with anti-injection rails, image-token accounting, 188 backend tests) + `AIScanService` client (BYOK prompt byte-identical, single catalog-mapping path, unit conversion, plausibility discards)
+- [x] Scan choice — every scan offers AI (primary, "photo sent for AI reading — not stored") or on-device ("private, may not read every report"); ALL scan types share one free-then-Premium credit; one credit covers a full flow (scan + report), consumed only on completed save/report, never on dismissal
+- [x] Columnar OCR fix — rows reconstructed from Vision bounding boxes (the UK four-column report that produced zero values now parses end-to-end, pinned by a line-for-line test fixture), UK aliases (haemoglobin, transferases, T.I.B.C, fasting blood glucose…), MCHC g/L→g/dL conversion
+- [x] Display rename "Lab report" → "Bloodwork" (ru «Анализ крови»), stored data untouched
+- [ ] Follow-ups: supplement–drug interaction rules (levothyroxine+iron etc.) in MedicationInteractions; goal↔lab schema linkage; retest-reminder preference; transferrin saturation catalog entry; server-side free-trial allowance when ENFORCE_PREMIUM flips on
+
 ## Future Milestones
 
 Not part of the current plan; captured here for future scoping:
