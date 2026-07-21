@@ -94,11 +94,14 @@ only-discuss-provided-data rules, and strict-JSON output instructions).
 
 Per-kind handling (non-streaming for all three; see "Known simplifications"):
 
-| kind | model (env var, default) | max_tokens | temperature |
-|---|---|---|---|
-| `report` | `MODEL_REPORT` (`claude-opus-4-8`) | 1500 | default |
-| `chat` | `MODEL_CHAT` (`claude-sonnet-5`) | 700 | default |
-| `extract` | `MODEL_EXTRACT` (`claude-haiku-4-5-20251001`) | 800 | 0 |
+| kind | model (env var, default) | max_tokens |
+|---|---|---|
+| `report` | `MODEL_REPORT` (`claude-opus-4-8`) | 4000 |
+| `chat` | `MODEL_CHAT` (`claude-sonnet-5`) | 1200 |
+| `extract` | `MODEL_EXTRACT` (`claude-haiku-4-5-20251001`) | 800 |
+
+No request sets `temperature` — current models reject the parameter;
+determinism guidance lives in the prompts instead.
 
 Validation rejects (400): unknown `kind`s, unknown fields anywhere (top
 level, nested — an `attachment`/`imageData` field fails the request rather
