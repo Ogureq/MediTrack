@@ -20,6 +20,7 @@ enum AISummaryError: LocalizedError {
     case premiumRequired
     case quotaExceeded
     case network(Error)
+    case invalidOutput(String)
 
     var errorDescription: String? {
         switch self {
@@ -39,6 +40,8 @@ enum AISummaryError: LocalizedError {
             "The AI service has reached today's usage limit. Please try again tomorrow."
         case .network(let error):
             "Couldn't reach the AI service: \(error.localizedDescription)"
+        case .invalidOutput(let detail):
+            "The AI report failed a safety check (\(detail)). Try generating again."
         }
     }
 
@@ -306,6 +309,23 @@ enum AISummaryService {
     /// so "120" matches an input of 120.0 — somewhere in `allowedNumbers`.
     /// Small integers 1...10 are always allowed since they're commonly used
     /// for list counts ("3 questions") rather than clinical figures.
+    /// `numbersEchoCheck` with the offending token surfaced — used by
+    /// `generateReport` so a guard failure names the number instead of
+    /// collapsing into a generic error. The Bool variant stays for its
+    /// existing tests/callers.
+    static func firstUnexpectedNumber(output: String, allowedNumbers: Set<Double>) -> Double? {
+        for value in decimalTokens(in: output) {
+            if value.truncatingRemainder(dividingBy: 1) == 0, (1...10).contains(value) {
+                continue
+            }
+            if allowedNumbers.contains(where: { abs($0 - value) < 0.05 }) {
+                continue
+            }
+            return value
+        }
+        return nil
+    }
+
     static func numbersEchoCheck(output: String, allowedNumbers: Set<Double>) -> Bool {
         for value in decimalTokens(in: output) {
             if value.truncatingRemainder(dividingBy: 1) == 0, (1...10).contains(value) {
@@ -350,7 +370,9 @@ enum AISummaryService {
         do {
             decoded = try JSONDecoder().decode(RawReport.self, from: data)
         } catch {
-            throw AISummaryError.badResponse
+            // A truncated response (max_tokens cut) or malformed JSON both
+            // land here — the char count distinguishes them at a glance.
+            throw AISummaryError.invalidOutput("report JSON didn't parse, \(cleaned.count) chars")
         }
         return AIHealthReport(
             overview: decoded.overview,
@@ -392,7 +414,7 @@ enum AISummaryService {
         let direct = AITransport.DirectSpec(
             model: model,
             system: reportSystemPrompt,
-            maxTokens: 1536,
+            maxTokens: 4000,
             messages: [(role: "user", text: inputJSON)]
         )
 
@@ -408,17 +430,18 @@ enum AISummaryService {
         let validIDs = Set(input.findings.map(\.id))
         let citedIDs = report.sections.flatMap(\.relatedFindingIDs)
         guard findingIDsCheck(ids: citedIDs, validIDs: validIDs) else {
-            throw AISummaryError.badResponse
+            throw AISummaryError.invalidOutput("cited an unknown finding ID")
         }
 
         let outputText = ([report.overview] + report.sections.flatMap { [$0.title, $0.body] } + report.doctorQuestions)
             .joined(separator: "\n")
-        guard numbersEchoCheck(output: outputText, allowedNumbers: allowedNumbers(fromInputJSON: inputJSON)) else {
-            throw AISummaryError.badResponse
+        let allowed = allowedNumbers(fromInputJSON: inputJSON)
+        if let offender = firstUnexpectedNumber(output: outputText, allowedNumbers: allowed) {
+            throw AISummaryError.invalidOutput("mentioned \(offender), which isn't in your data")
         }
 
         guard !report.doctorQuestions.isEmpty else {
-            throw AISummaryError.badResponse
+            throw AISummaryError.invalidOutput("no doctor questions section")
         }
 
         return report
