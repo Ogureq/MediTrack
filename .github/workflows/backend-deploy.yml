@@ -1,0 +1,77 @@
+name: Backend Deploy
+
+# Deploys the relay to Cloudflare whenever backend code lands on main —
+# after type-check and the full test suite pass in this same job, so a
+# red test run can never ship. `workflow_dispatch` also allows a manual
+# deploy from the GitHub Actions tab with no code change.
+#
+# Requires one repo secret: CLOUDFLARE_API_TOKEN (Cloudflare dashboard →
+# My Profile → API Tokens → "Edit Cloudflare Workers" template). Until
+# it's added, runs fail fast on the first step with a message saying so.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-deploy.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: backend-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Check deploy token is configured
+        working-directory: .
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN repo secret is not set — add it under Settings → Secrets and variables → Actions, then re-run."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Run tests
+        run: npx vitest run
+
+      - name: Deploy to Cloudflare
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: backend
+
+      # The compiled-in client default (AITransport.defaultBaseURLString).
+      - name: Verify deployment health
+        working-directory: .
+        run: |
+          sleep 5
+          body=$(curl -fsS --max-time 30 "https://gemocode-relay.ogureq.workers.dev/health/ready" || true)
+          echo "health/ready: $body"
+          case "$body" in
+            *'"status":"ready"'*) echo "Relay healthy." ;;
+            *) echo "::error::/health/ready did not report ready — the deploy shipped but the worker may be misconfigured (the JSON body above names the broken piece)."; exit 1 ;;
+          esac
