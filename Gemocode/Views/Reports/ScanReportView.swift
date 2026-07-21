@@ -1408,6 +1408,7 @@ struct ScanReportView: View {
             var found: [ScannedLabValue] = []
             var succeededIDs: Set<UUID> = []
             var hadPerImageFailure = false
+            var lastPerImageFailureDetail: String?
             var hitNotConfigured = false
             // First non-empty facility wins across the batch — see
             // `scannedFacility`'s doc comment.
@@ -1436,6 +1437,10 @@ struct ScanReportView: View {
                     break
                 } catch {
                     hadPerImageFailure = true
+                    // Keep the underlying cause — a "couldn't read" that's
+                    // really a relay 404/500/decode failure must say so, or
+                    // it's undiagnosable from the device.
+                    lastPerImageFailureDetail = error.localizedDescription
                 }
             }
 
@@ -1466,7 +1471,8 @@ struct ScanReportView: View {
             // `scannedAttachmentIDs` above so "Try On-Device Instead" can
             // pick it up.
             if hadPerImageFailure {
-                aiScanErrorMessage = String(localized: "AI couldn't read this photo — try the on-device scan or retake the photo.")
+                let base = String(localized: "AI couldn't read this photo — try the on-device scan or retake the photo.")
+                aiScanErrorMessage = lastPerImageFailureDetail.map { "\(base)\n\n(\($0))" } ?? base
                 showingAIScanErrorAlert = true
             }
 
