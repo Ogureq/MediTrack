@@ -371,6 +371,16 @@
         }
       }
     },
+    "%@. %@. Saves about %lld dollars, estimated.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@. %2$@. Экономия примерно %3$lld долларов (оценка)."
+          }
+        }
+      }
+    },
     "%@: %@. %@": {
       "localizations": {
         "ru": {
@@ -7855,6 +7865,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Сохранять новые показатели в Apple Health"
+          }
+        }
+      }
+    },
+    "Saves ~$%lld": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Экономия ~$%lld"
           }
         }
       }

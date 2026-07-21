@@ -360,7 +360,8 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: 6) {
                 nextDrawInsetCard(
                     title: nextDrawTitle(dueDate: bundle.date),
-                    subtitle: nextDrawSubtitle(bundle: bundle)
+                    subtitle: nextDrawSubtitle(bundle: bundle),
+                    savings: bundle.estimatedSavings
                 )
                 if hasDueOrSoon {
                     Text(RetestSchedule.disclaimer)
@@ -396,27 +397,34 @@ struct DashboardView: View {
     /// the full retest schedule, while "Book" is its own `Button` opening
     /// `BookDrawSheet` — previously drawn as plain `Text`, a dead pill with
     /// no action at all.
-    private func nextDrawInsetCard(title: String, subtitle: String) -> some View {
+    private func nextDrawInsetCard(title: String, subtitle: String, savings: Int? = nil) -> some View {
         HStack(spacing: 12) {
             NavigationLink {
                 RetestScheduleView()
             } label: {
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(verbatim: title)
                         .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(Editorial.ink(colorScheme))
                         .lineLimit(2)
-                    Text(verbatim: subtitle)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Editorial.muted(colorScheme))
-                        .lineLimit(1)
+                    HStack(spacing: 8) {
+                        Text(verbatim: subtitle)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Editorial.muted(colorScheme))
+                            .lineLimit(1)
+                        // The money story in one word of visual weight — the
+                        // full pricing breakdown stays on the Schedule screen.
+                        if let savings {
+                            EditorialTag(verbatim: String(format: String(localized: "Saves ~$%lld"), savings), kind: .good)
+                        }
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(title). \(subtitle)")
+            .accessibilityLabel(savings.map { String(format: String(localized: "%@. %@. Saves about %lld dollars, estimated."), title, subtitle, $0) } ?? "\(title). \(subtitle)")
             .accessibilityHint("Opens the retest schedule.")
 
             Button {
