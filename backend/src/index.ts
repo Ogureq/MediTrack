@@ -335,15 +335,44 @@ router.post("/v1/extract-labs", async ({ request, env }: RouteContext<Env>) => {
     return json({ values: [], refused: true });
   }
 
-  return json({ values: result.values, refused: false });
+  // `facility` is additive/optional (see extractLabs.ts's doc comment on
+  // `ExtractLabsCallResult`) — when the model didn't return one,
+  // `result.facility` is `undefined` and JSON.stringify simply omits the
+  // key, so existing clients that don't know about "facility" keep working
+  // unchanged.
+  return json({ values: result.values, facility: result.facility, refused: false });
 });
+
+/**
+ * Last-resort safety net: every route handler above already returns a
+ * structured `errorResponse(...)` for the failures it anticipates, but a
+ * handler (or something it calls — a KV binding throwing on a transient
+ * outage, a crypto call failing, a future bug) can still throw. Before this
+ * try/catch existed, an unhandled throw here propagated straight out of
+ * `fetch`, and Cloudflare's runtime turned that into a bare, non-JSON 500
+ * with none of the relay's own error shape — exactly the raw 500 users
+ * reported on POST /v1/extract-labs. Never include `err` itself or any
+ * request-derived value in the log line — only its class name and message,
+ * never request/response content (see logging.ts's module doc comment for
+ * the same rule applied to the metadata-only usage log).
+ */
+function logUnhandledError(err: unknown): void {
+  const errorClass = err instanceof Error ? err.constructor.name : typeof err;
+  const message = err instanceof Error ? err.message : "non-Error value thrown";
+  console.error(JSON.stringify({ event: "unhandled_error", errorClass, message }));
+}
 
 export default {
   async fetch(request: Request, env: Env, execCtx: ExecutionContext): Promise<Response> {
     if (request.method === "OPTIONS") {
       return withCors(new Response(null, { status: 204 }));
     }
-    const response = await router.handle(request, env, execCtx);
-    return withCors(response ?? errorResponse(404, "not_found", "No such route."));
+    try {
+      const response = await router.handle(request, env, execCtx);
+      return withCors(response ?? errorResponse(404, "not_found", "No such route."));
+    } catch (err) {
+      logUnhandledError(err);
+      return withCors(errorResponse(500, "internal_error", "The relay hit an unexpected error."));
+    }
   }
 } satisfies ExportedHandler<Env>;

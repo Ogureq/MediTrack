@@ -78,12 +78,12 @@ struct ScanReportView: View {
     // MARK: - AI vs. on-device scan choice
 
     /// Presented after new camera/photo attachments arrive and before any
-    /// reading runs — the single-image case (see `promptEngineChoiceIfNeeded`).
-    @State private var showingEngineChoiceDialog = false
-    /// Same choice, presented as a small sheet instead of a confirmation
-    /// dialog when multiple photos arrived in one batch (a photo-library
-    /// multi-select) — richer captions than a dialog's plain button titles
-    /// can show. See `promptEngineChoiceIfNeeded`.
+    /// reading runs — one custom bottom sheet used for both a single new
+    /// photo and a multi-photo batch alike (see `promptEngineChoiceIfNeeded`
+    /// and `ScanEngineChoiceSheet` below). Replaces the old system
+    /// `.confirmationDialog` entirely — the owner called it "cheap"; a
+    /// custom sheet lets both options show a real icon, title, and one-line
+    /// caption instead of a dialog's plain button titles.
     @State private var showingEngineChoiceSheet = false
 
     /// IDs of `scannedValues`/`confirmedLabs` entries that came from
@@ -94,6 +94,15 @@ struct ScanReportView: View {
     /// Read by `save()` to decide whether this save spends the free AI
     /// credit (see `aiCreditConsumedThisFlow`).
     @State private var aiSourcedValueIDs: Set<UUID> = []
+
+    /// Facility/clinic name the AI scan found printed on the report (see
+    /// `AIScanService.AIScanResult.facility`) — `nil` until an AI-scanned
+    /// image actually reports one, and never populated by the on-device OCR
+    /// path (`LabScanService` has no notion of a facility field). Drives
+    /// `clinicAppointmentCard` in the post-save stage. First non-empty value
+    /// wins across a multi-image batch — a later page of the same report
+    /// shouldn't override an earlier, likely-letterhead page's answer.
+    @State private var scannedFacility: String?
 
     /// Set at most once per flow — the moment either an AI-extraction save
     /// or a successful AI report generation actually completes — so a scan
@@ -144,6 +153,19 @@ struct ScanReportView: View {
     /// The report `save()` just inserted — kept so the AI stage can attach
     /// the exported PDF to it and read back its saved lab results.
     @State private var savedReport: MedicalReport?
+    /// The `Medication`s `save()`'s automatic `ActionPlan` pass created for
+    /// THIS flow (via `SupplementPlanApplier.apply`) — empty until a save
+    /// actually yields plan items. Drives `supplementAddedBanner` (shown
+    /// whenever non-empty) and is exactly what `undoAutoSupplements()`
+    /// unwinds. Owner decision: this runs automatically, never as a choice —
+    /// see `applyAutoSupplements(for:)`.
+    @State private var autoAddedSupplements: [Medication] = []
+    /// User dismissed `clinicAppointmentCard` without adding the
+    /// appointment — the card never reappears for the rest of this flow.
+    @State private var dismissedClinicAppointmentCard = false
+    /// Set once `addClinicAppointment()` actually inserts the `Appointment`
+    /// — swaps the card to a small confirmation instead of hiding it.
+    @State private var clinicAppointmentAdded = false
     @State private var isPulsingAIGenerating = false
     @State private var isExportingPDF = false
     @State private var pdfExportError: String?
@@ -268,28 +290,10 @@ struct ScanReportView: View {
             } message: {
                 Text(cameraAlertMessage)
             }
-            // Single new photo (the common case — one camera capture, or a
-            // single library pick): a plain confirmation dialog, following
-            // the same pattern `MedicationsView`'s own "Scan a Prescription"
-            // choice already uses in this codebase.
-            .confirmationDialog(
-                "How should Gemocode read this?",
-                isPresented: $showingEngineChoiceDialog,
-                titleVisibility: .visible
-            ) {
-                Button("AI scan — reads almost any report. Your photo is sent for AI reading, not stored.") {
-                    scanAttachmentsWithAI()
-                }
-                Button("On-device scan — private, may not read every report.") {
-                    scanAttachments()
-                }
-                Button("Cancel", role: .cancel) {}
-            }
-            // Multiple new photos in one batch (a photo-library multi-
-            // select): a small sheet instead, so each option keeps its own
-            // separate title + caption rather than one combined button
-            // title — a confirmation dialog can't lay out two independent
-            // lines per button.
+            // One custom bottom sheet for every new-photo case — single
+            // capture or multi-photo batch alike — replacing the old system
+            // `.confirmationDialog` the owner called "cheap". See
+            // `ScanEngineChoiceSheet` below.
             .sheet(isPresented: $showingEngineChoiceSheet) {
                 ScanEngineChoiceSheet(
                     onChooseAI: { scanAttachmentsWithAI() },
@@ -493,7 +497,6 @@ struct ScanReportView: View {
         let visibleInRange = showAllInRangeValues ? inRangeList : Array(inRangeList.prefix(3))
         let hiddenInRangeCount = inRangeList.count - visibleInRange.count
         let priorValues = fetchLatestPriorValues()
-        let supplementSuggestedIDs = supplementSuggestedLabIDs(for: evaluated)
 
         return VStack(alignment: .leading, spacing: 4) {
             scannedAttachmentHeaderCard(valuesRead: confirmedLabs.count)
@@ -506,8 +509,7 @@ struct ScanReportView: View {
                         confirmedLabRow(
                             entry,
                             compact: false,
-                            priorValue: priorValues[entry.scanned.reference.id.lowercased()],
-                            supplementSuggested: supplementSuggestedIDs.contains(entry.scanned.reference.id.lowercased())
+                            priorValue: priorValues[entry.scanned.reference.id.lowercased()]
                         )
                     }
                 }
@@ -517,7 +519,7 @@ struct ScanReportView: View {
                     .padding(.top, outOfRange.isEmpty ? 0 : 16)
                 VStack(spacing: 0) {
                     ForEach(visibleInRange, id: \.scanned.id) { entry in
-                        confirmedLabRow(entry, compact: true, priorValue: nil, supplementSuggested: false)
+                        confirmedLabRow(entry, compact: true, priorValue: nil)
                     }
                 }
                 if hiddenInRangeCount > 0 {
@@ -525,7 +527,7 @@ struct ScanReportView: View {
                         withAnimation { showAllInRangeValues = true }
                     } label: {
                         Text("Show \(hiddenInRangeCount) more ↗")
-                            .font(.system(size: 12))
+                            .font(.system(size: 13))
                             .foregroundStyle(Editorial.accent(colorScheme))
                     }
                     .buttonStyle(.plain)
@@ -569,7 +571,7 @@ struct ScanReportView: View {
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Editorial.ink(colorScheme))
                 Text("\(valuesRead) values read · original kept")
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundStyle(Editorial.muted(colorScheme))
             }
             Spacer(minLength: 8)
@@ -595,54 +597,18 @@ struct ScanReportView: View {
         return grouped.compactMapValues { $0.max(by: { $0.date < $1.date })?.value }
     }
 
-    /// Which of the currently-evaluated scanned values would surface an
-    /// `ActionPlan` supplement suggestion, keyed by lowercased catalog id.
-    /// Built by handing a minimal, throwaway `HealthReview` (just today's
-    /// scanned snapshots — no findings/trends/score, none of which
-    /// `ActionPlan.generate` reads) to the real `ActionPlan.generate` rule
-    /// table, so "supplement suggested" always reflects the actual rules in
-    /// `Services/ActionPlan.swift` rather than a duplicated whitelist here.
-    private func supplementSuggestedLabIDs(
-        for evaluated: [(scanned: ScannedLabValue, status: LabStatus, range: ClosedRange<Double>?)]
-    ) -> Set<String> {
-        let snapshots = evaluated.map { entry in
-            LabSnapshot(
-                id: entry.scanned.reference.id.lowercased(),
-                name: entry.scanned.reference.name,
-                unit: entry.scanned.reference.unit,
-                value: entry.scanned.value,
-                date: .now,
-                status: entry.status,
-                range: entry.range,
-                reference: entry.scanned.reference
-            )
-        }
-        let miniReview = HealthReview(
-            generatedAt: .now,
-            hasData: true,
-            score: 0,
-            summary: "",
-            findings: [],
-            trends: [],
-            labSnapshots: snapshots
-        )
-        let plan = ActionPlan.generate(review: miniReview, medications: [], now: .now)
-        return Set(plan.items.map(\.labTestID))
-    }
-
     /// A single confirmed-value row. The full (`compact: false`) form shows
     /// name + value + tag on one line and the range bar beneath it — used
     /// for out-of-range values. The compact form drops the tag (the section
     /// header already says "In Range") and shows a slimmer inline bar next
     /// to the value, matching the quieter in-range ledger in the mockups.
-    /// `priorValue`/`supplementSuggested` only ever feed the full form's
-    /// caption line — the compact in-range rows never pass them.
+    /// `priorValue` only ever feeds the full form's caption line — the
+    /// compact in-range rows never pass it.
     @ViewBuilder
     private func confirmedLabRow(
         _ entry: (scanned: ScannedLabValue, status: LabStatus, range: ClosedRange<Double>?),
         compact: Bool,
-        priorValue: Double?,
-        supplementSuggested: Bool
+        priorValue: Double?
     ) -> some View {
         if compact {
             HStack(spacing: 12) {
@@ -693,9 +659,9 @@ struct ScanReportView: View {
                         value: entry.scanned.value,
                         accessibilityLabel: Text("\(entry.scanned.reference.name) \(entry.scanned.value.compactFormatted) \(entry.scanned.reference.unit), \(entry.status.label)")
                     )
-                    if let caption = scannedRowCaption(range: range, priorValue: priorValue, currentValue: entry.scanned.value, supplementSuggested: supplementSuggested) {
+                    if let caption = scannedRowCaption(range: range, priorValue: priorValue, currentValue: entry.scanned.value) {
                         Text(caption)
-                            .font(.system(size: 11))
+                            .font(.system(size: 13))
                             .foregroundStyle(Editorial.muted(colorScheme))
                     }
                 }
@@ -704,17 +670,16 @@ struct ScanReportView: View {
         }
     }
 
-    /// Builds the "lab range %@–%@ · ↗ up from %@ · supplement suggested"
-    /// caption for one out-of-range confirmed row. Every clause is optional
-    /// and only appears when there's real data behind it: the trend clause
-    /// needs an actual prior saved value for this series, and the supplement
-    /// clause needs this id to actually be one of `ActionPlan`'s rules (see
-    /// `supplementSuggestedLabIDs(for:)`).
+    /// Builds the "lab range %@–%@ · ↗ up from %@" caption for one
+    /// out-of-range confirmed row — range plus, only when there's an actual
+    /// prior saved value for this series, a trend arrow. No longer mentions
+    /// a supplement suggestion: supplements now auto-add on save (see
+    /// `applyAutoSupplements(for:)`), so there's nothing left to "suggest"
+    /// here.
     private func scannedRowCaption(
         range: ClosedRange<Double>,
         priorValue: Double?,
-        currentValue: Double,
-        supplementSuggested: Bool
+        currentValue: Double
     ) -> String? {
         var parts: [String] = [
             String(localized: "lab range \(range.lowerBound.compactFormatted)–\(range.upperBound.compactFormatted)")
@@ -725,9 +690,6 @@ struct ScanReportView: View {
                     ? String(localized: "↗ up from \(priorValue.compactFormatted)")
                     : String(localized: "↘ down from \(priorValue.compactFormatted)")
             )
-        }
-        if supplementSuggested {
-            parts.append(String(localized: "supplement suggested"))
         }
         return parts.joined(separator: " · ")
     }
@@ -805,13 +767,9 @@ struct ScanReportView: View {
             MicroLabel("Premium")
             Text("Unlock Unlimited Scans")
                 .font(.headline)
-            Text("Unlimited scans with Premium — every report decoded in seconds.")
-                .font(.subheadline)
+            Text("You've used your free scan — Premium unlocks unlimited.")
+                .font(.system(size: 13))
                 .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            Text("You've used your free scan.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
             Button {
                 showingPaywall = true
@@ -825,7 +783,7 @@ struct ScanReportView: View {
         .frame(maxWidth: .infinity)
         .glassCard()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Unlock unlimited scans. Unlimited scans with Premium — every report decoded in seconds. You've used your free scan.")
+        .accessibilityLabel("Unlock unlimited scans. You've used your free scan — Premium unlocks unlimited.")
         .accessibilityHint("Double tap Unlock Premium to see plans.")
     }
 
@@ -833,6 +791,12 @@ struct ScanReportView: View {
 
     @ViewBuilder
     private var aiStageBody: some View {
+        // The auto-add banner coexists with whichever AI-report sub-stage is
+        // showing (generating/succeeded/failed) — it's about what `save()`
+        // already did, independent of whether the AI report itself succeeds.
+        if !autoAddedSupplements.isEmpty {
+            supplementAddedBanner
+        }
         switch stage {
         case .scanning:
             EmptyView()
@@ -847,9 +811,10 @@ struct ScanReportView: View {
             if savedReportHasOutOfRangeValue {
                 actionPlanLinkButton
             }
+            clinicAppointmentCard
             if !premiumStore.isPremium {
                 Text("Your first report is free — this one used your lifetime trial.")
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundStyle(Editorial.muted(colorScheme))
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
@@ -857,8 +822,158 @@ struct ScanReportView: View {
         case .aiFailed(let message):
             aiGeneratingHeader
             aiErrorCard(message)
+            clinicAppointmentCard
             doneButton
         }
+    }
+
+    // MARK: - Auto-added supplements banner
+
+    /// "Added N supplements + reminders · Undo" — shown whenever `save()`'s
+    /// automatic `ActionPlan` pass (`applyAutoSupplements(for:)`) actually
+    /// created at least one `Medication` for this flow. The disclaimer for
+    /// what a supplement suggestion means lives on the Supplements page
+    /// itself (`ActionPlan.disclaimer`, via `SupplementsView`), not
+    /// duplicated here.
+    private var supplementAddedBanner: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "pills.fill")
+                .font(.system(size: 13))
+                .foregroundStyle(Editorial.tagGood(colorScheme))
+                .accessibilityHidden(true)
+            Text(autoAddedSupplements.count == 1
+                ? String(localized: "Added 1 supplement + reminder")
+                : String(localized: "Added \(autoAddedSupplements.count) supplements + reminders"))
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Editorial.ink(colorScheme))
+            Spacer(minLength: 8)
+            Button {
+                undoAutoSupplements()
+            } label: {
+                Text("Undo")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Editorial.accent(colorScheme))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Undoes exactly what `applyAutoSupplements(for:)` created THIS flow —
+    /// deletes those `Medication`s and cancels their reminders via
+    /// `SupplementPlanApplier.unapply`, then clears the local list so the
+    /// banner disappears (it's only ever shown while the list is non-empty).
+    private func undoAutoSupplements() {
+        guard !autoAddedSupplements.isEmpty else { return }
+        SupplementPlanApplier.unapply(autoAddedSupplements, context: modelContext)
+        autoAddedSupplements = []
+        Haptics.success()
+    }
+
+    // MARK: - Clinic -> appointment card
+
+    /// A next retest date derived from the labs THIS save confirmed —
+    /// mirrors `scheduleRetestNudge()`'s "shortest known interval wins"
+    /// logic, but never falls back to the generic 90-day wellness nudge:
+    /// `clinicAppointmentCard` only ever offers a date backed by a real
+    /// `RetestSchedule` cadence for one of this report's own tests.
+    private func nextRetestDate() -> Date? {
+        let months = confirmedLabs.compactMap { RetestSchedule.intervalMonths(for: $0.reference.id) }
+        guard let shortest = months.min() else { return nil }
+        return Calendar.current.date(byAdding: .month, value: shortest, to: .now)
+    }
+
+    /// "Next draw at <facility>?" — shown only when the AI scan actually
+    /// found a facility name on the report AND there's a concrete next
+    /// retest date to offer. Ask-first, never auto-creates: the card just
+    /// sits there until tapped, and can be dismissed instead with no
+    /// appointment ever created.
+    @ViewBuilder
+    private var clinicAppointmentCard: some View {
+        if let facility = scannedFacility, !facility.isEmpty,
+           let retestDate = nextRetestDate(),
+           !dismissedClinicAppointmentCard {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 8) {
+                    if clinicAppointmentAdded {
+                        Label("Appointment added", systemImage: "checkmark.circle.fill")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Editorial.tagGood(colorScheme))
+                    } else {
+                        Text("Next draw at \(facility)?")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(Editorial.ink(colorScheme))
+                        Button {
+                            addClinicAppointment(facility: facility, retestDate: retestDate)
+                        } label: {
+                            Text("Add Appointment")
+                        }
+                        .buttonStyle(AccentPillButtonStyle())
+                    }
+                }
+                Spacer(minLength: 8)
+                if !clinicAppointmentAdded {
+                    Button {
+                        dismissedClinicAppointmentCard = true
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Editorial.muted(colorScheme))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text("Dismiss"))
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    /// Creates the follow-up-draw `Appointment` — existing model init
+    /// conventions (mirrors `AppointmentsView.save()`'s own construction and
+    /// day-before reminder scheduling): `location`/`notes` = the scanned
+    /// facility name, `date` = the next retest date at 8:30 AM, reminder on.
+    private func addClinicAppointment(facility: String, retestDate: Date) {
+        let apptDate = Calendar.current.date(bySettingHour: 8, minute: 30, second: 0, of: retestDate) ?? retestDate
+        let appointment = Appointment(
+            title: String(localized: "Follow-Up Blood Draw"),
+            location: facility,
+            date: apptDate,
+            notes: facility,
+            reminderEnabled: true
+        )
+        modelContext.insert(appointment)
+
+        if apptDate > .now {
+            let id = appointment.reminderID
+            // Reuses the "at %@" fragment `AppointmentsView.save()` already
+            // uses for its own day-before reminder body (there, %@ is a
+            // time; here it's the facility name) rather than inventing a
+            // new composite key for the same "title + where" shape.
+            let body = [
+                appointment.title,
+                String(format: String(localized: "at %@"), facility),
+            ].joined(separator: " ")
+            let fireDate = apptDate.addingTimeInterval(-86_400)
+            Task {
+                if await NotificationService.requestAuthorization() {
+                    NotificationService.scheduleOneTime(
+                        id: id,
+                        title: String(localized: "Appointment Tomorrow"),
+                        body: body,
+                        at: fireDate
+                    )
+                }
+            }
+        }
+
+        Haptics.success()
+        clinicAppointmentAdded = true
     }
 
     /// The plain "we're working on it" / "something went wrong" header —
@@ -1045,7 +1160,7 @@ struct ScanReportView: View {
 
             if let pdfExportError {
                 Text(pdfExportError)
-                    .font(.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(.red)
             }
 
@@ -1107,7 +1222,7 @@ struct ScanReportView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             Text("Your scan and lab values are safely saved either way.")
-                .font(.caption)
+                .font(.system(size: 13))
                 .foregroundStyle(.tertiary)
         }
         .padding()
@@ -1244,9 +1359,10 @@ struct ScanReportView: View {
     /// After new camera/photo attachments arrive (never PDFs — those go
     /// straight to `scanAttachments()` via `handleFileImport`, since
     /// `AIScanService.extract` only takes a `UIImage`), lets the user pick
-    /// the reading engine before anything runs. Does nothing while the
-    /// scan flow is locked (`isAIScanLocked`) — both engines are metered,
-    /// and `lockedCard` explains why over in `unlockedBody`.
+    /// the reading engine before anything runs — the same custom sheet for
+    /// a single new photo or a multi-photo batch alike. Does nothing while
+    /// the scan flow is locked (`isAIScanLocked`) — both engines are
+    /// metered, and `lockedCard` explains why over in `unlockedBody`.
     private func promptEngineChoiceIfNeeded() {
         // Owner decision: ALL scan types share the one-free-then-Premium
         // gate. When the credit is spent and there's no subscription,
@@ -1255,11 +1371,7 @@ struct ScanReportView: View {
         guard !isAIScanLocked else { return }
         let pendingCount = attachments.filter { !scannedAttachmentIDs.contains($0.id) }.count
         guard pendingCount > 0 else { return }
-        if pendingCount > 1 {
-            showingEngineChoiceSheet = true
-        } else {
-            showingEngineChoiceDialog = true
-        }
+        showingEngineChoiceSheet = true
     }
 
     /// AI-first counterpart to `scanAttachments()` above — identical
@@ -1297,6 +1409,9 @@ struct ScanReportView: View {
             var succeededIDs: Set<UUID> = []
             var hadPerImageFailure = false
             var hitNotConfigured = false
+            // First non-empty facility wins across the batch — see
+            // `scannedFacility`'s doc comment.
+            var facility: String?
 
             for draft in unscanned {
                 guard !Task.isCancelled else { return }
@@ -1308,9 +1423,14 @@ struct ScanReportView: View {
                     continue
                 }
                 do {
-                    let values = try await AIScanService.extract(from: image)
-                    found.append(contentsOf: values)
+                    let result = try await AIScanService.extract(from: image)
+                    found.append(contentsOf: result.values)
                     succeededIDs.insert(draft.id)
+                    if facility == nil,
+                       let candidate = result.facility?.trimmingCharacters(in: .whitespacesAndNewlines),
+                       !candidate.isEmpty {
+                        facility = candidate
+                    }
                 } catch AIScanError.notConfigured {
                     hitNotConfigured = true
                     break
@@ -1335,6 +1455,9 @@ struct ScanReportView: View {
             scannedValues.append(contentsOf: deduped)
             scannedAttachmentIDs.formUnion(succeededIDs)
             hasScanned = true
+            if let facility {
+                scannedFacility = scannedFacility ?? facility
+            }
 
             // Shown whenever at least one image in the batch genuinely
             // failed to read — even if another image in the same batch DID
@@ -1470,6 +1593,14 @@ struct ScanReportView: View {
             Task { await recordAICreditUse() }
         }
 
+        // Auto-add supplements — owner decision: automatic, never a choice.
+        // Runs whenever this save confirmed lab results, regardless of
+        // premium/AI-report availability: the scan flow itself was already
+        // authorized (metered above), so this needs no additional gating.
+        if !report.labResults.isEmpty {
+            applyAutoSupplements(for: report)
+        }
+
         // Auto-run the AI Health Analyst on the just-saved scan whenever a
         // lab value was confirmed and AI is reachable, instead of
         // dismissing — see `generateAIReport(for:)` below. Gated on AI
@@ -1484,6 +1615,33 @@ struct ScanReportView: View {
             generateAIReport(for: report)
         } else {
             dismiss()
+        }
+    }
+
+    /// Builds the fresh `HealthReview`/`ActionPlan` for the just-saved
+    /// report and, when that plan yields items, applies them via
+    /// `SupplementPlanApplier.apply` — the same shared helper
+    /// `ActionPlanView`'s own button uses — scheduling a daily reminder for
+    /// each newly created supplement exactly like that button does. Skips
+    /// silently (no plan, or every suggested supplement already exists) by
+    /// simply leaving `autoAddedSupplements` empty, which keeps
+    /// `supplementAddedBanner` from ever appearing.
+    private func applyAutoSupplements(for report: MedicalReport) {
+        let review = currentReview(including: report)
+        let existingMedications = (try? modelContext.fetch(FetchDescriptor<Medication>())) ?? []
+        let plan = ActionPlan.generate(review: review, medications: existingMedications, now: .now)
+        guard !plan.items.isEmpty else { return }
+
+        autoAddedSupplements = SupplementPlanApplier.apply(items: plan.items, context: modelContext) { medication in
+            let id = medication.reminderID
+            let name = medication.name
+            let dosage = medication.dosage
+            let time = medication.reminderTime ?? .now
+            Task {
+                if await NotificationService.requestAuthorization() {
+                    NotificationService.scheduleDailyReminder(id: id, medicationName: name, dosage: dosage, at: time)
+                }
+            }
         }
     }
 
@@ -1789,11 +1947,11 @@ private func rangeBarAxis(range: ClosedRange<Double>, value: Double) -> (min: Do
 
 // MARK: - Header
 
-/// AI-first hero: the primary line pitches the AI reading path (fast, reads
-/// almost any report, free the first time), with the on-device option as a
-/// quieter secondary remark right underneath — matching the same
-/// AI-primary-then-on-device ordering used everywhere else this pass
-/// touches (the engine-choice dialog/sheet, `lockedCard`'s copy).
+/// The hero: icon, title, and ONE description line — down from three lines
+/// of copy (a second AI sentence plus a separate on-device remark) per the
+/// owner's "too much explanatory text" note. The AI-vs-on-device choice
+/// itself now lives entirely in `ScanEngineChoiceSheet`, so this no longer
+/// needs to pitch either engine by name.
 private struct ScanReportHeader: View {
     @Environment(\.colorScheme) private var colorScheme
 
@@ -1805,13 +1963,9 @@ private struct ScanReportHeader: View {
                 .accessibilityHidden(true)
             Text("Scan Bloodwork")
                 .font(.title2.bold())
-            Text("Photograph any bloodwork — AI reads it in seconds. First scan free.")
+            Text("Photograph any bloodwork — decoded in seconds.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            Text("Or scan on-device — private, works offline.")
-                .font(.footnote)
-                .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -1844,7 +1998,7 @@ private struct ScanActionCard: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(Editorial.ink(colorScheme))
                 Text(subtitle)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundStyle(Editorial.muted(colorScheme))
             }
             Spacer(minLength: 0)
@@ -1859,66 +2013,99 @@ private struct ScanActionCard: View {
     }
 }
 
-// MARK: - Engine choice (multi-photo case)
+// MARK: - Engine choice (custom bottom sheet)
 
-/// The AI-vs-on-device engine choice for a batch of new photos, presented
-/// as a small sheet rather than `ScanReportView`'s single-photo
-/// `.confirmationDialog` — a dialog's buttons can only carry one line of
-/// plain text each, and this needs a real title + a separate caption per
-/// option (matching the copy specified for this choice), which only a
-/// genuine SwiftUI view can lay out reliably. Reuses `ScanActionCard`'s
-/// existing title/subtitle row treatment rather than inventing a new one.
+/// The AI-vs-on-device engine choice, for a single new photo or a
+/// multi-photo batch alike — one custom bottom sheet replacing the old
+/// system `.confirmationDialog` the owner called "cheap". Two large equal
+/// cards (icon + title + a single ≤5-word caption each), AI listed first
+/// with the accent icon since it's the primary path; the one sentence about
+/// the photo being sent for AI reading lives as a single small footnote
+/// below both cards instead of inside either option's copy.
 private struct ScanEngineChoiceSheet: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
 
     let onChooseAI: () -> Void
     let onChooseOnDevice: () -> Void
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 14) {
-                Button {
-                    dismiss()
-                    onChooseAI()
-                } label: {
-                    ScanActionCard(
-                        icon: "sparkles",
-                        title: "AI scan — reads almost any report",
-                        subtitle: "Your photo is sent for AI reading — not stored."
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("AI scan, reads almost any report")
-                .accessibilityHint("Your photo is sent for AI reading, not stored.")
-
-                Button {
-                    dismiss()
-                    onChooseOnDevice()
-                } label: {
-                    ScanActionCard(
-                        icon: "lock.shield",
-                        title: "On-device scan",
-                        subtitle: "Private · may not read every report."
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("On-device scan")
-                .accessibilityHint("Private, may not read every report.")
-
-                Spacer(minLength: 0)
+        VStack(spacing: 16) {
+            HStack(spacing: 12) {
+                engineCard(
+                    icon: "sparkles",
+                    title: "AI Scan",
+                    caption: "Reads any report",
+                    isPrimary: true,
+                    action: onChooseAI
+                )
+                engineCard(
+                    icon: "lock.shield",
+                    title: "On-Device",
+                    caption: "Private, offline",
+                    isPrimary: false,
+                    action: onChooseOnDevice
+                )
             }
-            .padding()
-            .ambientScreen()
-            .navigationTitle("Choose Scan Method")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-            }
+
+            Text("Your photo is sent for AI reading, never stored.")
+                .font(.system(size: 13))
+                .foregroundStyle(Editorial.muted(colorScheme))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+
+            Spacer(minLength: 0)
         }
-        .presentationDetents([.medium])
+        .padding(.horizontal, 20)
+        .padding(.top, 22)
+        .frame(maxWidth: .infinity)
+        .background(Editorial.canvas(colorScheme))
+        .presentationDetents([.height(300)])
         .presentationDragIndicator(.visible)
+    }
+
+    private func engineCard(
+        icon: String,
+        title: LocalizedStringKey,
+        caption: LocalizedStringKey,
+        isPrimary: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            dismiss()
+            action()
+        } label: {
+            VStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(isPrimary ? Editorial.accent(colorScheme) : Editorial.ink(colorScheme))
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                Text(caption)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Editorial.muted(colorScheme))
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 24)
+            .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(
+                        isPrimary ? Editorial.accent(colorScheme).opacity(0.5) : Editorial.controlBorder(colorScheme),
+                        lineWidth: isPrimary ? 1.5 : 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        // `Text` concatenation (`+`), not string interpolation of one
+        // `LocalizedStringKey` into another — interpolating a
+        // `LocalizedStringKey` isn't a supported `appendInterpolation`
+        // overload, while `Text + Text` is a plain, well-supported SwiftUI
+        // operator that keeps both pieces independently localizable.
+        .accessibilityLabel(Text(title) + Text(": ") + Text(caption))
     }
 }
 

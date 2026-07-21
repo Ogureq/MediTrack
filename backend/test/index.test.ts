@@ -623,6 +623,47 @@ describe("POST /v1/extract-labs — happy path", () => {
     expect(response.status).toBe(502);
     expect(await errorCode(response)).toBe("upstream_error");
   });
+
+  it("passes through a facility the model reports, additively alongside values", async () => {
+    stubUpstream(() =>
+      anthropicExtractLabsSuccess(
+        '{"values":[{"name":"Fasting Glucose","value":95,"unit":"mg/dL","sourceText":"Fasting Glucose 95 mg/dL"}],"facility":"Quest Diagnostics"}'
+      )
+    );
+    const env = makeEnv();
+    const token = await mintToken(false);
+
+    const response = await postJson(env, "/v1/extract-labs", extractLabsBody(), token);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      values: [{ name: "Fasting Glucose", value: 95, unit: "mg/dL", sourceText: "Fasting Glucose 95 mg/dL" }],
+      facility: "Quest Diagnostics",
+      refused: false
+    });
+  });
+
+  it("omits the facility key entirely (not null) when the model didn't report one — existing clients unaffected", async () => {
+    stubUpstream(() => anthropicExtractLabsSuccess('{"values":[]}'));
+    const env = makeEnv();
+    const token = await mintToken(false);
+
+    const response = await postJson(env, "/v1/extract-labs", extractLabsBody(), token);
+    expect(response.status).toBe(200);
+    const rawText = await response.text();
+    expect(rawText).not.toContain("facility");
+    expect(JSON.parse(rawText)).toEqual({ values: [], refused: false });
+  });
+
+  it("omits facility when the model reports only whitespace", async () => {
+    stubUpstream(() => anthropicExtractLabsSuccess('{"values":[],"facility":"   "}'));
+    const env = makeEnv();
+    const token = await mintToken(false);
+
+    const response = await postJson(env, "/v1/extract-labs", extractLabsBody(), token);
+    expect(response.status).toBe(200);
+    const rawText = await response.text();
+    expect(rawText).not.toContain("facility");
+  });
 });
 
 describe("POST /v1/extract-labs — premium enforcement", () => {
@@ -791,5 +832,72 @@ describe("logging", () => {
     expect(entry.feature).toBe("report");
     expect(entry.model).toBe("model-report");
     expect(entry.tokensReserved).toBe(1500);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Global error handling: an unhandled throw anywhere in route dispatch must
+// still come back as this relay's own structured error shape, never a bare
+// crash — see index.ts's `fetch` try/catch around `router.handle`.
+// ---------------------------------------------------------------------------
+
+describe("global error handling", () => {
+  class ThrowingKV implements KVLike {
+    async get(): Promise<string | null> {
+      throw new Error("simulated KV outage");
+    }
+    async put(): Promise<void> {
+      throw new Error("simulated KV outage");
+    }
+  }
+
+  it("returns a structured 500 internal_error, not a bare crash, when a handler throws unexpectedly", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    stubUpstream(() => anthropicSuccess("should never be reached"));
+    // checkQuota is called after auth + validation succeed and before the
+    // upstream call — routing QUOTA_KV.get through a throwing stub forces an
+    // unhandled exception mid-handler without touching any relay source.
+    const env = makeEnv({ QUOTA_KV: new ThrowingKV() });
+    const token = await mintToken(false);
+
+    const response = await postJson(env, "/v1/ai/generate", chatBody(), token);
+    expect(response.status).toBe(500);
+    const body = (await response.json()) as { error?: { code?: string; message?: string } };
+    expect(body.error?.code).toBe("internal_error");
+    expect(body.error?.message).toBe("The relay hit an unexpected error.");
+  });
+
+  it("still applies CORS headers to the structured 500", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const env = makeEnv({ QUOTA_KV: new ThrowingKV() });
+    const token = await mintToken(false);
+
+    const response = await postJson(env, "/v1/ai/generate", chatBody(), token);
+    expect(response.headers.get("access-control-allow-origin")).toBe("*");
+  });
+
+  it("logs only the error class/message, never request content or the exception object itself", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const env = makeEnv({ QUOTA_KV: new ThrowingKV() });
+    const token = await mintToken(false);
+
+    await postJson(env, "/v1/ai/generate", chatBody(), token);
+
+    expect(errorSpy).toHaveBeenCalled();
+    const logged = errorSpy.mock.calls.map((args) => args.map(String).join(" ")).join("\n");
+    expect(logged).toContain("simulated KV outage");
+    expect(logged).not.toContain("Health score");
+    expect(logged).not.toContain("What does my score mean");
+    expect(logged).not.toContain(DEVICE_ID);
+  });
+
+  it("returns a structured 500 for /v1/extract-labs too (the try/catch wraps every route, not just /v1/ai/generate)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const env = makeEnv({ QUOTA_KV: new ThrowingKV() });
+    const token = await mintToken(false);
+
+    const response = await postJson(env, "/v1/extract-labs", extractLabsBody(), token);
+    expect(response.status).toBe(500);
+    expect(await errorCode(response)).toBe("internal_error");
   });
 });

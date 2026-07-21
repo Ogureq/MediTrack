@@ -222,12 +222,18 @@ struct TrendsView: View {
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(Editorial.ink(colorScheme))
                         .lineLimit(1)
-                    if let trend = trendCaption(for: series) {
+                    // Hidden for the currently-selected row only: its exact
+                    // same direction is repeated, with more precision (a
+                    // percent change), by the "Trend" stat row in
+                    // `detailSection` right below — showing both here was a
+                    // redundant caption for the one row where it mattered
+                    // least.
+                    if !isSelected, let trend = trendCaption(for: series) {
                         HStack(spacing: 4) {
                             Image(systemName: trend.symbol)
                             Text(trend.text)
                         }
-                        .font(.system(size: 11))
+                        .font(.system(size: 13))
                         .foregroundStyle(Editorial.muted(colorScheme))
                         .lineLimit(1)
                     }
@@ -362,7 +368,7 @@ struct TrendsView: View {
                     // matches their pre-redesign display, which passed the
                     // raw `rawValue` straight to `Text`.
                     Text(verbatim: range.rawValue)
-                        .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                        .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                         .foregroundStyle(isSelected ? Editorial.ink(colorScheme) : Editorial.muted(colorScheme))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 7)
@@ -430,12 +436,26 @@ struct TrendsView: View {
         let scaleRange: [Color] = pair == nil ? [] : [Editorial.ink(colorScheme), Editorial.muted(colorScheme)]
 
         Chart {
+            // Reference-range band: a hairline top/bottom border plus a
+            // faint tint, not a heavy fill. This used to be
+            // `Editorial.zoneIn(colorScheme).opacity(0.5)` (up from the
+            // pre-editorial-redesign `.green.opacity(0.1)`) — a 5x jump in
+            // opacity that, for a wide reference range, painted a solid
+            // block over most of the chart's vertical extent, reading as a
+            // heavy shadow that bled into the reading below it as the page
+            // scrolled. Reduced back down and framed with hairlines instead.
             if let range = series.range {
                 RectangleMark(
                     yStart: .value("Range low", range.lowerBound),
                     yEnd: .value("Range high", range.upperBound)
                 )
-                .foregroundStyle(Editorial.zoneIn(colorScheme).opacity(0.5))
+                .foregroundStyle(Editorial.zoneIn(colorScheme).opacity(0.12))
+                RuleMark(y: .value("Range low", range.lowerBound))
+                    .foregroundStyle(Editorial.hairline(colorScheme))
+                    .lineStyle(StrokeStyle(lineWidth: 1))
+                RuleMark(y: .value("Range high", range.upperBound))
+                    .foregroundStyle(Editorial.hairline(colorScheme))
+                    .lineStyle(StrokeStyle(lineWidth: 1))
             }
 
             if let pair {
@@ -512,7 +532,7 @@ struct TrendsView: View {
                         overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .plot))
                     ) {
                         Text("avg \(average.compactFormatted)")
-                            .font(.caption2.weight(.semibold))
+                            .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(Editorial.muted(colorScheme))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 3)
@@ -532,7 +552,7 @@ struct TrendsView: View {
                     overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .plot))
                 ) {
                     Text(minPoint.value.compactFormatted)
-                        .font(.caption2.weight(.semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Editorial.accent(colorScheme))
                 }
             }
@@ -548,7 +568,7 @@ struct TrendsView: View {
                     overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .plot))
                 ) {
                     Text(maxPoint.value.compactFormatted)
-                        .font(.caption2.weight(.semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Editorial.accent(colorScheme))
                 }
             }
@@ -563,10 +583,10 @@ struct TrendsView: View {
                     ) {
                         VStack(spacing: 2) {
                             Text(selected.date.formatted(date: .abbreviated, time: .omitted))
-                                .font(.caption2)
+                                .font(.system(size: 13))
                                 .foregroundStyle(Editorial.muted(colorScheme))
                             Text("\(selected.value.compactFormatted) \(series.unit)")
-                                .font(.caption.weight(.bold))
+                                .font(.system(size: 13, weight: .bold))
                                 .foregroundStyle(Editorial.ink(colorScheme))
                         }
                         .padding(.horizontal, 8)

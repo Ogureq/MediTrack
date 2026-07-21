@@ -580,11 +580,26 @@ extension AITransport {
         }
     }
 
+    /// Bundled result of `extractLabs(image:direct:)`: the same
+    /// `{"values":[...]}` JSON text `AIScanService.mapValues` has always
+    /// parsed (unchanged shape — `valuesJSON` is exactly what the old
+    /// `String`-returning version of this function used to hand back),
+    /// plus, additively, the relay's optional `facility` field. `facility`
+    /// is always `nil` on the direct/BYOK path: that path's prompt has no
+    /// facility instruction (see `AIScanService.directPrompt`'s doc comment
+    /// on staying byte-identical to the server-owned prompt this pass
+    /// doesn't touch), and is `nil` on the relay path too whenever the photo
+    /// shows no facility name or the relay predates the field.
+    struct ExtractLabsResult {
+        let valuesJSON: String
+        let facility: String?
+    }
+
     /// Extracts lab values from `image`: relay when configured (POST
     /// `<baseURL>/v1/extract-labs` — no prompt/model is sent, the relay owns
     /// both), else a direct BYOK call using `direct`. Same routing/failure
     /// rule as `generate(route:input:direct:)`.
-    static func extractLabs(image: ImageBlock, direct: DirectImageSpec) async throws -> String {
+    static func extractLabs(image: ImageBlock, direct: DirectImageSpec) async throws -> ExtractLabsResult {
         if RelayConfig.baseURL != nil {
             return try await extractLabsViaRelay(image: image, isRetry: false)
         }
@@ -610,7 +625,7 @@ extension AITransport {
         let image: ImagePayload
     }
 
-    private static func extractLabsViaRelay(image: ImageBlock, isRetry: Bool) async throws -> String {
+    private static func extractLabsViaRelay(image: ImageBlock, isRetry: Bool) async throws -> ExtractLabsResult {
         guard let baseURL = RelayConfig.baseURL else {
             throw AITransportError.notConfigured
         }
@@ -675,19 +690,25 @@ extension AITransport {
               let text = String(data: reencoded, encoding: .utf8) else {
             throw AITransportError.badResponse
         }
-        return text
+        return ExtractLabsResult(valuesJSON: text, facility: decoded.facility)
     }
 
     /// The relay's `POST /v1/extract-labs` response — `{"values":
-    /// [{"name","value","unit","sourceText"}], "refused": Bool}`. Unlike
-    /// `/v1/ai/generate`'s `{"text","refused"}` envelope, the relay has
-    /// ALREADY sanity-parsed the model's raw text into a structured array
-    /// server-side (see `backend/src/extractLabs.ts`'s
+    /// [{"name","value","unit","sourceText"}], "facility": String?,
+    /// "refused": Bool}`. Unlike `/v1/ai/generate`'s `{"text","refused"}`
+    /// envelope, the relay has ALREADY sanity-parsed the model's raw text
+    /// into a structured array server-side (see `backend/src/extractLabs.ts`'s
     /// `parseExtractedLabsText`) — there is no free-text `"text"` field to
     /// re-parse here. Field names are camelCase on the wire (the relay's
     /// `LabValue` TypeScript interface uses `sourceText`, not
-    /// `source_text` — no snake_case conversion on this decode). Kept
-    /// internal (not private) so `AIScanServiceTests` can assert on it
+    /// `source_text` — no snake_case conversion on this decode).
+    ///
+    /// `facility` is additive: an older relay deployment that predates this
+    /// field simply omits the key, and — because the property is
+    /// `Optional` — Swift's synthesized `Decodable` conformance already
+    /// calls `decodeIfPresent` for it, so a missing key decodes to `nil`
+    /// with no custom `init(from:)` needed. Kept internal (not private) so
+    /// `AIScanServiceTests`/`AIScanServiceFacilityTests` can assert on it
     /// directly.
     struct ExtractLabsResponseBody: Decodable {
         struct Value: Codable {
@@ -697,6 +718,7 @@ extension AITransport {
             let sourceText: String
         }
         let values: [Value]
+        let facility: String?
         let refused: Bool
     }
 
@@ -755,7 +777,7 @@ extension AITransport {
         let messages: [DirectImageMessage]
     }
 
-    private static func extractLabsDirect(image: ImageBlock, spec: DirectImageSpec, apiKey: String) async throws -> String {
+    private static func extractLabsDirect(image: ImageBlock, spec: DirectImageSpec, apiKey: String) async throws -> ExtractLabsResult {
         var request = URLRequest(url: directEndpoint)
         request.httpMethod = "POST"
         request.timeoutInterval = directTimeoutInterval
@@ -821,6 +843,8 @@ extension AITransport {
         guard !text.isEmpty else {
             throw AITransportError.badResponse
         }
-        return text
+        // Never populated on this path — see `ExtractLabsResult.facility`'s
+        // doc comment.
+        return ExtractLabsResult(valuesJSON: text, facility: nil)
     }
 }

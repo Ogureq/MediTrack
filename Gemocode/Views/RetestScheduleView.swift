@@ -30,6 +30,11 @@ struct RetestScheduleView: View {
     /// section below. Rebuilt alongside `items` in the same `.task`.
     @State private var bundle: DrawBundle?
 
+    /// Presents `BookDrawSheet` for the current `bundle` — set from the
+    /// "Book" pill in `nextDrawCard(bundle:)`, which used to be a no-op (see
+    /// this file's own prior comment history).
+    @State private var showingBookSheet = false
+
     /// Mirrors `DashboardView.retestSignature`: changes exactly when the
     /// number of reports or the total number of lab results changes, which
     /// is exactly when `RetestSchedule.items` could produce a different
@@ -119,6 +124,11 @@ struct RetestScheduleView: View {
             items = freshItems
             bundle = RetestSchedule.nextDraw(items: freshItems, now: .now)
         }
+        .sheet(isPresented: $showingBookSheet) {
+            if let bundle {
+                BookDrawSheet(bundle: bundle)
+            }
+        }
     }
 
     private var trackedCountText: String {
@@ -129,8 +139,8 @@ struct RetestScheduleView: View {
 
     /// "Next draw — Aug 2 / 3 tests bundled · saves ~$80 est." inset card,
     /// with an optional "fasting required" chip and a "Book" accent pill
-    /// (kept as the existing no-op-booking action — there's no separate
-    /// booking flow today, matching `DashboardView.nextDrawInsetCard`).
+    /// that opens `BookDrawSheet` for this bundle — matching
+    /// `DashboardView.nextDrawInsetCard`'s own "Book" pill.
     private func nextDrawCard(bundle: DrawBundle) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 12) {
@@ -150,8 +160,9 @@ struct RetestScheduleView: View {
                 // Kept as its own standalone control (not folded into the
                 // combined text element above) so VoiceOver users can still
                 // reach it as a separate button, not just hear its label.
-                Button("Book") {}
+                Button("Book") { showingBookSheet = true }
                     .buttonStyle(AccentPillButtonStyle())
+                    .accessibilityHint("Opens a form to add this draw as an appointment.")
             }
             .padding(14)
             .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 18, style: .continuous))

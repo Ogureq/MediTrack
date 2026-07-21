@@ -18,7 +18,7 @@ struct ContentView: View {
     /// link route through `presentReview()` instead of switching tabs.
     @State private var showingReview = false
 
-    /// Bottom pill-tab-bar order (Today / Markers / Reports / Schedule /
+    /// Bottom pill-tab-bar order (Today / Trends / Reports / Schedule /
     /// More), mapped to the `Int` tags `PillTabBar` expects. `.review` is
     /// deliberately absent from this list — kept on `AppTab` itself only
     /// for source compatibility.
@@ -37,7 +37,7 @@ struct ContentView: View {
     private var tabBarItems: [(label: LocalizedStringKey, icon: String, tag: Int)] {
         [
             (label: "Today", icon: "house.fill", tag: 0),
-            (label: "Markers", icon: "chart.line.uptrend.xyaxis", tag: 1),
+            (label: "Trends", icon: "chart.line.uptrend.xyaxis", tag: 1),
             (label: "Reports", icon: "doc.text.fill", tag: 2),
             (label: "Schedule", icon: "calendar.badge.clock", tag: 3),
             (label: "More", icon: "ellipsis.circle.fill", tag: 4),
@@ -51,7 +51,7 @@ struct ContentView: View {
                 .toolbar(.hidden, for: .tabBar)
                 .tag(AppTab.dashboard)
             TrendsView()
-                .tabItem { Label("Markers", systemImage: "chart.line.uptrend.xyaxis") }
+                .tabItem { Label("Trends", systemImage: "chart.line.uptrend.xyaxis") }
                 .toolbar(.hidden, for: .tabBar)
                 .tag(AppTab.trends)
             ReportsListView()
@@ -236,6 +236,12 @@ struct MoreView: View {
                         }
                         featureCard(icon: "folder.fill", tint: MoreTint.documents, title: "Documents", subtitle: documentsSubtitle) {
                             DocumentsView()
+                        }
+                        featureCard(icon: "cross.vial.fill", tint: MoreTint.medications, title: "Supplements", subtitle: String(localized: "From your scans")) {
+                            SupplementsView()
+                        }
+                        featureCard(icon: "bell.fill", tint: MoreTint.appointments, title: "Reminders", subtitle: String(localized: "Daily schedule")) {
+                            RemindersView()
                         }
                     }
 

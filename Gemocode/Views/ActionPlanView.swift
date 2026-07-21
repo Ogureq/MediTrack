@@ -101,7 +101,7 @@ struct ActionPlanView: View {
                     }
                     ctaButtons(currentPlan)
                     Text(ActionPlan.disclaimer)
-                        .font(.system(size: 11))
+                        .font(.system(size: 13))
                         .foregroundStyle(Editorial.muted(colorScheme))
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -119,7 +119,7 @@ struct ActionPlanView: View {
             Spacer()
             if let scanDate {
                 Text("from \(scanDate.formatted(date: .abbreviated, time: .omitted)) scan")
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundStyle(Editorial.muted(colorScheme))
             }
         }
@@ -160,7 +160,7 @@ struct ActionPlanView: View {
                 )
             }
             Text(verbatim: planItemCaption(item))
-                .font(.system(size: 11))
+                .font(.system(size: 13))
                 .foregroundStyle(Editorial.muted(colorScheme))
         }
         .ledgerRow()
@@ -202,7 +202,7 @@ struct ActionPlanView: View {
                     .foregroundStyle(Editorial.muted(colorScheme))
                     .accessibilityHidden(true)
                 Text(verbatim: noInteractionsText)
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundStyle(Editorial.muted(colorScheme))
             }
             .padding(11)
@@ -219,7 +219,7 @@ struct ActionPlanView: View {
                     }
                 }
                 Text(MedicationInteractions.disclaimer)
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundStyle(Editorial.muted(colorScheme))
                     .padding(.top, 8)
             }
@@ -236,10 +236,10 @@ struct ActionPlanView: View {
                 EditorialTag(verbatim: warning.severity.displayName, kind: interactionTagKind(warning.severity))
             }
             Text(warning.explanation)
-                .font(.system(size: 12))
+                .font(.system(size: 13))
                 .foregroundStyle(Editorial.muted(colorScheme))
             Text(warning.recommendation)
-                .font(.system(size: 12))
+                .font(.system(size: 13))
                 .foregroundStyle(Editorial.ink(colorScheme))
         }
         .ledgerRow()
@@ -314,7 +314,7 @@ struct ActionPlanView: View {
                 )
             }
             Text(String(localized: "no supplement — retest \(item.suggestedRetestDate.formatted(date: .abbreviated, time: .omitted))"))
-                .font(.system(size: 11))
+                .font(.system(size: 13))
                 .foregroundStyle(Editorial.muted(colorScheme))
         }
         .ledgerRow()
@@ -358,53 +358,62 @@ struct ActionPlanView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(GlassButtonStyle())
+
+            // Every supplement this screen (or ScanReportView's auto-add)
+            // ever creates lives on the dedicated Supplements page — this is
+            // the one link this pass adds to reach it from here.
+            NavigationLink {
+                SupplementsView()
+            } label: {
+                Label("View Supplements", systemImage: "pills")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(GlassButtonStyle())
         }
     }
 
-    /// Creates one `Medication` per `PlanItem` (dosage/frequency stored as
-    /// plain text, following `MedicationsView`'s own field conventions) with
-    /// a daily reminder enabled at the same 9 AM default `MedicationsView`
-    /// uses for a brand-new medication, requests notification authorization,
-    /// and schedules each reminder via the exact
-    /// `NotificationService.scheduleDailyReminder(id:medicationName:dosage:at:)`
-    /// call `MedicationsView.save()` uses — then shows a confirmation and
-    /// dismisses. Re-entrancy-guarded the same way `MedicationsView.save()`
-    /// guards `isSaving`.
+    /// Delegates to `SupplementPlanApplier.apply(...)` — the shared helper
+    /// extracted from this function's original inline logic so
+    /// `ScanReportView`'s automatic post-save supplement add uses the exact
+    /// same creation/skip/reminder rule instead of a second copy of it. The
+    /// reminder-scheduling closure passed here is unchanged from before the
+    /// extraction: request notification authorization, then schedule via the
+    /// same `NotificationService.scheduleDailyReminder(id:medicationName:dosage:at:)`
+    /// call `MedicationsView.save()` uses. Re-entrancy-guarded the same way
+    /// `MedicationsView.save()` guards `isSaving`.
+    ///
+    /// Unlike the pre-extraction version, a supplement already present
+    /// (added by an earlier plan, or by `ScanReportView`'s auto-add) is now
+    /// skipped rather than duplicated — `SupplementPlanApplier`'s dedupe
+    /// applies here too, so tapping this button twice never creates two rows
+    /// for the same supplement.
     private func addPlanAndSetReminders(_ plan: ActionPlan) {
         guard !isAddingPlan, !plan.items.isEmpty else { return }
         isAddingPlan = true
 
-        let reminderTime = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: .now) ?? .now
-        var addedCount = 0
-
-        for item in plan.items {
-            let medication = Medication(
-                name: supplementName(item.supplementForm),
-                dosage: "\(item.doseLow.compactFormatted)–\(item.doseHigh.compactFormatted) \(item.doseUnit.rawValue)",
-                frequency: frequencyDisplayName(item.frequency),
-                purpose: String(localized: "Suggested by your Action Plan"),
-                startDate: .now
-            )
-            medication.reminderEnabled = true
-            medication.reminderTime = reminderTime
-            modelContext.insert(medication)
-            addedCount += 1
-
+        let created = SupplementPlanApplier.apply(items: plan.items, context: modelContext) { medication in
             let id = medication.reminderID
             let name = medication.name
             let dosage = medication.dosage
+            let time = medication.reminderTime ?? .now
             Task {
                 if await NotificationService.requestAuthorization() {
-                    NotificationService.scheduleDailyReminder(id: id, medicationName: name, dosage: dosage, at: reminderTime)
+                    NotificationService.scheduleDailyReminder(id: id, medicationName: name, dosage: dosage, at: time)
                 }
             }
         }
 
         Haptics.success()
         isAddingPlan = false
-        confirmationMessage = addedCount == 1
-            ? String(localized: "Added 1 supplement to Medications with a daily reminder.")
-            : String(localized: "Added \(addedCount) supplements to Medications with daily reminders.")
+        let addedCount = created.count
+        switch addedCount {
+        case 0:
+            confirmationMessage = String(localized: "Those supplements are already in your Medications.")
+        case 1:
+            confirmationMessage = String(localized: "Added 1 supplement to Medications with a daily reminder.")
+        default:
+            confirmationMessage = String(localized: "Added \(addedCount) supplements to Medications with daily reminders.")
+        }
         showingConfirmation = true
     }
 

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   EXTRACT_LABS_MAX_TOKENS,
   EXTRACT_LABS_SYSTEM_PROMPT,
+  EXTRACT_LABS_SYSTEM_PROMPT_VERSION,
   EXTRACT_LABS_TEMPERATURE,
   MAX_IMAGE_DECODED_BYTES,
   callExtractLabsAnthropic,
@@ -168,6 +169,90 @@ describe("validateExtractLabsRequest — 413 oversized image", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Sampled base64 charset validation for large payloads (CPU-limit tradeoff,
+// see `isValidBase64Charset`'s doc comment) — strings over ~256KB only have
+// their first/last 4KB regex-tested rather than the full string.
+// ---------------------------------------------------------------------------
+
+describe("validateExtractLabsRequest — sampled validation for large payloads", () => {
+  const LARGE_LENGTH = 300_000; // > the 256KB sampling threshold, well under the 4MB decoded cap
+
+  it("accepts a large, uniformly valid base64 string (decodes well under the 4MB cap)", () => {
+    const large = "A".repeat(LARGE_LENGTH);
+    const result = validateExtractLabsRequest({ image: { media_type: "image/jpeg", data: large } });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.image.data).toBe(large);
+  });
+
+  it("catches corrupted padding placement within the sampled tail slice", () => {
+    // The '=' here is not at the true end of the string (three 'A's follow
+    // it), which is invalid — and the corruption sits inside the last 4KB,
+    // so the sampled tail check still catches it.
+    const corruptTail = `${"A".repeat(LARGE_LENGTH - 4)}=AAA`;
+    const result = validateExtractLabsRequest({ image: { media_type: "image/jpeg", data: corruptTail } });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.status).toBe(400);
+    expect(result.code).toBe("bad_request");
+    expect(result.message).toContain("base64");
+  });
+
+  it("catches too many padding characters at the true end of a large string", () => {
+    const tooMuchPadding = `${"A".repeat(LARGE_LENGTH - 3)}===`;
+    const result = validateExtractLabsRequest({ image: { media_type: "image/jpeg", data: tooMuchPadding } });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.status).toBe(400);
+  });
+
+  it("catches an invalid character within the sampled head slice", () => {
+    const corruptHead = `!${"A".repeat(LARGE_LENGTH - 1)}`;
+    const result = validateExtractLabsRequest({ image: { media_type: "image/jpeg", data: corruptHead } });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.status).toBe(400);
+  });
+
+  it("still rejects an oversized payload with 413 before the sampled base64 check ever runs", () => {
+    const hugeButUniform = "A".repeat(6_000_000); // decodes to ~4.5MB, over the cap
+    const result = validateExtractLabsRequest({ image: { media_type: "image/jpeg", data: hugeButUniform } });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.status).toBe(413);
+    expect(result.code).toBe("payload_too_large");
+  });
+
+  it("documents the sampling tradeoff: corruption strictly inside the unsampled middle of a huge string is not caught locally", () => {
+    // Deliberate tradeoff (see isValidBase64Charset's doc comment): sampled
+    // validation only inspects the first/last 4KB, so corruption placed
+    // safely inside that unsampled middle region slips through here.
+    // Anthropic's own decode remains the authoritative backstop for
+    // anything outside the sampled window — this is documented risk, not a
+    // bug.
+    const middle = 150_000;
+    const withMiddleCorruption = `${"A".repeat(middle)}!${"A".repeat(LARGE_LENGTH - middle - 1)}`;
+    expect(withMiddleCorruption.length).toBe(LARGE_LENGTH);
+
+    const result = validateExtractLabsRequest({ image: { media_type: "image/jpeg", data: withMiddleCorruption } });
+    expect(result.ok).toBe(true);
+  });
+
+  it("keeps exact full-scan behavior for small strings at or under the sampling threshold", () => {
+    // A small (well under 256KB) string with an invalid character anywhere
+    // — including a position that a sampled check's head/tail slices alone
+    // wouldn't necessarily cover — must still be rejected, since small
+    // strings are never sampled.
+    const smallWithMiddleCorruption = `${"A".repeat(100)}!${"A".repeat(99)}`; // length 200, multiple of 4? not required here
+    const padded = smallWithMiddleCorruption + "A".repeat((4 - (smallWithMiddleCorruption.length % 4)) % 4);
+    const result = validateExtractLabsRequest({ image: { media_type: "image/jpeg", data: padded } });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.status).toBe(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // System prompt
 // ---------------------------------------------------------------------------
 
@@ -185,7 +270,7 @@ describe("EXTRACT_LABS_SYSTEM_PROMPT", () => {
   it("keeps the never-invent-a-number rail and the exact output shape", () => {
     expect(EXTRACT_LABS_SYSTEM_PROMPT).toContain("Never invent a number");
     expect(EXTRACT_LABS_SYSTEM_PROMPT).toContain(
-      '{"values":[{"name":String,"value":Number,"unit":String,"sourceText":String}]}'
+      '{"values":[{"name":String,"value":Number,"unit":String,"sourceText":String}],"facility":String}'
     );
     expect(EXTRACT_LABS_SYSTEM_PROMPT).toContain("ONLY one strict JSON object");
   });
@@ -193,6 +278,16 @@ describe("EXTRACT_LABS_SYSTEM_PROMPT", () => {
   it("keeps the translate-name-but-keep-unit/sourceText-verbatim rule", () => {
     expect(EXTRACT_LABS_SYSTEM_PROMPT).toContain("standard English name");
     expect(EXTRACT_LABS_SYSTEM_PROMPT).toContain('keep "unit" and "sourceText" exactly as printed');
+  });
+
+  it("bumps the prompt version alongside the wording change that added facility extraction", () => {
+    expect(EXTRACT_LABS_SYSTEM_PROMPT_VERSION).toBe("2026-07-p2");
+  });
+
+  it("adds the facility rail: never-invent, transcription-only, omitted when absent", () => {
+    expect(EXTRACT_LABS_SYSTEM_PROMPT).toContain("never invent, guess, or infer a facility name");
+    expect(EXTRACT_LABS_SYSTEM_PROMPT).toContain('omit "facility" entirely');
+    expect(EXTRACT_LABS_SYSTEM_PROMPT).toContain('"facility" is optional');
   });
 });
 
@@ -279,6 +374,55 @@ describe("parseExtractedLabsText", () => {
   it("defaults a missing sourceText to an empty string rather than dropping the item", () => {
     const result = parseExtractedLabsText('{"values":[{"name":"HbA1c","value":5.4,"unit":"%"}]}');
     expect(result).toEqual({ ok: true, values: [{ name: "HbA1c", value: 5.4, unit: "%", sourceText: "" }] });
+  });
+
+  // -------------------------------------------------------------------------
+  // facility (optional top-level field)
+  // -------------------------------------------------------------------------
+
+  it("carries a present facility through, trimmed", () => {
+    const result = parseExtractedLabsText('{"values":[],"facility":"  Quest Diagnostics  "}');
+    expect(result).toEqual({ ok: true, values: [], facility: "Quest Diagnostics" });
+  });
+
+  it("omits facility entirely when the model doesn't return one", () => {
+    const result = parseExtractedLabsText('{"values":[]}');
+    expect(result).toEqual({ ok: true, values: [] });
+    expect(result.ok && "facility" in result).toBe(false);
+  });
+
+  it("omits facility when it is null", () => {
+    const result = parseExtractedLabsText('{"values":[],"facility":null}');
+    expect(result).toEqual({ ok: true, values: [] });
+  });
+
+  it("omits facility when it is whitespace-only", () => {
+    const result = parseExtractedLabsText('{"values":[],"facility":"   "}');
+    expect(result).toEqual({ ok: true, values: [] });
+  });
+
+  it("omits facility when it is the wrong type", () => {
+    const result = parseExtractedLabsText('{"values":[],"facility":42}');
+    expect(result).toEqual({ ok: true, values: [] });
+  });
+
+  it("caps an overlong facility at ~120 chars rather than dropping or failing it", () => {
+    const overlong = "A".repeat(200);
+    const result = parseExtractedLabsText(`{"values":[],"facility":"${overlong}"}`);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.facility).toBe("A".repeat(120));
+  });
+
+  it("carries facility alongside a non-empty values array", () => {
+    const result = parseExtractedLabsText(
+      '{"values":[{"name":"HbA1c","value":5.4,"unit":"%","sourceText":"HbA1c 5.4%"}],"facility":"City Medical Lab"}'
+    );
+    expect(result).toEqual({
+      ok: true,
+      values: [{ name: "HbA1c", value: 5.4, unit: "%", sourceText: "HbA1c 5.4%" }],
+      facility: "City Medical Lab"
+    });
   });
 });
 
@@ -406,5 +550,47 @@ describe("callExtractLabsAnthropic", () => {
     expect(result.ok).toBe(false);
     if (result.ok || result.kind !== "upstream") throw new Error("expected an upstream failure");
     expect(result.status).toBe(0);
+  });
+
+  it("carries a facility from the model's response text through to the call result", async () => {
+    const fetchImpl = stubFetch(
+      () =>
+        new Response(
+          JSON.stringify({
+            stop_reason: "end_turn",
+            content: [{ type: "text", text: '{"values":[],"facility":"Quest Diagnostics"}' }],
+            usage: { input_tokens: 1200, output_tokens: 30 }
+          }),
+          { status: 200 }
+        )
+    );
+
+    const result = await callExtractLabsAnthropic({ anthropicApiKey: "k", model: "m", image, fetchImpl });
+    expect(result).toEqual({
+      ok: true,
+      refused: false,
+      values: [],
+      facility: "Quest Diagnostics",
+      usage: { inputTokens: 1200, outputTokens: 30 }
+    });
+  });
+
+  it("leaves facility absent when the model's response text doesn't include one", async () => {
+    const fetchImpl = stubFetch(
+      () =>
+        new Response(
+          JSON.stringify({
+            stop_reason: "end_turn",
+            content: [{ type: "text", text: '{"values":[]}' }],
+            usage: { input_tokens: 1200, output_tokens: 30 }
+          }),
+          { status: 200 }
+        )
+    );
+
+    const result = await callExtractLabsAnthropic({ anthropicApiKey: "k", model: "m", image, fetchImpl });
+    expect(result.ok).toBe(true);
+    if (!result.ok || result.refused) throw new Error("expected a successful, non-refused result");
+    expect(result.facility).toBeUndefined();
   });
 });

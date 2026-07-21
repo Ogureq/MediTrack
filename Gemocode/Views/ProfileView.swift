@@ -75,12 +75,12 @@ private struct ProfileForm: View {
             let biometricsClause = AppLock.biometricsAvailable
                 ? String(localized: " or enable \(AppLock.biometryLabel)")
                 : ""
-            return String(localized: "Set a passcode\(biometricsClause) to protect your data. Everything is stored only on this device.")
+            return String(localized: "Set a passcode\(biometricsClause) to protect your data — stored only on this device.")
         }
         if rememberMe {
-            return String(localized: "You'll stay signed in across launches until you tap Lock Now or turn this off. All data is stored only on this device.")
+            return String(localized: "You'll stay signed in until you tap Lock Now or turn this off. Data stays on this device.")
         }
-        return String(localized: "Gemocode asks you to sign in whenever it returns from the background. All data is stored only on this device.")
+        return String(localized: "Gemocode asks you to sign in when it returns from the background. Data stays on this device.")
     }
     @State private var confirmErase = false
     @State private var isImportingHealth = false
@@ -114,6 +114,9 @@ private struct ProfileForm: View {
             aiSummarySection
             dataManagementSection
             aboutSection
+            #if DEBUG
+            developerSection
+            #endif
         }
         .onAppear {
             anthropicAPIKey = AISummaryService.apiKey ?? ""
@@ -445,7 +448,7 @@ private struct ProfileForm: View {
         } header: {
             MicroLabel("App")
         } footer: {
-            Text("Language changes apply immediately to most screens; restart the app to apply everywhere. Retest reminders mirror your notification permission — enable notifications in Settings to receive them.")
+            Text("Language changes apply immediately; restart to apply everywhere. Enable notifications in Settings for retest reminders.")
         }
         .listRowBackground(GlassRowBackground())
         .listRowSeparatorTint(Editorial.hairline(colorScheme))
@@ -584,7 +587,7 @@ private struct ProfileForm: View {
         } header: {
             MicroLabel("Premium")
         } footer: {
-            Text("Unlimited AI health reports and future AI features. All core tracking stays free forever.")
+            Text("Unlimited AI reports and future AI features — core tracking stays free forever.")
         }
         .listRowBackground(GlassRowBackground())
         .listRowSeparatorTint(Editorial.hairline(colorScheme))
@@ -651,7 +654,7 @@ private struct ProfileForm: View {
         } header: {
             MicroLabel("AI Summary (Optional)")
         } footer: {
-            Text("Add your own Anthropic API key to enable plain-language AI summaries of your Health Review. When you tap Generate, only the review text is sent to Anthropic — never your documents or database. The key is stored in the device Keychain. Leave empty to keep Gemocode fully offline.")
+            Text("Add your own Anthropic key for AI summaries — only review text is sent, never your documents or database. Stored in Keychain; leave empty to stay fully offline.")
         }
         .listRowBackground(GlassRowBackground())
         .listRowSeparatorTint(Editorial.hairline(colorScheme))
@@ -679,7 +682,7 @@ private struct ProfileForm: View {
         } header: {
             MicroLabel("Data Management")
         } footer: {
-            Text("Health import copies your recent readings from Apple Health. When \"Save new vitals to Apple Health\" is on, vitals you log in Gemocode are also written to the Health app. Backups are a single passphrase-encrypted JSON file containing everything — including attachments — that you can store anywhere and restore later (reminders need re-enabling after a restore). Erasing removes all data from this device.")
+            Text("Health import copies recent readings from Apple Health; with write-back on, logged vitals sync back too. Backups are one encrypted JSON file (with attachments) you can restore anywhere — reminders need re-enabling after. Erasing removes all data from this device.")
         }
         .listRowBackground(GlassRowBackground())
         .listRowSeparatorTint(Editorial.hairline(colorScheme))
@@ -704,6 +707,40 @@ private struct ProfileForm: View {
         .listRowBackground(GlassRowBackground())
         .listRowSeparatorTint(Editorial.hairline(colorScheme))
     }
+
+    // MARK: - Developer (DEBUG builds only)
+
+    #if DEBUG
+    /// Owner-only testing tools: never present in a Release/TestFlight/App
+    /// Store build, since this whole section is compiled out by `#if DEBUG`
+    /// at the call site above. Lets the owner flip `PremiumStore`'s test
+    /// override to exercise every premium-gated screen without a StoreKit
+    /// sandbox purchase, and clear the one-time free AI report credit to
+    /// re-test that flow repeatedly.
+    private var developerSection: some View {
+        Section {
+            Toggle(
+                "Test Premium features",
+                isOn: Binding(
+                    get: { premiumStore.debugPremiumOverride },
+                    set: { premiumStore.debugPremiumOverride = $0 }
+                )
+            )
+            .tint(Editorial.tagGood(colorScheme))
+            Button {
+                AIReportQuota.debugResetUsedCount(defaults: .standard)
+            } label: {
+                Label("Reset free scan credit", systemImage: "arrow.counterclockwise")
+            }
+        } header: {
+            MicroLabel("Developer")
+        } footer: {
+            Text("Debug builds only — never ships.")
+        }
+        .listRowBackground(GlassRowBackground())
+        .listRowSeparatorTint(Editorial.hairline(colorScheme))
+    }
+    #endif
 
     /// Called by `BackupExportPassphraseSheet` once a valid passphrase has
     /// been entered and confirmed. `BackupService.export` hops off the main
@@ -829,7 +866,7 @@ private struct ProfileEditorSheet: View {
                 } header: {
                     MicroLabel("About You")
                 } footer: {
-                    Text("Biological sex is used to pick the correct reference ranges for lab tests. Height enables BMI calculation.")
+                    Text("Biological sex picks correct lab reference ranges; height enables BMI.")
                 }
                 .listRowBackground(GlassRowBackground())
                 .listRowSeparatorTint(Editorial.hairline(colorScheme))
@@ -936,7 +973,7 @@ private struct BackupExportPassphraseSheet: View {
                     if let error {
                         Text(error).foregroundStyle(Editorial.tagBad(colorScheme))
                     } else {
-                        Text("Choose a passphrase of at least \(Self.minimumLength) characters. You'll need it to restore this backup — Gemocode can't recover it if you forget it.")
+                        Text("At least \(Self.minimumLength) characters. Gemocode can't recover a forgotten passphrase.")
                     }
                 }
                 .listRowBackground(GlassRowBackground())
@@ -1019,7 +1056,7 @@ private struct BackupRestorePassphraseSheet: View {
                     if let error {
                         Text(error).foregroundStyle(Editorial.tagBad(colorScheme))
                     } else {
-                        Text("Enter the passphrase you used when this backup was exported. Older, unencrypted backups don't need one — leave this blank and tap Restore.")
+                        Text("Use the passphrase from when you exported this backup. Older, unencrypted backups can be left blank.")
                     }
                 }
                 .listRowBackground(GlassRowBackground())

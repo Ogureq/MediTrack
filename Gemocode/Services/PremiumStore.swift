@@ -18,7 +18,9 @@ import StoreKit
 
 /// Drives the paywall UI and the app's premium entitlement. `isPremium` is
 /// derived solely from `Transaction.currentEntitlements` — there is no
-/// separate "premium" flag to fall out of sync with StoreKit.
+/// separate "premium" flag to fall out of sync with StoreKit. (DEBUG builds
+/// only: `isPremium` also overlays a manual `debugPremiumOverride` toggle
+/// for testing — see below. That path does not exist in Release.)
 @MainActor
 final class PremiumStore: ObservableObject {
 
@@ -47,8 +49,52 @@ final class PremiumStore: ObservableObject {
 
     @Published private(set) var products: [Product] = []
     @Published private(set) var loadState: LoadState = .loading
-    @Published private(set) var isPremium = false
+    /// Backing store for the real StoreKit entitlement. Nothing outside
+    /// this file reads this directly — every call site (paywall gates,
+    /// scan lock, AI features) reads `isPremium` below, which is the single
+    /// source of truth.
+    @Published private var isPremiumEntitlement = false
     @Published private(set) var isPurchasing = false
+
+    /// The one property every premium gate in the app reads. Derived from
+    /// the real StoreKit entitlement (`isPremiumEntitlement`) plus — in
+    /// DEBUG builds only — the developer test toggle below. Every existing
+    /// call site keeps reading `store.isPremium` with zero changes; only
+    /// this accessor changed from a stored property to a computed one.
+    ///
+    /// Release-build safety: the `#if DEBUG` means the override branch,
+    /// `debugPremiumOverride` itself, and its UserDefaults key do not exist
+    /// in a compiled Release/TestFlight/App Store binary — not hidden
+    /// behind a runtime flag, but absent as a symbol. There is no code path
+    /// for App Review or a shipped build to discover or flip.
+    var isPremium: Bool {
+        #if DEBUG
+        return isPremiumEntitlement || debugPremiumOverride
+        #else
+        return isPremiumEntitlement
+        #endif
+    }
+
+    #if DEBUG
+    /// Debug-only manual override so the owner can exercise every
+    /// premium-gated path (paywall, scan lock, AI report/chat/quick-add)
+    /// without completing a StoreKit sandbox purchase. Persisted directly
+    /// in UserDefaults rather than as a plain `@Published` stored property,
+    /// because a property wrapper can't carry a `didSet` to persist itself;
+    /// `objectWillChange` is sent manually in the setter instead, so every
+    /// view observing this store (e.g. Profile's toggle, or any screen
+    /// reading `isPremium`) still re-renders correctly on toggle. Compiled
+    /// out entirely in Release — see `isPremium` above.
+    static let debugPremiumOverrideKey = "debug.premiumOverride"
+
+    var debugPremiumOverride: Bool {
+        get { UserDefaults.standard.bool(forKey: Self.debugPremiumOverrideKey) }
+        set {
+            objectWillChange.send()
+            UserDefaults.standard.set(newValue, forKey: Self.debugPremiumOverrideKey)
+        }
+    }
+    #endif
 
     private var transactionListenerTask: Task<Void, Never>?
 
@@ -167,7 +213,7 @@ final class PremiumStore: ObservableObject {
                 active = true
             }
         }
-        isPremium = active
+        isPremiumEntitlement = active
         hasLoadedEntitlements = true
     }
 
@@ -216,4 +262,14 @@ enum AIReportQuota {
     static func recordUse(defaults: UserDefaults) {
         defaults.set(usedCount(defaults: defaults) + 1, forKey: usedCountKey)
     }
+
+    #if DEBUG
+    /// Debug-only: clears the used-count key so the owner can re-test the
+    /// one-free-report flow repeatedly in a debug build. The quota is
+    /// otherwise a lifetime cap that never resets (see `freeLifetimeLimit`)
+    /// — this bypass does not exist in a compiled Release build.
+    static func debugResetUsedCount(defaults: UserDefaults) {
+        defaults.removeObject(forKey: usedCountKey)
+    }
+    #endif
 }

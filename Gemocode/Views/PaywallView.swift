@@ -149,17 +149,12 @@ struct PaywallView: View {
     }
 
     private var unavailableCard: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(spacing: 10) {
             Image(systemName: "info.circle.fill")
                 .foregroundStyle(Editorial.tagWarn(colorScheme))
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Purchases aren't available in this build yet.")
-                    .font(.subheadline.weight(.semibold))
-                Text("This preview isn't connected to the App Store yet, so premium plans can't be shown or purchased here. Everything else in Gemocode works normally.")
-                    .font(.footnote)
-                    .foregroundStyle(Editorial.muted(colorScheme))
-            }
+            Text("Purchases aren't available in this build yet.")
+                .font(.subheadline.weight(.semibold))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
@@ -211,7 +206,7 @@ struct PaywallView: View {
             }
         }
         .buttonStyle(.plain)
-        .font(.system(size: 12, weight: .regular))
+        .font(.system(size: 13, weight: .regular))
         .foregroundStyle(Editorial.muted(colorScheme))
         .underline()
         .disabled(isRestoring)
@@ -233,7 +228,7 @@ struct PaywallView: View {
                     Text("Privacy Policy").underline()
                 }
             }
-            .font(.caption2)
+            .font(.system(size: 13, weight: .regular))
             .buttonStyle(.plain)
         }
         .foregroundStyle(Editorial.muted(colorScheme))

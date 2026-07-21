@@ -123,15 +123,15 @@ struct ScannedResultsSheet: View {
                             value: scanned.value,
                             accessibilityLabel: Text("\(scanned.reference.name) \(scanned.value.compactFormatted) \(scanned.reference.unit), \(status.label)")
                         )
-                        if status.isOutOfRange, let caption = outOfRangeCaption(scanned: scanned, range: range, status: status) {
+                        if status.isOutOfRange, let caption = outOfRangeCaption(scanned: scanned, range: range) {
                             Text(caption)
-                                .font(.system(size: 11))
+                                .font(.system(size: 13))
                                 .foregroundStyle(Editorial.muted(colorScheme))
                         }
                     }
 
                     Text("“\(scanned.sourceLine)”")
-                        .font(.system(size: 11))
+                        .font(.system(size: 13))
                         .foregroundStyle(Editorial.muted(colorScheme))
                         .lineLimit(1)
                 }
@@ -151,11 +151,15 @@ struct ScannedResultsSheet: View {
         }
     }
 
-    /// "lab range %@–%@ · ↗ up from %@ · supplement suggested" for one
-    /// out-of-range detected value — mirrors `ScanReportView`'s identical
-    /// caption builder (`scannedRowCaption`), duplicated per this file's
-    /// edit-ownership rather than lifted into shared support.
-    private func outOfRangeCaption(scanned: ScannedLabValue, range: ClosedRange<Double>, status: LabStatus) -> String? {
+    /// "lab range %@–%@ · ↗ up from %@" for one out-of-range detected value
+    /// — mirrors `ScanReportView`'s identical caption builder
+    /// (`scannedRowCaption`), duplicated per this file's edit-ownership
+    /// rather than lifted into shared support. No longer mentions a
+    /// supplement suggestion: supplements now auto-add on save (see
+    /// `SupplementPlanApplier`/`ScanReportView.applyAutoSupplements(for:)`),
+    /// so there's nothing left to "suggest" in this review-before-adding
+    /// sheet.
+    private func outOfRangeCaption(scanned: ScannedLabValue, range: ClosedRange<Double>) -> String? {
         var parts: [String] = [
             String(localized: "lab range \(range.lowerBound.compactFormatted)–\(range.upperBound.compactFormatted)")
         ]
@@ -165,9 +169,6 @@ struct ScannedResultsSheet: View {
                     ? String(localized: "↗ up from \(prior.compactFormatted)")
                     : String(localized: "↘ down from \(prior.compactFormatted)")
             )
-        }
-        if isSupplementSuggested(scanned: scanned, status: status, range: range) {
-            parts.append(String(localized: "supplement suggested"))
         }
         return parts.joined(separator: " · ")
     }
@@ -179,35 +180,6 @@ struct ScannedResultsSheet: View {
         let allResults = (try? modelContext.fetch(FetchDescriptor<LabResult>())) ?? []
         let grouped = Dictionary(grouping: allResults, by: \.seriesKey)
         return grouped.compactMapValues { $0.max(by: { $0.date < $1.date })?.value }
-    }
-
-    /// Whether `scanned` would surface an `ActionPlan` supplement suggestion
-    /// — built the same way `ScanReportView.supplementSuggestedLabIDs(for:)`
-    /// is: a minimal, throwaway `HealthReview` wrapping just this one
-    /// snapshot, handed to the real `ActionPlan.generate` rule table so this
-    /// never duplicates that whitelist by hand.
-    private func isSupplementSuggested(scanned: ScannedLabValue, status: LabStatus, range: ClosedRange<Double>?) -> Bool {
-        let snapshot = LabSnapshot(
-            id: scanned.reference.id.lowercased(),
-            name: scanned.reference.name,
-            unit: scanned.reference.unit,
-            value: scanned.value,
-            date: .now,
-            status: status,
-            range: range,
-            reference: scanned.reference
-        )
-        let miniReview = HealthReview(
-            generatedAt: .now,
-            hasData: true,
-            score: 0,
-            summary: "",
-            findings: [],
-            trends: [],
-            labSnapshots: [snapshot]
-        )
-        let plan = ActionPlan.generate(review: miniReview, medications: [], now: .now)
-        return plan.items.contains { $0.labTestID == snapshot.id }
     }
 }
 

@@ -123,19 +123,39 @@ enum AIScanService {
     private static let userInstruction =
         "Extract every lab analyte with a numeric result from this photo, following your instructions exactly."
 
+    // MARK: Result
+
+    /// `extract(from:)`'s return shape: the mapped lab values (unchanged
+    /// from before this pass — every existing caller's handling of "the
+    /// values" is identical, just reached via `.values` now) plus,
+    /// additively, the clinic/facility name the model found printed on the
+    /// report. `facility` is `nil` whenever the photo doesn't show one, the
+    /// relay serving this request predates the field, or the direct/BYOK
+    /// fallback served the request (that path never populates it — see
+    /// `AITransport.ExtractLabsResult.facility`'s doc comment). No other
+    /// file in this module calls `extract(from:)` (only `ScanReportView`
+    /// does, plus `AIScanServiceTests`' doc comment noting it's never
+    /// network-tested), so this is a straight signature change rather than
+    /// an additive wrapper.
+    struct AIScanResult {
+        let values: [ScannedLabValue]
+        let facility: String?
+    }
+
     // MARK: Call
 
     /// Downsamples `image` for AI input, sends it to the model (relay when
     /// configured, else a direct BYOK call), and maps the structured JSON
-    /// reply onto `[ScannedLabValue]` using the same name-matching, unit
-    /// conversion, and plausibility rules `LabScanService.parse` applies.
+    /// reply onto `AIScanResult` using the same name-matching, unit
+    /// conversion, and plausibility rules `LabScanService.parse` applies for
+    /// `values`.
     ///
     /// Throws `AIScanError` on any failure — image prep, missing key,
     /// network, refusal, or a top-level malformed response. A well-formed
     /// response whose entries all fail to match a catalog test returns an
-    /// empty array rather than throwing (the caller's empty state handles
-    /// that case).
-    static func extract(from image: UIImage) async throws -> [ScannedLabValue] {
+    /// empty `values` array rather than throwing (the caller's empty state
+    /// handles that case).
+    static func extract(from image: UIImage) async throws -> AIScanResult {
         guard let jpeg = image.jpegData(compressionQuality: 0.9) else {
             throw AIScanError.imageEncodingFailed
         }
@@ -155,14 +175,15 @@ enum AIScanService {
             maxTokens: maxTokens
         )
 
-        let text: String
+        let transportResult: AITransport.ExtractLabsResult
         do {
-            text = try await AITransport.extractLabs(image: imageBlock, direct: direct)
+            transportResult = try await AITransport.extractLabs(image: imageBlock, direct: direct)
         } catch {
             throw AIScanError.from(error)
         }
 
-        return try mapValues(fromJSON: text)
+        let values = try mapValues(fromJSON: transportResult.valuesJSON)
+        return AIScanResult(values: values, facility: transportResult.facility)
     }
 
     // MARK: - Response mapping (pure, unit-testable, no networking)

@@ -28,7 +28,10 @@ All error responses (any non-200) share one shape:
 with codes: `401 unauthorized`, `402 premium_required`, `429 quota_exceeded`,
 `400 bad_request`, `413 payload_too_large` (POST /v1/extract-labs only),
 `502 upstream_error`, `502 invalid_model_output` (POST /v1/extract-labs
-only) (plus `404 not_found` for unknown routes).
+only) (plus `404 not_found` for unknown routes, and a last-resort
+`500 internal_error` if a handler throws unexpectedly instead of returning
+one of the structured errors above — see `src/index.ts`'s top-level
+try/catch around route dispatch).
 
 ### `POST /v1/auth/anonymous`
 
@@ -115,10 +118,11 @@ way for a client to supply or override any prompt content.
 // request
 { "image": { "media_type": "image/jpeg", "data": "<base64, ~4MB decoded max>" } }
 
-// 200 response
+// 200 response ("facility" is additive/optional — omitted when the report
+// doesn't clearly print a clinic/lab name, so older clients are unaffected)
 { "values": [
     { "name": "Fasting Glucose", "value": 95, "unit": "mg/dL", "sourceText": "Fasting Glucose 95 mg/dL" }
-  ], "refused": false }
+  ], "facility": "Quest Diagnostics", "refused": false }
 
 // 200 response when Anthropic ends with stop_reason == "refusal"
 { "values": [], "refused": true }
@@ -128,7 +132,11 @@ way for a client to supply or override any prompt content.
   otherwise); `data` must be valid base64 (400 if malformed) and decode to
   ~4MB or less (`413 payload_too_large` otherwise — checked before the
   base64-shape check, so an oversized garbage string is reported as "too
-  large" rather than "malformed").
+  large" rather than "malformed"). For payloads over ~256KB, the base64
+  charset check samples the first/last 4KB rather than scanning the whole
+  string (a deliberate CPU-time-limit tradeoff — see `isValidBase64Charset`
+  in `src/extractLabs.ts`); Anthropic's own decode remains the authoritative
+  validator for anything outside that sampled window.
 - Model: `MODEL_EXTRACT_LABS` (default `claude-sonnet-5`; a harder
   perception task than `MODEL_EXTRACT`'s free-text parsing, so it defaults to
   a stronger model despite the extra cost — a misread lab value has real
@@ -136,6 +144,10 @@ way for a client to supply or override any prompt content.
 - If Anthropic's response text doesn't parse into `{"values": [...]}` (even
   after tolerantly stripping code fences / wrapper prose), the relay returns
   `502 invalid_model_output` rather than passing through garbage.
+- `facility` is an optional top-level string: the printed name of the clinic
+  or laboratory that issued the report (from its letterhead/header/footer),
+  when one is clearly printed — never invented or inferred. Omitted from the
+  response entirely when the model didn't return one.
 - Premium gating mirrors `chat`/`extract` exactly — **no** one-lifetime-free
   allowance (that's scoped to the `report` kind only).
 - Token accounting for this endpoint books Anthropic's *actual*

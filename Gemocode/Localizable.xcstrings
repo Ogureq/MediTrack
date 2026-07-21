@@ -211,6 +211,16 @@
         }
       }
     },
+    "%@ · fasting": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · натощак"
+          }
+        }
+      }
+    },
     "%@ · one visit": {
       "localizations": {
         "ru": {
@@ -623,6 +633,16 @@
         }
       }
     },
+    "%lld tests": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld тестов"
+          }
+        }
+      }
+    },
     "%lld tests bundled": {
       "localizations": {
         "ru": {
@@ -1011,6 +1031,16 @@
         }
       }
     },
+    "1 test": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 тест"
+          }
+        }
+      }
+    },
     "1 test bundled": {
       "localizations": {
         "ru": {
@@ -1137,6 +1167,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "AI-отчёт недоступен"
+          }
+        }
+      }
+    },
+    "AI Scan": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ИИ-сканирование"
           }
         }
       }
@@ -1821,6 +1861,16 @@
         }
       }
     },
+    "Add your own Anthropic key for AI summaries — only review text is sent, never your documents or database. Stored in Keychain; leave empty to stay fully offline.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавьте свой ключ Anthropic для AI-сводок — отправляется только текст обзора, никогда документы или база данных. Хранится в Связке ключей; оставьте поле пустым, чтобы остаться полностью офлайн."
+          }
+        }
+      }
+    },
     "Added": {
       "localizations": {
         "ru": {
@@ -1831,12 +1881,32 @@
         }
       }
     },
+    "Added %lld supplements + reminders": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавлено %lld добавок + напоминания"
+          }
+        }
+      }
+    },
     "Added %lld supplements to Medications with daily reminders.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Добавлено %lld добавок в Лекарства с ежедневными напоминаниями."
+          }
+        }
+      }
+    },
+    "Added 1 supplement + reminder": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавлена 1 добавка + напоминание"
           }
         }
       }
@@ -2011,12 +2081,32 @@
         }
       }
     },
+    "Appointment Added": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приём добавлен"
+          }
+        }
+      }
+    },
     "Appointment Tomorrow": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Приём завтра"
+          }
+        }
+      }
+    },
+    "Appointment added": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приём добавлен"
           }
         }
       }
@@ -2157,6 +2247,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ассистент печатает"
+          }
+        }
+      }
+    },
+    "At least %lld characters. Gemocode can't recover a forgotten passphrase.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не менее %lld символов. Gemocode не сможет восстановить забытую кодовую фразу."
           }
         }
       }
@@ -2411,6 +2511,16 @@
         }
       }
     },
+    "Biological sex picks correct lab reference ranges; height enables BMI.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Биологический пол определяет правильные референсные диапазоны анализов; рост нужен для расчёта ИМТ."
+          }
+        }
+      }
+    },
     "Biological sex: %@": {
       "localizations": {
         "ru": {
@@ -2447,6 +2557,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Биометрия недоступна."
+          }
+        }
+      }
+    },
+    "Blood Draw": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Забор крови"
           }
         }
       }
@@ -2527,6 +2647,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Запись"
+          }
+        }
+      }
+    },
+    "Book This Draw": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Записать забор"
           }
         }
       }
@@ -3071,6 +3201,16 @@
         }
       }
     },
+    "Daily schedule": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ежедневное расписание"
+          }
+        }
+      }
+    },
     "Dashboard": {
       "localizations": {
         "ru": {
@@ -3311,6 +3451,16 @@
         }
       }
     },
+    "Dismiss": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скрыть"
+          }
+        }
+      }
+    },
     "Dismiss error": {
       "localizations": {
         "ru": {
@@ -3417,6 +3567,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Дважды нажмите, чтобы оформить подписку"
+          }
+        }
+      }
+    },
+    "Double tap to turn the daily reminder off.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Двойное касание выключит ежедневное напоминание."
+          }
+        }
+      }
+    },
+    "Double tap to turn the daily reminder on.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Двойное касание включит ежедневное напоминание."
           }
         }
       }
@@ -4001,6 +4171,16 @@
         }
       }
     },
+    "Find a Lab Nearby": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Найти лабораторию рядом"
+          }
+        }
+      }
+    },
     "Flagged in This Report": {
       "localizations": {
         "ru": {
@@ -4021,6 +4201,16 @@
         }
       }
     },
+    "Follow-Up Blood Draw": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Повторный забор крови"
+          }
+        }
+      }
+    },
     "Free AI reports used": {
       "localizations": {
         "ru": {
@@ -4037,6 +4227,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Частота приёма"
+          }
+        }
+      }
+    },
+    "From your scans": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Из ваших сканирований"
           }
         }
       }
@@ -4107,6 +4307,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Оценка Gemocode"
+          }
+        }
+      }
+    },
+    "Gemocode asks you to sign in when it returns from the background. Data stays on this device.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gemocode запрашивает вход при возврате из фонового режима. Данные остаются на этом устройстве."
           }
         }
       }
@@ -4571,6 +4781,16 @@
         }
       }
     },
+    "Health import copies recent readings from Apple Health; with write-back on, logged vitals sync back too. Backups are one encrypted JSON file (with attachments) you can restore anywhere — reminders need re-enabling after. Erasing removes all data from this device.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Импорт копирует последние показания из Apple Health; при включённой обратной записи добавленные показатели тоже синхронизируются обратно. Резервная копия — один зашифрованный JSON-файл (с вложениями), который можно восстановить где угодно — напоминания нужно включить заново. Удаление стирает все данные с этого устройства."
+          }
+        }
+      }
+    },
     "Health import copies your recent readings from Apple Health. When \"Save new vitals to Apple Health\" is on, vitals you log in Gemocode are also written to the Health app. Backups are a single passphrase-encrypted JSON file containing everything — including attachments — that you can store anywhere and restore later (reminders need re-enabling after a restore). Erasing removes all data from this device.": {
       "localizations": {
         "ru": {
@@ -4931,6 +5151,16 @@
         }
       }
     },
+    "It's on your calendar of appointments.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Он добавлен в ваши приёмы."
+          }
+        }
+      }
+    },
     "Joint & Muscle Pain": {
       "localizations": {
         "ru": {
@@ -5047,6 +5277,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Изменения языка применяются сразу на большинстве экранов; перезапустите приложение, чтобы применить везде. Напоминания о пересдаче отражают разрешение на уведомления — включите уведомления в Настройках, чтобы их получать."
+          }
+        }
+      }
+    },
+    "Language changes apply immediately; restart to apply everywhere. Enable notifications in Settings for retest reminders.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Изменения языка применяются сразу; перезапустите приложение, чтобы применить везде. Включите уведомления в Настройках для напоминаний о пересдаче."
           }
         }
       }
@@ -5775,6 +6015,16 @@
         }
       }
     },
+    "Next draw at %@?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Следующий забор в %@?"
+          }
+        }
+      }
+    },
     "Next draw — %@": {
       "localizations": {
         "ru": {
@@ -6205,6 +6455,16 @@
         }
       }
     },
+    "On-Device": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На устройстве"
+          }
+        }
+      }
+    },
     "On-device scan": {
       "localizations": {
         "ru": {
@@ -6241,6 +6501,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Один пропущенный тест\n"
+          }
+        }
+      }
+    },
+    "One visit covers it all.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Один визит — и всё готово."
           }
         }
       }
@@ -6295,6 +6565,26 @@
         }
       }
     },
+    "Opens Apple Maps to search nearby blood test laboratories.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открывает Apple Карты для поиска лабораторий сдачи анализов поблизости."
+          }
+        }
+      }
+    },
+    "Opens a form to add this draw as an appointment.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открывает форму добавления приёма для этого забора."
+          }
+        }
+      }
+    },
     "Opens read-only emergency medical information without unlocking Gemocode.": {
       "localizations": {
         "ru": {
@@ -6341,6 +6631,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Открывает сканер отчётов."
+          }
+        }
+      }
+    },
+    "Opens the retest schedule.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открывает график повторных анализов."
           }
         }
       }
@@ -6615,6 +6915,16 @@
         }
       }
     },
+    "Photograph any bloodwork — decoded in seconds.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сфотографируйте любой анализ крови — расшифровка за секунды."
+          }
+        }
+      }
+    },
     "Photograph any lab report — values extracted and organized automatically.": {
       "localizations": {
         "ru": {
@@ -6811,6 +7121,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Приватно, может прочитать не каждый отчёт."
+          }
+        }
+      }
+    },
+    "Private, offline": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приватно, офлайн"
           }
         }
       }
@@ -7049,6 +7369,16 @@
         }
       }
     },
+    "Reads any report": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Читает любой отчёт"
+          }
+        }
+      }
+    },
     "Recent Reports": {
       "localizations": {
         "ru": {
@@ -7119,12 +7449,32 @@
         }
       }
     },
+    "Remind me the night before": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Напомнить вечером накануне"
+          }
+        }
+      }
+    },
     "Reminder": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Напоминание"
+          }
+        }
+      }
+    },
+    "Reminder off": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Напоминание выключено"
           }
         }
       }
@@ -7325,6 +7675,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Результат"
+          }
+        }
+      }
+    },
+    "Retest %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Повтор %@"
           }
         }
       }
@@ -7569,6 +7929,16 @@
         }
       }
     },
+    "Scan bloodwork — needed supplements are added automatically.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сканируйте анализы — нужные добавки добавляются автоматически."
+          }
+        }
+      }
+    },
     "Scan for Lab Values": {
       "localizations": {
         "ru": {
@@ -7765,6 +8135,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Задать код доступа"
+          }
+        }
+      }
+    },
+    "Set a passcode%@ to protect your data — stored only on this device.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Установите код доступа%@ для защиты данных — они хранятся только на этом устройстве."
           }
         }
       }
@@ -8269,6 +8649,16 @@
         }
       }
     },
+    "Tests: %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Анализы: %@"
+          }
+        }
+      }
+    },
     "The \"Export Backup\" feature creates a single JSON file containing your data, encrypted with AES-GCM using a key derived from a passphrase you choose. Gemocode can't open that file without your passphrase, and neither can we — we never see it, because it isn't sent anywhere by the app. Where you store or share that file afterward (iCloud Drive, email, a USB drive) is entirely up to you and outside Gemocode's control.": {
       "localizations": {
         "ru": {
@@ -8495,6 +8885,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Этот экран описывает текущее поведение Gemocode. Если оно изменится, эта страница — и предупреждения по всему приложению — изменятся вместе с ним."
+          }
+        }
+      }
+    },
+    "Those supplements are already in your Medications.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Эти добавки уже есть в ваших лекарствах."
           }
         }
       }
@@ -8879,6 +9279,16 @@
         }
       }
     },
+    "Undo": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отменить"
+          }
+        }
+      }
+    },
     "Unit": {
       "localizations": {
         "ru": {
@@ -8945,6 +9355,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Неограниченные AI-отчёты о здоровье и будущие AI-функции. Весь базовый учёт данных навсегда останется бесплатным."
+          }
+        }
+      }
+    },
+    "Unlimited AI reports and future AI features — core tracking stays free forever.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Неограниченные AI-отчёты и будущие AI-функции — базовый учёт данных навсегда останется бесплатным."
           }
         }
       }
@@ -9019,6 +9439,16 @@
         }
       }
     },
+    "Unlock unlimited scans. You've used your free scan — Premium unlocks unlimited.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Разблокируйте безлимитные сканирования. Вы использовали бесплатное сканирование — Premium открывает безлимит."
+          }
+        }
+      }
+    },
     "Unlock with %@": {
       "localizations": {
         "ru": {
@@ -9075,6 +9505,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Использовать %@"
+          }
+        }
+      }
+    },
+    "Use the passphrase from when you exported this backup. Older, unencrypted backups can be left blank.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Используйте кодовую фразу, указанную при экспорте этой резервной копии. Для старых незашифрованных копий поле можно оставить пустым."
           }
         }
       }
@@ -9185,6 +9625,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Оригинал"
+          }
+        }
+      }
+    },
+    "View Supplements": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Смотреть добавки"
           }
         }
       }
@@ -9315,6 +9765,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Мы можем обновлять эти условия по мере изменения функций Gemocode. Продолжение использования Приложения после обновления означает согласие с пересмотренными условиями; существенные изменения будут отмечены в примечаниях к выпуску приложения."
+          }
+        }
+      }
+    },
+    "We'll remind you the night before.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Напомним вечером накануне."
           }
         }
       }
@@ -9659,6 +10119,16 @@
         }
       }
     },
+    "You'll stay signed in until you tap Lock Now or turn this off. Data stays on this device.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вы останетесь в системе, пока не нажмёте «Заблокировать сейчас» или не отключите эту функцию. Данные остаются на этом устройстве."
+          }
+        }
+      }
+    },
     "You're caught up": {
       "localizations": {
         "ru": {
@@ -9695,6 +10165,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Вы уже использовали бесплатное AI-сканирование. Premium открывает неограниченное количество сканирований и AI-отчётов."
+          }
+        }
+      }
+    },
+    "You've used your free scan — Premium unlocks unlimited.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вы использовали бесплатное сканирование — Premium открывает безлимит."
           }
         }
       }
@@ -9865,6 +10345,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ваше фото отправляется на ИИ-чтение — не сохраняется."
+          }
+        }
+      }
+    },
+    "Your photo is sent for AI reading, never stored.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Фото отправляется для распознавания ИИ и никогда не сохраняется."
           }
         }
       }

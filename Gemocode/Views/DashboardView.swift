@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import Charts
 
 struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
@@ -12,7 +11,6 @@ struct DashboardView: View {
     @Query(sort: \ScoreSnapshot.date) private var snapshots: [ScoreSnapshot]
     @Query private var symptoms: [SymptomEntry]
     @Query(sort: \Appointment.date) private var appointments: [Appointment]
-    @Query private var goals: [HealthGoal]
     @Query(sort: \Reminder.createdAt) private var reminders: [Reminder]
 
     /// Presents `ReviewScreen` when the score header is tapped — passed in
@@ -34,6 +32,11 @@ struct DashboardView: View {
     /// via `.task(id: retestSignature)`. Drives `nextDrawCard`.
     @State private var drawBundle: DrawBundle?
 
+    /// Presents `BookDrawSheet` for the current `drawBundle` — set from the
+    /// "Book" pill in `nextDrawInsetCard`, which used to be inert (drawn as
+    /// plain `Text`, not a button — see that function's prior doc comment).
+    @State private var showingBookSheet = false
+
     private var review: HealthReview {
         AnalysisEngine.generateReview(
             profile: profiles.first,
@@ -43,10 +46,6 @@ struct DashboardView: View {
             symptoms: symptoms,
             appointments: appointments
         )
-    }
-
-    private var nextAppointment: Appointment? {
-        appointments.first(where: \.isUpcoming)
     }
 
     /// Earliest data point already fetched by this view — reused so the
@@ -162,10 +161,6 @@ struct DashboardView: View {
                 // access, so every section below takes it as a parameter
                 // instead of reading the computed property directly.
                 let review = self.review
-                // Same idea: `vitalsGrid`/`goalsCard` each used to filter+sort
-                // every vital per `VitalType`/goal on every render; grouping
-                // once here and threading the dictionary through does it once.
-                let vitalsByType = Dictionary(grouping: vitals, by: \.type)
                 VStack(alignment: .leading, spacing: 16) {
                     editorialHeader
                     if review.hasData {
@@ -174,20 +169,32 @@ struct DashboardView: View {
                             .transaction { $0.animation = nil }
                         needsAttentionSection(review: review)
                         scanReportButton
+                        // "Today" text diet (owner feedback: too much small
+                        // text): the page used to scroll through nine
+                        // stacked sections after this point. Collapsed down
+                        // to at most two compact ones — today's reminders
+                        // (when there are any) and recent activity — since
+                        // everything else here duplicated a full screen
+                        // already reachable from its own tab: vitals
+                        // (Vitals, off More), goals (Goals, off More),
+                        // appointments (Appointments, off More, which shows
+                        // an even richer version of this same card), the
+                        // biomarker ledger (the Trends tab), and the top
+                        // findings (the full review, one tap away from the
+                        // score header above). Removed here, not deleted —
+                        // every one of those views/features is untouched.
+                        //
+                        // `quarterlyReviewCard` is the one deliberate
+                        // exception to "at most two": it's conditional (only
+                        // renders when a review is actually due, so it adds
+                        // no persistent clutter) and, unlike the sections
+                        // above, has no other entry point anywhere in the
+                        // app — dropping it here would strand the whole
+                        // Quarterly Review feature, not just declutter a
+                        // duplicate view of it.
                         remindersCard
                             .transaction { $0.animation = nil }
                         quarterlyReviewCard
-                            .transaction { $0.animation = nil }
-                        scoreHistoryCard
-                        BiomarkerCarouselSection()
-                            .transaction { $0.animation = nil }
-                        alertsSection(review: review)
-                            .transaction { $0.animation = nil }
-                        appointmentCard
-                            .transaction { $0.animation = nil }
-                        vitalsGrid(vitalsByType: vitalsByType)
-                            .transaction { $0.animation = nil }
-                        goalsCard(vitalsByType: vitalsByType)
                             .transaction { $0.animation = nil }
                         recentReportsSection
                             .transaction { $0.animation = nil }
@@ -203,6 +210,11 @@ struct DashboardView: View {
             .sheet(isPresented: $showingAddVital) { AddVitalSheet() }
             .sheet(isPresented: $showingQuickAdd) { QuickAddView() }
             .sheet(isPresented: $showingQuarterlyReview) { QuarterlyReviewView() }
+            .sheet(isPresented: $showingBookSheet) {
+                if let drawBundle {
+                    BookDrawSheet(bundle: drawBundle)
+                }
+            }
         }
         .task(id: earliestDataSignature) {
             earliestDataDate = Self.computeEarliestDataDate(reports: reports, vitals: vitals, snapshots: snapshots)
@@ -266,9 +278,11 @@ struct DashboardView: View {
                             ],
                             marker: CGFloat(review.score) / 100
                         )
-                        scoreTrendCaption(review: review)
-                            .font(.system(size: 11))
-                            .foregroundStyle(Editorial.muted(colorScheme))
+                        if let trendText = scoreTrendText(review: review) {
+                            Text(verbatim: trendText)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(Editorial.muted(colorScheme))
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -313,30 +327,17 @@ struct DashboardView: View {
         }
     }
 
-    /// "Health Score · ↗ up 6 since January"-style caption, built from the
-    /// existing `snapshots` history: reuses the "Health Score" key, then
-    /// appends an arrow (universal glyph, not localized) plus a templated
-    /// phrase comparing `review.score` against the earliest snapshot on
-    /// record. Falls back to just "Health Score" when there's fewer than
-    /// two snapshots to compare.
-    private func scoreTrendCaption(review: HealthReview) -> Text {
-        let base = Text("Health Score")
-        guard snapshots.count >= 2, let baseline = snapshots.first else {
-            return base
-        }
+    /// Compact "↗ +6"-style score delta since the earliest snapshot on
+    /// record — replaces the old "Health Score · up 6 since January"
+    /// caption per the "Today" text diet (owner feedback: too much small
+    /// text). `nil` (renders nothing) when there are fewer than two
+    /// snapshots to compare, or when the score hasn't moved — a "→ 0"
+    /// caption has no information worth a line of its own.
+    private func scoreTrendText(review: HealthReview) -> String? {
+        guard snapshots.count >= 2, let baseline = snapshots.first else { return nil }
         let delta = review.score - baseline.score
-        let month = baseline.date.formatted(.dateTime.month(.wide))
-        let dot = Text(verbatim: " · ")
-        if delta > 0 {
-            let phrase = String(format: String(localized: "up %lld since %@"), delta, month)
-            return base + dot + Text(verbatim: "↗ ") + Text(phrase)
-        } else if delta < 0 {
-            let phrase = String(format: String(localized: "down %lld since %@"), -delta, month)
-            return base + dot + Text(verbatim: "↘ ") + Text(phrase)
-        } else {
-            let phrase = String(format: String(localized: "steady since %@"), month)
-            return base + dot + Text(verbatim: "→ ") + Text(phrase)
-        }
+        guard delta != 0 else { return nil }
+        return delta > 0 ? "↗ +\(delta)" : "↘ \(delta)"
     }
 
     // MARK: Next draw
@@ -374,41 +375,53 @@ struct DashboardView: View {
         String(format: String(localized: "Next draw — %@"), dueDate.formatted(.dateTime.month(.abbreviated).day()))
     }
 
-    /// "HbA1c + LDL + glucose · one visit · saves ~$80 est." — the joined
-    /// test names, the existing "· one visit" tail once there's more than
-    /// one, and (new) a "· saves ~$N est." tail once the bundle actually
-    /// has a savings figure (never true alongside a lone test, since
-    /// `RetestSchedule.estimatedSavings` requires 2+ bundled tests).
+    /// "3 tests · fasting" — one short line: just the bundled-test count and
+    /// a "fasting" flag when required. Per the "Today" text diet, the joined
+    /// test names, "· one visit", and the savings figure all move to (or
+    /// stay on) the Schedule screen's own next-draw card
+    /// (`RetestScheduleView.nextDrawCard`) instead of repeating here.
     private func nextDrawSubtitle(bundle: DrawBundle) -> String {
-        let names = bundle.items.prefix(3).map(\.displayName)
-        let joined = names.joined(separator: " + ")
-        guard names.count > 1 else { return joined }
-        if let savings = bundle.estimatedSavings {
-            return String(format: String(localized: "%@ · one visit · saves ~$%lld est."), joined, savings)
-        }
-        return String(format: String(localized: "%@ · one visit"), joined)
+        let count = bundle.items.count
+        let countText = count == 1
+            ? String(localized: "1 test")
+            : String(format: String(localized: "%lld tests"), count)
+        guard bundle.requiresFasting else { return countText }
+        return String(format: String(localized: "%@ · fasting"), countText)
     }
 
-    /// `insetCard` fill, radius 18: title/subtitle plus a "Book"-look accent
-    /// pill. The whole card is one `NavigationLink` into the full retest
-    /// schedule (there's no separate booking flow today), so the pill is
-    /// drawn — not a nested button — to avoid two overlapping tap targets.
+    /// `insetCard` fill, radius 18: title/subtitle plus a "Book" accent
+    /// pill. Two independent tap targets side by side (not a button nested
+    /// inside a `NavigationLink`'s label, which only gives one of the two a
+    /// working tap area): the title/subtitle `NavigationLink` still opens
+    /// the full retest schedule, while "Book" is its own `Button` opening
+    /// `BookDrawSheet` — previously drawn as plain `Text`, a dead pill with
+    /// no action at all.
     private func nextDrawInsetCard(title: String, subtitle: String) -> some View {
-        NavigationLink {
-            RetestScheduleView()
-        } label: {
-            HStack(spacing: 12) {
+        HStack(spacing: 12) {
+            NavigationLink {
+                RetestScheduleView()
+            } label: {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(verbatim: title)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(Editorial.ink(colorScheme))
                         .lineLimit(2)
                     Text(verbatim: subtitle)
-                        .font(.system(size: 12))
+                        .font(.system(size: 13))
                         .foregroundStyle(Editorial.muted(colorScheme))
-                        .lineLimit(2)
+                        .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(title). \(subtitle)")
+            .accessibilityHint("Opens the retest schedule.")
+
+            Button {
+                showingBookSheet = true
+            } label: {
                 Text("Book")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.white)
@@ -416,12 +429,11 @@ struct DashboardView: View {
                     .padding(.horizontal, 16)
                     .background(Editorial.accent(colorScheme), in: Capsule())
             }
-            .padding(14)
-            .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(title). \(subtitle)")
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens a form to add this draw as an appointment.")
         }
-        .buttonStyle(.plain)
+        .padding(14)
+        .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     // MARK: Needs attention
@@ -455,11 +467,11 @@ struct DashboardView: View {
         return VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .lastTextBaseline) {
                 Text(verbatim: snapshot.name)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Editorial.ink(colorScheme))
                 Spacer()
                 Text(verbatim: "\(snapshot.value.compactFormatted) \(snapshot.unit)")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(Editorial.ink(colorScheme))
                 EditorialTag(verbatim: snapshot.status.label, kind: tagKind(for: snapshot.status))
             }
@@ -498,14 +510,6 @@ struct DashboardView: View {
         }
     }
 
-    private func tagKind(for severity: Severity) -> TagKind {
-        switch severity {
-        case .critical: .bad
-        case .attention: .warn
-        case .info: .good
-        }
-    }
-
     // MARK: Scan Bloodwork
 
     /// Always-visible outlined CTA — the mockup's persistent "Scan
@@ -523,51 +527,36 @@ struct DashboardView: View {
 
     // MARK: Sections (existing content, restyled below the mockup structure)
 
+    /// "Today's reminders, if any" — one of the two secondary sections kept
+    /// on the "Today" page (see `body`'s comment). Renders nothing at all
+    /// when there are no active reminders: the old empty-state upsell ("No
+    /// reminders yet — add one…") moved out per the text diet, since Quick
+    /// Add's "+" already covers adding a first reminder without a
+    /// standing, always-visible prompt.
+    @ViewBuilder
     private var remindersCard: some View {
-        let today = Date.now
-        let doneCount = activeReminders.filter { $0.isCompleted(on: today) }.count
-        let hasAISuggestions = activeReminders.contains(where: \.isAISuggested)
+        if !activeReminders.isEmpty {
+            let today = Date.now
+            let doneCount = activeReminders.filter { $0.isCompleted(on: today) }.count
+            let hasAISuggestions = activeReminders.contains(where: \.isAISuggested)
 
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                MicroLabel("Today")
-                Spacer()
-                if !activeReminders.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    MicroLabel("Today")
+                    Spacer()
                     Text("\(doneCount) of \(activeReminders.count) done")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Editorial.muted(colorScheme))
-                }
-                NavigationLink {
-                    RemindersView()
-                } label: {
-                    Text("Manage")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Editorial.accent(colorScheme))
-                }
-                .buttonStyle(.plain)
-            }
-
-            if activeReminders.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("No reminders yet — add one to stay on top of medications, checkups, and healthy habits.")
-                        .font(.subheadline)
                         .foregroundStyle(Editorial.muted(colorScheme))
                     NavigationLink {
                         RemindersView()
                     } label: {
-                        Label("Add a Reminder", systemImage: "bell.badge.plus")
-                            .font(.subheadline.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 13)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .strokeBorder(Glass.bevelStroke(for: colorScheme), lineWidth: 1)
-                            )
+                        Text("Manage")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Editorial.accent(colorScheme))
                     }
                     .buttonStyle(.plain)
                 }
-            } else {
+
                 VStack(spacing: 0) {
                     ForEach(activeReminders) { reminder in
                         TodayReminderRow(
@@ -581,7 +570,7 @@ struct DashboardView: View {
                 }
                 if hasAISuggestions {
                     Text("AI-suggested reminders are educational, not medical advice — worth discussing with your doctor before changing your routine.")
-                        .font(.caption2)
+                        .font(.system(size: 13))
                         .foregroundStyle(Editorial.muted(colorScheme))
                 }
             }
@@ -634,199 +623,6 @@ struct DashboardView: View {
                 .accessibilityElement(children: .combine)
             }
             .buttonStyle(.plain)
-        }
-    }
-
-    @ViewBuilder
-    private var scoreHistoryCard: some View {
-        if snapshots.count >= 2 {
-            VStack(alignment: .leading, spacing: 8) {
-                MicroLabel("Score History")
-                Chart(snapshots) { snapshot in
-                    AreaMark(
-                        x: .value("Date", snapshot.date),
-                        y: .value("Score", snapshot.score)
-                    )
-                    .interpolationMethod(.monotone)
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.teal.opacity(0.35), .clear],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    LineMark(
-                        x: .value("Date", snapshot.date),
-                        y: .value("Score", snapshot.score)
-                    )
-                    .interpolationMethod(.monotone)
-                    .foregroundStyle(Glass.accentGradient)
-                    .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                }
-                .chartYScale(domain: 0...100)
-                .accessibilityLabel("Health score history chart")
-                .frame(height: 110)
-                .padding()
-                .glassCard(cornerRadius: 16)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func alertsSection(review: HealthReview) -> some View {
-        let alerts = review.findings.filter { $0.severity > .info }.prefix(3)
-        if !alerts.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                MicroLabel("Needs Your Attention")
-                    .padding(.bottom, 8)
-                ForEach(Array(alerts)) { finding in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(alignment: .top) {
-                            Text(finding.title)
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundStyle(Editorial.ink(colorScheme))
-                            Spacer(minLength: 8)
-                            EditorialTag(verbatim: finding.severity.displayName, kind: tagKind(for: finding.severity))
-                        }
-                        Text(finding.detail)
-                            .font(.system(size: 12))
-                            .foregroundStyle(Editorial.muted(colorScheme))
-                            .lineLimit(3)
-                    }
-                    .ledgerRow()
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(finding.severity.displayName): \(finding.title). \(finding.detail)")
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var appointmentCard: some View {
-        if let next = nextAppointment {
-            VStack(alignment: .leading, spacing: 8) {
-                MicroLabel("Next Appointment")
-                NavigationLink {
-                    AppointmentsView()
-                } label: {
-                    HStack(spacing: 12) {
-                        VStack(spacing: 0) {
-                            Text(next.date.formatted(.dateTime.month(.abbreviated)))
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(Editorial.muted(colorScheme))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.6)
-                            Text(next.date.formatted(.dateTime.day()))
-                                .font(.title3.bold())
-                                .foregroundStyle(Editorial.accent(colorScheme))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.6)
-                        }
-                        .frame(width: 44, height: 44)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .strokeBorder(Glass.bevelStroke(for: colorScheme), lineWidth: 1)
-                        )
-                        .accessibilityHidden(true)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(next.title)
-                                .font(.subheadline.weight(.semibold))
-                                .lineLimit(1)
-                            Text(next.date.formatted(date: .abbreviated, time: .shortened))
-                                .font(.caption)
-                                .foregroundStyle(Editorial.muted(colorScheme))
-                        }
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(Editorial.muted(colorScheme))
-                            .accessibilityHidden(true)
-                    }
-                    .ledgerRow()
-                    .accessibilityElement(children: .combine)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func vitalsGrid(vitalsByType: [VitalType: [VitalSample]]) -> some View {
-        let tiles = VitalType.allCases.compactMap { type -> (type: VitalType, latest: VitalSample, history: [VitalSample])? in
-            let samples = (vitalsByType[type] ?? []).sorted { $0.date < $1.date }
-            guard let latest = samples.last else { return nil }
-            return (type, latest, Array(samples.suffix(12)))
-        }
-        if !tiles.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                MicroLabel("Latest Vitals")
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    ForEach(tiles, id: \.type) { tile in
-                        NavigationLink {
-                            VitalsView(initialType: tile.type)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Label(tile.type.displayName, systemImage: tile.type.systemImage)
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(Editorial.muted(colorScheme))
-                                    .lineLimit(1)
-                                Text(tile.latest.formattedValue)
-                                    .font(.title3.bold())
-                                    .contentTransition(.numericText())
-                                if tile.history.count >= 2 {
-                                    Chart(tile.history) { sample in
-                                        LineMark(
-                                            x: .value("Date", sample.date),
-                                            y: .value("Value", Units.display(sample.value, for: tile.type))
-                                        )
-                                        .interpolationMethod(.monotone)
-                                        .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .round))
-                                    }
-                                    .foregroundStyle(Glass.accentGradient)
-                                    .chartXAxis(.hidden)
-                                    .chartYAxis(.hidden)
-                                    .chartYScale(domain: .automatic(includesZero: false))
-                                    .frame(height: 26)
-                                    .accessibilityHidden(true)
-                                }
-                                Text(tile.latest.date.formatted(date: .abbreviated, time: .omitted))
-                                    .font(.caption2)
-                                    .foregroundStyle(Editorial.muted(colorScheme))
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(12)
-                            .glassCard(cornerRadius: 16)
-                            .accessibilityElement(children: .combine)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func goalsCard(vitalsByType: [VitalType: [VitalSample]]) -> some View {
-        let active = Array(goals.filter(\.isActive).prefix(2))
-        if !active.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                MicroLabel("Goals")
-                NavigationLink {
-                    GoalsView()
-                } label: {
-                    VStack(spacing: 0) {
-                        ForEach(active) { goal in
-                            GoalRow(
-                                goal: goal,
-                                latest: (vitalsByType[goal.type] ?? []).max { $0.date < $1.date }?.value
-                            )
-                            .ledgerRow()
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-            }
         }
     }
 
