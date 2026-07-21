@@ -3,6 +3,9 @@ import SwiftData
 import UniformTypeIdentifiers
 import StoreKit
 import UserNotifications
+#if DEBUG
+import UIKit
+#endif
 
 struct ProfileView: View {
     @Environment(\.modelContext) private var modelContext
@@ -52,6 +55,10 @@ private struct ProfileForm: View {
     @ObservedObject private var settings = AppSettingsStore.shared
     @State private var showingPasscodeSetup = false
     @State private var showingPaywall = false
+    #if DEBUG
+    @State private var debugRelayTestResult: String?
+    @State private var debugRelayTestRunning = false
+    #endif
     @State private var showingProfileEditor = false
     @State private var refreshToggle = false
 
@@ -732,6 +739,16 @@ private struct ProfileForm: View {
             } label: {
                 Label("Reset free scan credit", systemImage: "arrow.counterclockwise")
             }
+            Button {
+                Task { await runRelaySelfTest() }
+            } label: {
+                if debugRelayTestRunning {
+                    HStack { Label("Test AI relay", systemImage: "bolt.horizontal"); Spacer(); ProgressView() }
+                } else {
+                    Label("Test AI relay", systemImage: "bolt.horizontal")
+                }
+            }
+            .disabled(debugRelayTestRunning)
         } header: {
             MicroLabel("Developer")
         } footer: {
@@ -739,6 +756,43 @@ private struct ProfileForm: View {
         }
         .listRowBackground(GlassRowBackground())
         .listRowSeparatorTint(Editorial.hairline(colorScheme))
+        .alert(
+            "AI Relay Test",
+            isPresented: Binding(
+                get: { debugRelayTestResult != nil },
+                set: { if !$0 { debugRelayTestResult = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(debugRelayTestResult ?? "")
+        }
+    }
+
+    /// Sends a tiny synthetic "lab report" (a few KB) through the EXACT
+    /// production AI-scan pipeline. Discriminates deployment problems from
+    /// payload-size problems in one tap: a tiny image succeeding while real
+    /// photos fail points at the worker's CPU/size limits; a tiny image
+    /// failing too points at the deployment/endpoint itself — and the error
+    /// text names the status either way.
+    private func runRelaySelfTest() async {
+        debugRelayTestRunning = true
+        defer { debugRelayTestRunning = false }
+        let size = CGSize(width: 320, height: 160)
+        let image = UIGraphicsImageRenderer(size: size).image { ctx in
+            UIColor.white.setFill()
+            ctx.fill(CGRect(origin: .zero, size: size))
+            ("Fasting Glucose  95  mg/dL" as NSString).draw(
+                at: CGPoint(x: 16, y: 60),
+                withAttributes: [.font: UIFont.systemFont(ofSize: 20, weight: .medium), .foregroundColor: UIColor.black]
+            )
+        }
+        do {
+            let result = try await AIScanService.extract(from: image)
+            debugRelayTestResult = "Relay OK — read \(result.values.count) value(s) from the test image. The endpoint and model work; if real photos still fail, it's payload size."
+        } catch {
+            debugRelayTestResult = "FAILED: \(error.localizedDescription)"
+        }
     }
     #endif
 

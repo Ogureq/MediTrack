@@ -79,8 +79,14 @@ enum AIScanService {
     /// the OCR path's default (`ImageDownsampler`'s 2200px), trading a little
     /// resolution for materially smaller request payloads/latency; the model
     /// reads printed numbers rather than needing OCR-grade sharpness.
-    private static let downsampleMaxPixelSize: CGFloat = 1568
-    private static let downsampleCompressionQuality: CGFloat = 0.7
+    // Sized for the relay's free-plan Workers CPU budget as much as for
+    // model cost: every KB of base64 is JSON-parsed and re-serialized on
+    // the worker, and oversized payloads are the prime suspect for
+    // uncatchable CPU-limit kills (raw 500s). ~1280px keeps printed lab
+    // text comfortably readable for the model at roughly a third of the
+    // previous payload.
+    private static let downsampleMaxPixelSize: CGFloat = 1280
+    private static let downsampleCompressionQuality: CGFloat = 0.55
 
     /// Persona, hard safety/anti-injection rails, and the exact output JSON
     /// shape — byte-identical to the relay's server-owned
