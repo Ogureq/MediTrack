@@ -38,11 +38,13 @@ enum Editorial {
             : Color(red: 0.0, green: 0.0, blue: 0.0) // #000000
     }
 
-    /// Secondary text, micro-labels.
+    /// Secondary text, micro-labels. Light value must keep ≥4.5:1
+    /// contrast on both `canvas` and `insetCard` (WCAG AA — this is the
+    /// de facto section-header color at 10pt).
     static func muted(_ colorScheme: ColorScheme) -> Color {
         colorScheme == .dark
             ? Color(red: 0.552941, green: 0.576471, blue: 0.611765) // #8D939C
-            : Color(red: 0.560784, green: 0.560784, blue: 0.560784) // #8F8F8F
+            : Color(red: 0.419608, green: 0.419608, blue: 0.419608) // #6B6B6B
     }
 
     /// Row dividers.
@@ -79,9 +81,11 @@ enum Editorial {
     }
 
     /// Status tag fill — high/borderline/due soon. Identical in both
-    /// color schemes.
+    /// color schemes. Must keep ≥4.5:1 contrast with the white tag text
+    /// (and, used as text, against the light canvas) — WCAG AA at the
+    /// 9pt tag size.
     static func tagWarn(_ colorScheme: ColorScheme) -> Color {
-        Color(red: 0.725490, green: 0.513725, blue: 0.090196) // #B98317
+        Color(red: 0.588235, green: 0.411765, blue: 0.058824) // #96690F
     }
 
     /// Status tag fill — low/overdue/critical. Identical in both color
