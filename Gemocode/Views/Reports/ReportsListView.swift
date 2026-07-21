@@ -184,6 +184,23 @@ struct ReportRow: View {
         labStatuses.contains { $0.isOutOfRange && !$0.isCritical }
     }
 
+    /// The `LabCatalog` display name a prescription report's monitored lab
+    /// resolves to — e.g. "Prescription — Metformin" resolves to "HbA1c",
+    /// rendered as "HbA1c ↗" in `body`. There's no medication/report
+    /// association in the data model to draw on (and this pass adds none),
+    /// so the drug name is matched straight out of the report's own text via
+    /// `MedicationLabLinks.link(for:)`, the same matcher
+    /// `MedicationLabLinks`/`RxNameMatcher` use elsewhere. `nil` whenever the
+    /// report isn't a prescription, its text doesn't mention a monitored
+    /// drug, or that drug's link has no lab (a vital-only link like
+    /// amlodipine).
+    private var linkedLabName: String? {
+        guard report.category == .prescription else { return nil }
+        let combinedText = "\(report.title) \(report.notes)"
+        guard let labID = MedicationLabLinks.link(for: combinedText)?.primaryLabID else { return nil }
+        return LabCatalog.reference(for: labID)?.name
+    }
+
     var body: some View {
         HStack(spacing: 14) {
             thumbnail
@@ -204,6 +221,11 @@ struct ReportRow: View {
 
             if !report.labResults.isEmpty {
                 statusDots
+            } else if let linkedLabName {
+                Text(verbatim: "\(linkedLabName) ↗")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Editorial.accent(colorScheme))
+                    .lineLimit(1)
             }
         }
         .ledgerRow()
@@ -268,6 +290,9 @@ struct ReportRow: View {
     private var accessibilitySummary: String {
         var parts = [report.title, report.date.formatted(date: .abbreviated, time: .omitted)]
         parts.append(report.labResults.isEmpty ? report.category.displayName : labSummaryText)
+        if let linkedLabName {
+            parts.append(String(localized: "linked to \(linkedLabName)"))
+        }
         if !report.attachments.isEmpty {
             parts.append(String(localized: "\(report.attachments.count) attachments"))
         }

@@ -16,6 +16,9 @@ struct QuickAddView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @ObservedObject private var premiumStore = PremiumStore.shared
+    // Queried only to detect a medication draft that duplicates an existing
+    // active medication — see `activeMedicationNames`/`QuickAddPreviewDisplay.loggedText`.
+    @Query private var medications: [Medication]
 
     @State private var text = ""
     @State private var draft: QuickAddDraft?
@@ -59,6 +62,24 @@ struct QuickAddView: View {
         trimmedText.contains(",") || trimmedText.contains(" and ") || trimmedText.contains("\n") || draft == nil
     }
 
+    /// Lowercased, trimmed names of every currently-active medication — used
+    /// only to flag a duplicate medication draft with "✓ logged" instead of
+    /// a status tag (see `QuickAddPreviewDisplay.loggedText`). Never affects
+    /// what gets parsed or saved.
+    private var activeMedicationNames: Set<String> {
+        Set(medications.filter(\.isActive).map { $0.name.trimmingCharacters(in: .whitespaces).lowercased() })
+    }
+
+    /// How many entries the current preview represents — the AI batch count
+    /// when a batch is showing, otherwise 1 once the deterministic parser
+    /// (or a single AI fill) has produced a draft, else `nil`. Purely a
+    /// display caption; never changes what `save()`/`saveBatch()` insert.
+    private var entryCount: Int? {
+        if !batchDrafts.isEmpty { return batchDrafts.count }
+        if draft != nil { return 1 }
+        return nil
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -78,6 +99,18 @@ struct QuickAddView: View {
                         .accessibilityLabel("Quick add text")
                         .accessibilityHint("Describe one or more medications, vitals, symptoms, appointments, or reminders in a sentence or paragraph.")
 
+                        if let entryCount {
+                            Label(
+                                entryCount == 1
+                                    ? String(localized: "Understood — 1 entry found")
+                                    : String(format: String(localized: "Understood — %lld entries found"), entryCount),
+                                systemImage: "sparkle"
+                            )
+                            .font(.system(size: 11, weight: .regular))
+                            .foregroundStyle(.secondary)
+                            .accessibilityElement(children: .combine)
+                        }
+
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
                                 ForEach(Self.examples, id: \.self) { example in
@@ -95,7 +128,7 @@ struct QuickAddView: View {
                     aiAssistSection
 
                     if let draft {
-                        QuickAddPreviewCard(draft: draft, isAIFilled: isAIFilled)
+                        QuickAddPreviewCard(draft: draft, isAIFilled: isAIFilled, existingActiveMedicationNames: activeMedicationNames)
                             .transition(.asymmetric(
                                 insertion: .scale(scale: 0.94).combined(with: .opacity),
                                 removal: .opacity
@@ -142,7 +175,7 @@ struct QuickAddView: View {
 
             VStack(spacing: 0) {
                 ForEach(batchDrafts) { item in
-                    QuickAddBatchPreviewCard(draft: item.draft) {
+                    QuickAddBatchPreviewCard(draft: item.draft, existingActiveMedicationNames: activeMedicationNames) {
                         removeBatchItem(item.id)
                     }
                     .ledgerRow()
@@ -424,9 +457,15 @@ private struct QuickAddAIButtonStyle: ButtonStyle {
 private struct QuickAddPreviewCard: View {
     let draft: QuickAddDraft
     let isAIFilled: Bool
+    /// Lowercased, trimmed active medication names — a medication draft
+    /// matching one shows "✓ logged" instead of a status tag. Defaults to
+    /// empty so every existing call site (and any preview) stays unaffected.
+    var existingActiveMedicationNames: Set<String> = []
 
     @Environment(\.colorScheme) private var colorScheme
-    private var display: QuickAddPreviewDisplay { QuickAddPreviewDisplay(draft: draft) }
+    private var display: QuickAddPreviewDisplay {
+        QuickAddPreviewDisplay(draft: draft, existingActiveMedicationNames: existingActiveMedicationNames)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -435,7 +474,11 @@ private struct QuickAddPreviewCard: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(Editorial.ink(colorScheme))
                 Spacer(minLength: 8)
-                if let statusTag = display.statusTag {
+                if let loggedText = display.loggedText {
+                    Text(loggedText)
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(Editorial.accent(colorScheme))
+                } else if let statusTag = display.statusTag {
                     EditorialTag(statusTag.label, kind: statusTag.kind)
                 }
             }
@@ -469,10 +512,15 @@ private struct QuickAddPreviewCard: View {
 /// card's combined label.
 private struct QuickAddBatchPreviewCard: View {
     let draft: QuickAddDraft
+    /// Lowercased, trimmed active medication names — see
+    /// `QuickAddPreviewCard.existingActiveMedicationNames`.
+    var existingActiveMedicationNames: Set<String> = []
     let onRemove: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
-    private var display: QuickAddPreviewDisplay { QuickAddPreviewDisplay(draft: draft) }
+    private var display: QuickAddPreviewDisplay {
+        QuickAddPreviewDisplay(draft: draft, existingActiveMedicationNames: existingActiveMedicationNames)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -482,7 +530,11 @@ private struct QuickAddBatchPreviewCard: View {
                         Text(display.primaryText)
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(Editorial.ink(colorScheme))
-                        if let statusTag = display.statusTag {
+                        if let loggedText = display.loggedText {
+                            Text(loggedText)
+                                .font(.system(size: 12, weight: .regular))
+                                .foregroundStyle(Editorial.accent(colorScheme))
+                        } else if let statusTag = display.statusTag {
                             EditorialTag(statusTag.label, kind: statusTag.kind)
                         }
                     }
@@ -529,8 +581,14 @@ private struct QuickAddPreviewDisplay {
     /// saved, so showing a colored status tag for it would be inventing a
     /// medical read the app can't actually back up.
     let statusTag: (label: LocalizedStringKey, kind: TagKind)?
+    /// "✓ logged" accent text for a medication draft whose (trimmed,
+    /// case-insensitive) name matches an existing ACTIVE medication — shown
+    /// in place of a status tag, since medication drafts never carry one.
+    /// `nil` for every non-medication draft, and for a medication with no
+    /// match in `existingActiveMedicationNames`.
+    let loggedText: String?
 
-    init(draft: QuickAddDraft) {
+    init(draft: QuickAddDraft, existingActiveMedicationNames: Set<String> = []) {
         switch draft {
         case let .medication(name, dosage, frequency):
             icon = "pills.fill"
@@ -543,6 +601,10 @@ private struct QuickAddPreviewDisplay {
                 ? String(localized: "Medication: \(name)")
                 : String(localized: "Medication: \(name), \(parts.joined(separator: ", "))")
             statusTag = nil
+            let normalizedName = name.trimmingCharacters(in: .whitespaces).lowercased()
+            loggedText = existingActiveMedicationNames.contains(normalizedName)
+                ? String(localized: "✓ logged")
+                : nil
 
         case let .vital(type, value, secondary):
             icon = type.systemImage
@@ -552,6 +614,7 @@ private struct QuickAddPreviewDisplay {
             detailLines = []
             accessibilitySummary = String(localized: "Vital, \(type.displayName): \(primaryText)")
             statusTag = nil
+            loggedText = nil
 
         case let .symptom(name, severity):
             icon = "bandage.fill"
@@ -561,6 +624,7 @@ private struct QuickAddPreviewDisplay {
             detailLines = [String(localized: "Severity \(severity) of 10")]
             accessibilitySummary = String(localized: "Symptom: \(name), severity \(severity) out of 10")
             statusTag = (label: Self.severityLabel(severity), kind: Self.severityTagKind(severity))
+            loggedText = nil
 
         case let .appointment(title, date):
             icon = "calendar"
@@ -571,6 +635,7 @@ private struct QuickAddPreviewDisplay {
             detailLines = [formattedDate]
             accessibilitySummary = String(localized: "Appointment: \(title), \(formattedDate)")
             statusTag = nil
+            loggedText = nil
 
         case let .reminder(title, time):
             icon = "bell.fill"
@@ -586,6 +651,7 @@ private struct QuickAddPreviewDisplay {
                 accessibilitySummary = String(localized: "Reminder: \(title)")
             }
             statusTag = nil
+            loggedText = nil
         }
     }
 

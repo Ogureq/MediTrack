@@ -1,14 +1,33 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import UniformTypeIdentifiers
+import CoreTransferable
 
 struct AppointmentsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
     @Query(sort: \Appointment.date) private var appointments: [Appointment]
+    @Query(sort: \MedicalReport.date, order: .reverse) private var reports: [MedicalReport]
+    @Query private var medications: [Medication]
 
     @State private var showingAdd = false
     @State private var editingAppointment: Appointment?
+
+    /// The next-draw bundle — used to decide whether the featured
+    /// appointment's prep checklist should include a fasting note (see
+    /// `NextAppointmentCard`). Cached the same way `DashboardView`/
+    /// `RetestScheduleView` cache their own copy: rebuilding it flattens
+    /// every report's lab results, wasted work to redo on every render.
+    @State private var drawBundle: DrawBundle?
+
+    private var retestSignature: String {
+        "\(reports.count)-\(reports.reduce(0) { $0 + $1.labResults.count })"
+    }
+
+    private var activeMedications: [Medication] {
+        medications.filter(\.isActive)
+    }
 
     private var upcoming: [Appointment] {
         appointments.filter(\.isUpcoming)
@@ -45,12 +64,12 @@ struct AppointmentsView: View {
                 List {
                     if let nearestUpcoming {
                         Section {
-                            Button {
-                                editingAppointment = nearestUpcoming
-                            } label: {
-                                NextAppointmentCard(appointment: nearestUpcoming)
-                            }
-                            .buttonStyle(.plain)
+                            NextAppointmentCard(
+                                appointment: nearestUpcoming,
+                                drawBundle: drawBundle,
+                                activeMedications: activeMedications,
+                                onEdit: { editingAppointment = nearestUpcoming }
+                            )
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) {
                                     deleteOne(nearestUpcoming)
@@ -125,6 +144,10 @@ struct AppointmentsView: View {
         .sheet(item: $editingAppointment) { appointment in
             AddAppointmentSheet(appointment: appointment)
         }
+        .task(id: retestSignature) {
+            let items = RetestSchedule.items(reports: reports, now: .now)
+            drawBundle = RetestSchedule.nextDraw(items: items, now: .now)
+        }
     }
 
     private func delete(_ offsets: IndexSet, from list: [Appointment]) {
@@ -141,15 +164,34 @@ struct AppointmentsView: View {
 }
 
 /// Featured inset card for the nearest upcoming appointment (7p's "next
-/// draw" block): title, a system-localized countdown tag, doctor/location,
-/// and — only when the data actually says so — a note that the day-before
-/// reminder is set. No fasting/medication prep steps are shown because
-/// `Appointment` has no lab-panel data to derive them from; inventing that
-/// checklist would mean fabricating health guidance.
+/// draw" block): title, a countdown tag/plain label, doctor/location, a
+/// prep checklist computed from real data (fasting + per-medication timing
+/// notes, only when they actually apply — see `prepLines`), and an "Add to
+/// calendar" CTA wired to `CalendarService`.
 private struct NextAppointmentCard: View {
     let appointment: Appointment
+    /// The current next-draw bundle, if any — used only to decide whether
+    /// this appointment coincides with a fasting blood draw (see
+    /// `fastingNoteNeeded`) and which bundled labs an active medication
+    /// might be linked to (see `medicationPrepLines`). `nil` when there's
+    /// no tracked lab data yet.
+    let drawBundle: DrawBundle?
+    let activeMedications: [Medication]
+    /// Opens the edit sheet — called only from the tappable header block,
+    /// never from the "Add to calendar" CTA below it.
+    let onEdit: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
+
+    @State private var calendarState: CalendarAddState = .idle
+    @State private var showingCalendarFallback = false
+    @State private var calendarErrorMessage = ""
+
+    private enum CalendarAddState: Equatable {
+        case idle
+        case adding
+        case added
+    }
 
     /// Locale-aware "in 13 days" / "через 13 дней" — built from
     /// `RelativeDateTimeFormatter` rather than a hand-rolled format string,
@@ -161,54 +203,243 @@ private struct NextAppointmentCard: View {
         return formatter.localizedString(for: appointment.date, relativeTo: .now)
     }
 
+    /// Whole calendar days from today to the appointment (via `startOfDay`,
+    /// like `RetestSchedule`'s own day-difference math) — used only to pick
+    /// the countdown tag's urgency, not to re-derive its text.
+    private var daysUntil: Int {
+        Calendar.current.dateComponents(
+            [.day],
+            from: Calendar.current.startOfDay(for: .now),
+            to: Calendar.current.startOfDay(for: appointment.date)
+        ).day ?? 0
+    }
+
     private var detailLine: String {
         [appointment.doctor, appointment.location].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    /// `true` only when the bundle actually requires fasting AND this
+    /// appointment falls within a day of the bundle's own draw date — a
+    /// same-day-ish coincidence, not just "there's some fasting test due
+    /// eventually."
+    private var fastingNoteNeeded: Bool {
+        guard let drawBundle, drawBundle.requiresFasting else { return false }
+        let days = Calendar.current.dateComponents(
+            [.day],
+            from: Calendar.current.startOfDay(for: appointment.date),
+            to: Calendar.current.startOfDay(for: drawBundle.date)
+        ).day ?? Int.max
+        return abs(days) <= 1
+    }
+
+    private var bundledLabIDs: Set<String> {
+        Set((drawBundle?.items ?? []).map { $0.id.lowercased() })
+    }
+
+    /// "Ask your doctor when to take X around the draw" — one line per
+    /// active medication whose `CareLinks.MedicationLabLinks` monitoring
+    /// lab is actually in this bundle. Read-only lookup: never mutates or
+    /// caches anything, matching `MedicationLabLinks`'s pure/deterministic
+    /// contract.
+    private var medicationPrepLines: [String] {
+        guard !bundledLabIDs.isEmpty else { return [] }
+        return activeMedications.compactMap { medication in
+            guard let link = MedicationLabLinks.link(for: medication.name),
+                  link.labIDs.contains(where: { bundledLabIDs.contains($0.lowercased()) }) else { return nil }
+            return String(format: String(localized: "Ask your doctor when to take %@ around the draw"), medication.name)
+        }
+    }
+
+    /// The full checklist, in mockup order: fasting, then medication
+    /// timing notes, then the existing reminder line.
+    private var prepLines: [String] {
+        var lines: [String] = []
+        if fastingNoteNeeded {
+            lines.append(String(localized: "Fast 10–12 hours — water is fine"))
+        }
+        lines.append(contentsOf: medicationPrepLines)
+        if appointment.reminderEnabled {
+            lines.append(String(localized: "Reminder set for the night before"))
+        }
+        return lines
+    }
+
+    private var icsNotes: String? {
+        prepLines.isEmpty ? nil : prepLines.joined(separator: "\n")
     }
 
     private var accessibilityText: String {
         var parts = [appointment.title, appointment.date.formatted(date: .abbreviated, time: .shortened), countdownText]
         if !detailLine.isEmpty { parts.append(detailLine) }
-        if appointment.reminderEnabled { parts.append(String(localized: "Reminder set for the night before")) }
+        parts.append(contentsOf: prepLines)
         return parts.joined(separator: ", ")
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(appointment.title)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(Editorial.ink(colorScheme))
-                Spacer(minLength: 8)
-                EditorialTag(verbatim: countdownText, kind: .warn)
-            }
-            Text(appointment.date.formatted(date: .abbreviated, time: .shortened))
-                .font(.system(size: 12, weight: .regular))
-                .foregroundStyle(Editorial.muted(colorScheme))
-            if !detailLine.isEmpty {
-                Text(detailLine)
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(Editorial.muted(colorScheme))
-            }
-            if appointment.reminderEnabled {
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Editorial.tagGood(colorScheme))
-                        .accessibilityHidden(true)
-                    Text("Reminder set for the night before")
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(Editorial.ink(colorScheme))
+        VStack(alignment: .leading, spacing: 10) {
+            Button(action: onEdit) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(appointment.title)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(Editorial.ink(colorScheme))
+                        Spacer(minLength: 8)
+                        countdownTag
+                    }
+                    Text(appointment.date.formatted(date: .abbreviated, time: .shortened))
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(Editorial.muted(colorScheme))
+                    if !detailLine.isEmpty {
+                        Text(detailLine)
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(Editorial.muted(colorScheme))
+                    }
                 }
-                .padding(.top, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(accessibilityText)
+            .accessibilityHint("Opens this appointment for editing.")
+
+            if !prepLines.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(prepLines, id: \.self) { line in
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(Editorial.tagGood(colorScheme))
+                                .accessibilityHidden(true)
+                            Text(verbatim: line)
+                                .font(.system(size: 13, weight: .regular))
+                                .foregroundStyle(Editorial.ink(colorScheme))
+                        }
+                        .padding(.vertical, 3)
+                    }
+                }
+                .accessibilityHidden(true) // already read via `accessibilityText` above
+            }
+
+            calendarButton
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .padding(.horizontal)
         .padding(.vertical, 8)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityText)
+        .confirmationDialog(
+            calendarErrorMessage,
+            isPresented: $showingCalendarFallback,
+            titleVisibility: .visible
+        ) {
+            ShareLink(item: ICSFile(data: icsData), preview: SharePreview(appointment.title)) {
+                Text("Export as Calendar File")
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    /// Warm/urgent tag inside 14 days, plain muted text otherwise — the
+    /// same countdown text either way, just a quieter presentation once
+    /// it's not imminent.
+    @ViewBuilder
+    private var countdownTag: some View {
+        if daysUntil <= 14 {
+            EditorialTag(verbatim: countdownText, kind: .warn)
+        } else {
+            Text(verbatim: countdownText)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(Editorial.muted(colorScheme))
+        }
+    }
+
+    @ViewBuilder
+    private var calendarButton: some View {
+        switch calendarState {
+        case .added:
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(Editorial.tagGood(colorScheme))
+                    .accessibilityHidden(true)
+                Text("Added")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Editorial.ink(colorScheme))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 13)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("Added to calendar"))
+        case .idle, .adding:
+            Button {
+                addToCalendar()
+            } label: {
+                if calendarState == .adding {
+                    ProgressView()
+                        .tint(.white)
+                        .frame(maxWidth: .infinity)
+                } else {
+                    Text("Add to Calendar")
+                }
+            }
+            .buttonStyle(GlassProminentButtonStyle())
+            .disabled(calendarState == .adding)
+        }
+    }
+
+    private var icsData: Data {
+        CalendarService.icsData(
+            title: appointment.title,
+            date: appointment.date,
+            notes: icsNotes,
+            location: appointment.location.isEmpty ? nil : appointment.location
+        )
+    }
+
+    private func addToCalendar() {
+        calendarState = .adding
+        Task {
+            do {
+                let added = try await CalendarService.addEvent(
+                    title: appointment.title,
+                    date: appointment.date,
+                    notes: icsNotes,
+                    location: appointment.location.isEmpty ? nil : appointment.location
+                )
+                calendarState = added ? .added : .idle
+            } catch let error as CalendarService.CalendarError {
+                calendarState = .idle
+                calendarErrorMessage = error.errorDescription ?? String(localized: "The event could not be saved to your calendar.")
+                showingCalendarFallback = true
+            } catch {
+                calendarState = .idle
+            }
+        }
+    }
+}
+
+// MARK: - ICS ShareLink fallback
+
+/// Lets a `ShareLink` hand `CalendarService.icsData` to any calendar app —
+/// the fallback offered when `CalendarService.addEvent` throws `.denied`/
+/// `.restricted`. Data is available synchronously (no lazy rendering
+/// needed, unlike `ScoreShareImage`'s PNG export).
+private struct ICSFile: Transferable {
+    let data: Data
+
+    static var transferRepresentation: some TransferRepresentation {
+        DataRepresentation(exportedContentType: .icsCalendarFile) { file in
+            file.data
+        }
+        .suggestedFileName("appointment.ics")
+    }
+}
+
+private extension UTType {
+    /// `.ics` isn't one of Foundation's built-in `UTType` constants, so
+    /// it's resolved from the system-registered file-extension UTI (every
+    /// iOS version in this app's deployment target recognizes ".ics").
+    static var icsCalendarFile: UTType {
+        UTType(filenameExtension: "ics") ?? .data
     }
 }
 

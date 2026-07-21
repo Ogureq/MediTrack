@@ -1,14 +1,35 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import PhotosUI
+import AVFoundation
 
 struct MedicationsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
     @Query(sort: \Medication.startDate, order: .reverse) private var medications: [Medication]
+    @Query(sort: \MedicalReport.date, order: .reverse) private var reports: [MedicalReport]
+    @Query private var vitals: [VitalSample]
+    @Query private var symptoms: [SymptomEntry]
+    @Query(sort: \Appointment.date) private var appointments: [Appointment]
+    @Query private var profiles: [HealthProfile]
 
     @State private var showingAdd = false
     @State private var editingMedication: Medication?
+
+    // MARK: Prescription scan
+    @State private var showingScanOptions = false
+    @State private var showingCamera = false
+    @State private var showingPhotosPicker = false
+    @State private var photoItems: [PhotosPickerItem] = []
+    @State private var isScanningPrescription = false
+    @State private var detectedMedications: [DetectedMedication] = []
+    @State private var showingScanResults = false
+    @State private var showingCameraAlert = false
+    @State private var cameraAlertMessage = ""
+    /// The in-flight OCR task, cancelled if the view disappears mid-scan —
+    /// mirrors `ScanReportView.scanTask`.
+    @State private var scanTask: Task<Void, Never>?
 
     private var activeMedications: [Medication] {
         medications.filter(\.isActive)
@@ -22,6 +43,65 @@ struct MedicationsView: View {
         MedicationInteractions.check(medicationNames: activeMedications.map(\.name))
     }
 
+    /// Full `AnalysisEngine` pass — re-runs on every access, so `body` binds
+    /// it to one local `let` (see below) and threads the result through
+    /// instead of letting every row recompute it. Mirrors
+    /// `DashboardView.review`/`let review = self.review`.
+    private var review: HealthReview {
+        AnalysisEngine.generateReview(
+            profile: profiles.first,
+            reports: reports,
+            vitals: vitals,
+            medications: medications,
+            symptoms: symptoms,
+            appointments: appointments
+        )
+    }
+
+    // MARK: Prescriptions vs. supplements
+    //
+    // Computed only — no schema change. A medication classifies as a
+    // supplement when its `MedicationLabLinks` drug key is one of that
+    // table's two supplement-form entries (`ironSupplement`,
+    // `vitaminDSupplement`), or its name contains a common supplement-ish
+    // token (vitamin/mineral names, English or Russian) that table's
+    // synonym list doesn't cover on its own (e.g. a plain "Multivitamin"
+    // with no matched drug key at all). Everything else — including every
+    // unrecognized name — stays a prescription, the safer default.
+
+    // Includes a bare "iron"/"железо" token (e.g. for "Iron Bisglycinate",
+    // not itself one of `MedicationLabLinks`' narrower iron-supplement
+    // phrases) even though `MedicationLabLinks`'s own synonym table
+    // deliberately excludes it as too common a word — that caution is about
+    // not mis-LINKING a medication to lab-monitoring advice; here a false
+    // match only puts a row under the wrong section header, a much lower
+    // stakes mistake, so the broader token is worth it for coverage.
+    private static let supplementKeywordTokens: [String] = [
+        "vitamin", "витамин", "supplement", "добавка", "добавки",
+        "iron", "железо", "magnesium", "магний",
+        "folate", "folic", "фолиев", "фолат",
+        "calcium", "кальций", "zinc", "цинк",
+        "omega", "омега", "fish oil", "рыбий жир",
+        "probiotic", "пробиотик", "multivitamin", "мультивитамин",
+    ]
+
+    private func isSupplement(_ medication: Medication) -> Bool {
+        if let key = MedicationLabLinks.drugKey(for: medication.name),
+           key == "ironSupplement" || key == "vitaminDSupplement" {
+            return true
+        }
+        let lower = medication.name.lowercased()
+        return Self.supplementKeywordTokens.contains { lower.contains($0) }
+    }
+
+    private var activePrescriptions: [Medication] {
+        activeMedications.filter { !isSupplement($0) }
+    }
+
+    private var activeSupplements: [Medication] {
+        activeMedications.filter { isSupplement($0) }
+    }
+
     var body: some View {
         Group {
             if medications.isEmpty {
@@ -33,8 +113,21 @@ struct MedicationsView: View {
                     Button("Add Medication") { showingAdd = true }
                         .buttonStyle(GlassProminentButtonStyle())
                         .frame(maxWidth: 220)
+                    Button {
+                        showingScanOptions = true
+                    } label: {
+                        Label("Scan a Prescription", systemImage: "doc.text.viewfinder")
+                    }
+                    .buttonStyle(OutlinedPillButtonStyle())
+                    .frame(maxWidth: 220)
                 }
             } else {
+                // Computed once per render and threaded through explicitly —
+                // `review` re-runs the full `AnalysisEngine` pass on every
+                // access, and `RetestSchedule.dueOrSoon` flattens every
+                // report's lab results; neither should be redone per row.
+                let review = self.review
+                let retestItems = RetestSchedule.dueOrSoon(reports: reports, now: .now)
                 List {
                     if !interactions.isEmpty {
                         Section {
@@ -50,30 +143,30 @@ struct MedicationsView: View {
                         .listRowBackground(GlassRowBackground())
                         .listRowSeparator(.hidden)
                     }
-                    if !activeMedications.isEmpty {
+                    if !activePrescriptions.isEmpty {
                         Section {
-                            ForEach(activeMedications) { medication in
-                                Button {
-                                    editingMedication = medication
-                                } label: {
-                                    MedicationRow(medication: medication)
-                                        .ledgerRow()
-                                }
-                                .buttonStyle(.plain)
-                                .contextMenu {
-                                    Button {
-                                        medication.endDate = .now
-                                        NotificationService.cancelReminder(id: medication.reminderID)
-                                    } label: {
-                                        Label("Mark as Ended", systemImage: "checkmark.circle")
-                                    }
-                                }
+                            ForEach(activePrescriptions) { medication in
+                                linkedMedicationRow(medication, review: review, retestItems: retestItems)
                             }
                             .onDelete { offsets in
-                                delete(offsets, from: activeMedications)
+                                delete(offsets, from: activePrescriptions)
                             }
                         } header: {
-                            MicroLabel("Active")
+                            MicroLabel("Prescriptions")
+                        }
+                        .listRowBackground(GlassRowBackground())
+                        .listRowSeparator(.hidden)
+                    }
+                    if !activeSupplements.isEmpty {
+                        Section {
+                            ForEach(activeSupplements) { medication in
+                                linkedMedicationRow(medication, review: review, retestItems: retestItems)
+                            }
+                            .onDelete { offsets in
+                                delete(offsets, from: activeSupplements)
+                            }
+                        } header: {
+                            MicroLabel("Supplements — from your plan")
                         }
                         .listRowBackground(GlassRowBackground())
                         .listRowSeparator(.hidden)
@@ -81,13 +174,10 @@ struct MedicationsView: View {
                     if !pastMedications.isEmpty {
                         Section {
                             ForEach(pastMedications) { medication in
-                                Button {
+                                MedicationRow(medication: medication) {
                                     editingMedication = medication
-                                } label: {
-                                    MedicationRow(medication: medication)
-                                        .ledgerRow()
                                 }
-                                .buttonStyle(.plain)
+                                .ledgerRow()
                             }
                             .onDelete { offsets in
                                 delete(offsets, from: pastMedications)
@@ -98,6 +188,30 @@ struct MedicationsView: View {
                         .listRowBackground(GlassRowBackground())
                         .listRowSeparator(.hidden)
                     }
+                    if isScanningPrescription {
+                        Section {
+                            HStack(spacing: 10) {
+                                ProgressView()
+                                Text("Scanning for medication names…")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .accessibilityElement(children: .combine)
+                        }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                    }
+                    Section {
+                        Button {
+                            showingScanOptions = true
+                        } label: {
+                            Label("Scan a Prescription", systemImage: "doc.text.viewfinder")
+                        }
+                        .buttonStyle(OutlinedPillButtonStyle())
+                        .disabled(isScanningPrescription)
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
                 }
                 .listStyle(.plain)
             }
@@ -120,12 +234,144 @@ struct MedicationsView: View {
         .sheet(item: $editingMedication) { medication in
             AddMedicationSheet(medication: medication)
         }
+        .confirmationDialog("Scan a Prescription", isPresented: $showingScanOptions, titleVisibility: .visible) {
+            Button("Take Photo") { presentCamera() }
+            Button("Choose from Library") { showingPhotosPicker = true }
+        }
+        .sheet(isPresented: $showingCamera) {
+            PrescriptionCameraCaptureView { image in
+                runScan(image)
+            }
+            .ignoresSafeArea()
+        }
+        .photosPicker(isPresented: $showingPhotosPicker, selection: $photoItems, matching: .images)
+        .onChange(of: photoItems) { _, items in
+            guard let item = items.first else { return }
+            photoItems = []
+            Task { await loadPhoto(item) }
+        }
+        .alert("Camera", isPresented: $showingCameraAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(cameraAlertMessage)
+        }
+        .sheet(isPresented: $showingScanResults) {
+            PrescriptionScanResultsSheet(detected: detectedMedications) { selected in
+                addDetectedMedications(selected)
+            }
+        }
+        .onDisappear {
+            scanTask?.cancel()
+        }
+    }
+
+    /// One active medication row: resolves its `MedicationLabLinks` link and
+    /// `MedicationMonitorStatus` from the already-cached `review`/
+    /// `retestItems` (a cheap lookup over small arrays, not a re-run of the
+    /// engine itself) and threads both into `MedicationRow`.
+    @ViewBuilder
+    private func linkedMedicationRow(_ medication: Medication, review: HealthReview, retestItems: [RetestItem]) -> some View {
+        let linkedLabID = MedicationLabLinks.link(for: medication.name)?.primaryLabID
+        let status = MedicationLabLinks.status(
+            for: medication,
+            snapshots: review.labSnapshots,
+            retestItems: retestItems,
+            now: .now
+        )
+        MedicationRow(medication: medication, linkedLabID: linkedLabID, monitorStatus: status) {
+            editingMedication = medication
+        }
+        .ledgerRow()
+        .contextMenu {
+            Button {
+                medication.endDate = .now
+                NotificationService.cancelReminder(id: medication.reminderID)
+            } label: {
+                Label("Mark as Ended", systemImage: "checkmark.circle")
+            }
+        }
     }
 
     private func delete(_ offsets: IndexSet, from list: [Medication]) {
         for index in offsets {
             NotificationService.cancelReminder(id: list[index].reminderID)
             modelContext.delete(list[index])
+        }
+    }
+
+    // MARK: - Prescription scan
+
+    private func runScan(_ image: UIImage) {
+        isScanningPrescription = true
+        scanTask = Task {
+            let lines = (try? await LabScanService.recognizeText(in: image)) ?? []
+            let found = RxNameMatcher.detect(lines: lines)
+            guard !Task.isCancelled else { return }
+            detectedMedications = found
+            isScanningPrescription = false
+            showingScanResults = true
+        }
+    }
+
+    private func loadPhoto(_ item: PhotosPickerItem) async {
+        guard let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) else {
+            return
+        }
+        runScan(image)
+    }
+
+    private func addDetectedMedications(_ selected: [DetectedMedication]) {
+        for item in selected {
+            let dosage: String
+            if let doseValue = item.doseValue, let doseUnit = item.doseUnit {
+                dosage = "\(doseValue.compactFormatted) \(doseUnit)"
+            } else {
+                dosage = ""
+            }
+            modelContext.insert(Medication(
+                name: item.matchedName,
+                dosage: dosage,
+                frequency: item.frequencyHint ?? ""
+            ))
+        }
+        if !selected.isEmpty {
+            Haptics.success()
+        }
+    }
+
+    // MARK: - Camera permission (mirrors ScanReportView.presentCamera)
+
+    private func presentCamera() {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            cameraAlertMessage = String(localized: "This device doesn't have a camera available. Use Choose from Library instead.")
+            showingCameraAlert = true
+            return
+        }
+        guard Bundle.main.object(forInfoDictionaryKey: "NSCameraUsageDescription") != nil else {
+            cameraAlertMessage = String(localized: "Camera access isn't configured in this build yet. Use Choose from Library instead.")
+            showingCameraAlert = true
+            return
+        }
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            showingCamera = true
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    if granted {
+                        showingCamera = true
+                    } else {
+                        cameraAlertMessage = String(localized: "Camera access was denied. Enable it in Settings, or use Choose from Library instead.")
+                        showingCameraAlert = true
+                    }
+                }
+            }
+        case .denied, .restricted:
+            cameraAlertMessage = String(localized: "Camera access is disabled for Gemocode. Enable it in Settings, or use Choose from Library instead.")
+            showingCameraAlert = true
+        @unknown default:
+            cameraAlertMessage = String(localized: "Camera access isn't available. Use Choose from Library instead.")
+            showingCameraAlert = true
         }
     }
 }
@@ -164,41 +410,287 @@ struct InteractionRow: View {
 
 struct MedicationRow: View {
     let medication: Medication
+    /// The medication's primary linked `LabCatalog` id
+    /// (`MedicationLabLinks.link(for:).primaryLabID`), resolved once by the
+    /// caller — `nil` when the medication isn't recognized or is a
+    /// vital-only link (e.g. amlodipine). Drives the trailing lab chip.
+    var linkedLabID: String? = nil
+    /// Resolved once by the caller via `MedicationLabLinks.status(for:...)`
+    /// against the render's cached snapshots/retest items — never computed
+    /// inside this row. Drives the status caption line.
+    var monitorStatus: MedicationMonitorStatus? = nil
+    let onTap: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
 
+    init(
+        medication: Medication,
+        linkedLabID: String? = nil,
+        monitorStatus: MedicationMonitorStatus? = nil,
+        onTap: @escaping () -> Void
+    ) {
+        self.medication = medication
+        self.linkedLabID = linkedLabID
+        self.monitorStatus = monitorStatus
+        self.onTap = onTap
+    }
+
+    /// `.noData` omits the line entirely — there's nothing honest to say
+    /// yet, matching `MedicationLabLinks.status`'s own "no usable snapshot"
+    /// semantics.
+    private var monitorLineText: String? {
+        guard let monitorStatus else { return nil }
+        switch monitorStatus {
+        case .working(let labID, _):
+            let name = LabCatalog.reference(for: labID)?.shortName ?? labID
+            return String(format: String(localized: "Working — %@ in range since started"), name)
+        case .checkOverdue(_, let dueDate):
+            let dateText = dueDate.formatted(.dateTime.month(.abbreviated).day())
+            return String(format: String(localized: "Tracking lab overdue — retest %@ checks if it's working"), dateText)
+        case .notImproving(let labID):
+            let name = LabCatalog.reference(for: labID)?.shortName ?? labID
+            return String(format: String(localized: "%@ still out of range — worth discussing"), name)
+        case .noData:
+            return nil
+        }
+    }
+
+    private var monitorLineColor: Color {
+        switch monitorStatus {
+        case .working: Editorial.tagGood(colorScheme)
+        case .checkOverdue: Editorial.tagWarn(colorScheme)
+        case .notImproving, .noData, nil: Editorial.muted(colorScheme)
+        }
+    }
+
+    private var labChipText: String {
+        guard let linkedLabID else { return "" }
+        let shortName = LabCatalog.reference(for: linkedLabID)?.shortName ?? linkedLabID
+        return "\(shortName) ↗"
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(medication.name)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Editorial.ink(colorScheme))
-                if medication.isActive, medication.reminderEnabled, let time = medication.reminderTime {
-                    Label(time.formatted(date: .omitted, time: .shortened), systemImage: "bell.fill")
-                        .font(.caption2)
-                        .foregroundStyle(Editorial.accent(colorScheme))
-                }
-            }
-            if !medication.dosage.isEmpty || !medication.frequency.isEmpty {
-                Text([medication.dosage, medication.frequency].filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(Editorial.muted(colorScheme))
-            }
-            if !medication.purpose.isEmpty {
-                Text(medication.purpose)
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Button(action: onTap) {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(medication.name)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(Editorial.ink(colorScheme))
+                        if medication.isActive, medication.reminderEnabled, let time = medication.reminderTime {
+                            Label(time.formatted(date: .omitted, time: .shortened), systemImage: "bell.fill")
+                                .font(.caption2)
+                                .foregroundStyle(Editorial.accent(colorScheme))
+                        }
+                    }
+                    if !medication.dosage.isEmpty || !medication.frequency.isEmpty {
+                        Text([medication.dosage, medication.frequency].filter { !$0.isEmpty }.joined(separator: " · "))
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(Editorial.muted(colorScheme))
+                    }
+                    if !medication.purpose.isEmpty {
+                        Text(medication.purpose)
+                            .font(.system(size: 11, weight: .regular))
+                            .foregroundStyle(Editorial.muted(colorScheme))
+                    }
+                    HStack(spacing: 4) {
+                        Text("Since \(medication.startDate.formatted(date: .abbreviated, time: .omitted))")
+                        if let endDate = medication.endDate {
+                            Text("– \(endDate.formatted(date: .abbreviated, time: .omitted))")
+                        }
+                    }
                     .font(.system(size: 11, weight: .regular))
                     .foregroundStyle(Editorial.muted(colorScheme))
+                    if let monitorLineText {
+                        Text(monitorLineText)
+                            .font(.system(size: 11, weight: .regular))
+                            .foregroundStyle(monitorLineColor)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            HStack(spacing: 4) {
-                Text("Since \(medication.startDate.formatted(date: .abbreviated, time: .omitted))")
-                if let endDate = medication.endDate {
-                    Text("– \(endDate.formatted(date: .abbreviated, time: .omitted))")
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+
+            if let linkedLabID {
+                NavigationLink {
+                    LabDetailView(seriesKey: linkedLabID)
+                } label: {
+                    Text(verbatim: labChipText)
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(Editorial.accent(colorScheme))
+                }
+                .accessibilityLabel(
+                    String(format: String(localized: "View %@ lab detail"), LabCatalog.reference(for: linkedLabID)?.shortName ?? linkedLabID)
+                )
+            }
+        }
+    }
+}
+
+// MARK: - Prescription scan results
+
+/// Confirms `RxNameMatcher.detect(lines:)` results before creating
+/// `Medication` records — a lighter parallel to `ScanReportView`'s
+/// scan-confirmation flow (`ScannedResultsSheet`), reusing that file's
+/// "selection indicator + ledger row" grammar without touching it.
+private struct PrescriptionScanResultsSheet: View {
+    let detected: [DetectedMedication]
+    let onAdd: ([DetectedMedication]) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var selectedIndices: Set<Int>
+
+    init(detected: [DetectedMedication], onAdd: @escaping ([DetectedMedication]) -> Void) {
+        self.detected = detected
+        self.onAdd = onAdd
+        _selectedIndices = State(initialValue: Set(detected.indices))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if detected.isEmpty {
+                    ContentUnavailableView(
+                        "No Medication Names Recognized",
+                        systemImage: "text.viewfinder",
+                        description: Text("We couldn't find any medication names in that photo. Try a clearer photo of the label, or add it manually instead.")
+                    )
+                } else {
+                    List {
+                        Section {
+                            ForEach(Array(detected.enumerated()), id: \.offset) { index, item in
+                                detectedRow(index: index, item: item)
+                            }
+                        } header: {
+                            MicroLabel("Detected Medications")
+                        } footer: {
+                            Text("Review each one against the original photo before adding — text recognition can make mistakes.")
+                        }
+                        .listRowBackground(GlassRowBackground())
+                        .listRowSeparator(.hidden)
+                    }
+                    .listStyle(.plain)
                 }
             }
-            .font(.system(size: 11, weight: .regular))
-            .foregroundStyle(Editorial.muted(colorScheme))
+            .ambientScreen()
+            .navigationTitle("Scan a Prescription")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                if !detected.isEmpty {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Add (\(selectedIndices.count))") {
+                            onAdd(detected.enumerated().filter { selectedIndices.contains($0.offset) }.map(\.element))
+                            dismiss()
+                        }
+                        .disabled(selectedIndices.isEmpty)
+                    }
+                }
+            }
         }
+    }
+
+    private func detectedRow(index: Int, item: DetectedMedication) -> some View {
+        let isSelected = selectedIndices.contains(index)
+        let details = [
+            [item.doseValue?.compactFormatted, item.doseUnit].compactMap { $0 }.joined(separator: " "),
+            item.frequencyHint ?? "",
+        ].filter { !$0.isEmpty }
+
+        return Button {
+            toggle(index)
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 17))
+                    .foregroundStyle(isSelected ? Editorial.accent(colorScheme) : Editorial.controlBorder(colorScheme))
+                    .accessibilityHidden(true)
+                    .padding(.top, 1)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.matchedName)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Editorial.ink(colorScheme))
+                    if !details.isEmpty {
+                        Text(details.joined(separator: " · "))
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(Editorial.muted(colorScheme))
+                    }
+                    Text("“\(item.sourceLine)”")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Editorial.muted(colorScheme))
+                        .lineLimit(1)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .ledgerRow()
         .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private func toggle(_ index: Int) {
+        if selectedIndices.contains(index) {
+            selectedIndices.remove(index)
+        } else {
+            selectedIndices.insert(index)
+        }
+    }
+}
+
+// MARK: - Camera capture (mirrors ScanReportView.CameraCaptureView)
+
+/// Thin `UIImagePickerController` wrapper for capturing a single photo of a
+/// prescription. Duplicated rather than shared with `ScanReportView`'s own
+/// camera wrapper — that file is owned by another pass and stays untouched;
+/// this type only mirrors its picker mechanics (delegate hookup, off-main
+/// JPEG encode via `Task.detached`).
+private struct PrescriptionCameraCaptureView: UIViewControllerRepresentable {
+    let onCapture: (UIImage) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onCapture: onCapture, dismiss: dismiss)
+    }
+
+    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let onCapture: (UIImage) -> Void
+        let dismiss: DismissAction
+
+        init(onCapture: @escaping (UIImage) -> Void, dismiss: DismissAction) {
+            self.onCapture = onCapture
+            self.dismiss = dismiss
+        }
+
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
+            let image = info[.originalImage] as? UIImage
+            let onCapture = onCapture
+            let dismiss = dismiss
+            if let image {
+                onCapture(image)
+            }
+            dismiss()
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            dismiss()
+        }
     }
 }
 

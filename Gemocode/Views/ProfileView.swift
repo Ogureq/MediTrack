@@ -1,6 +1,8 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+import StoreKit
+import UserNotifications
 
 struct ProfileView: View {
     @Environment(\.modelContext) private var modelContext
@@ -35,6 +37,13 @@ private struct ProfileForm: View {
     @AppStorage(Units.weightKey) private var weightUnitRaw = WeightUnit.kilograms.rawValue
     @AppStorage(Units.temperatureKey) private var temperatureUnitRaw = TemperatureUnit.celsius.rawValue
     @AppStorage(Units.glucoseKey) private var glucoseUnitRaw = GlucoseUnit.mgdL.rawValue
+    /// Timestamp of the last successful encrypted backup export, written by
+    /// the `.fileExporter` completion below. No such timestamp existed
+    /// before this screen's redesign — this is the only new persisted
+    /// value this file introduces, and only because the export flow itself
+    /// lives in this file (see the mockup's "Encrypted backup — Last: %@"
+    /// row).
+    @AppStorage(ProfileForm.lastBackupExportKey) private var lastBackupExportAt: Double = 0
     @State private var anthropicAPIKey = ""
     @AppStorage(AppLock.rememberMeKey) private var rememberMe = false
     @AppStorage(AppLock.biometricsEnabledKey) private var biometricsEnabled = true
@@ -43,7 +52,23 @@ private struct ProfileForm: View {
     @ObservedObject private var settings = AppSettingsStore.shared
     @State private var showingPasscodeSetup = false
     @State private var showingPaywall = false
+    @State private var showingProfileEditor = false
     @State private var refreshToggle = false
+
+    /// Whether the OS has notification permission right now. There is no
+    /// dedicated "retest reminders" toggle anywhere in the app (retest
+    /// nudges piggyback on the general notification permission granted for
+    /// medication/appointment reminders) — this mirrors that permission as
+    /// a read-only status rather than inventing a new, disconnected setting.
+    /// `nil` until the first `.task` read completes.
+    @State private var notificationsAuthorized: Bool?
+    /// Best-effort "<plan> · renews <date>" line for the Premium row,
+    /// resolved directly from StoreKit's `Transaction.currentEntitlements`
+    /// (read-only — `PremiumStore` itself only publishes `isPremium`, so
+    /// this doesn't invent new published state on that type). `nil` while
+    /// unresolved or for a non-premium user, in which case the row falls
+    /// back to the plain "Active" badge alone.
+    @State private var premiumStatusText: String?
 
     private var securityFooter: String {
         if !lock.canLock {
@@ -77,298 +102,36 @@ private struct ProfileForm: View {
     /// and consumed by the restore sheet's `onDismiss` for the same reason.
     @State private var pendingRestoreMessage: String?
 
-    private static let bloodTypes = ["", "A+", "A−", "B+", "B−", "AB+", "AB−", "O+", "O−"]
+    static let lastBackupExportKey = "backup.lastExportAt"
 
     var body: some View {
         Form {
-            Section {
-                TextField("Name", text: $profile.name)
-                if profile.dateOfBirth != nil {
-                    DatePicker(
-                        "Date of birth",
-                        selection: Binding(
-                            get: { profile.dateOfBirth ?? Date(timeIntervalSince1970: 631_152_000) },
-                            set: { profile.dateOfBirth = $0 }
-                        ),
-                        in: ...Date.now,
-                        displayedComponents: .date
-                    )
-                    if let age = profile.age {
-                        LabeledContent("Age", value: String(localized: "\(age) years"))
-                    }
-                } else {
-                    Button("Add Date of Birth") {
-                        profile.dateOfBirth = Date(timeIntervalSince1970: 631_152_000)
-                    }
-                }
-                Picker("Biological sex", selection: $profile.sex) {
-                    ForEach(BiologicalSex.allCases) { sex in
-                        Text(sex.displayName).tag(sex)
-                    }
-                }
-                TextField("Height (cm)", text: heightBinding)
-                    .keyboardType(.decimalPad)
-                Picker("Blood type", selection: $profile.bloodType) {
-                    ForEach(Self.bloodTypes, id: \.self) { type in
-                        Text(type.isEmpty ? String(localized: "Unknown") : type).tag(type)
-                    }
-                }
-            } header: {
-                MicroLabel("About You")
-            } footer: {
-                Text("Biological sex is used to pick the correct reference ranges for lab tests. Height enables BMI calculation.")
-            }
-            .listRowBackground(GlassRowBackground())
-            .listRowSeparatorTint(Editorial.hairline(colorScheme))
-
-            Section {
-                TextField("Allergies", text: $profile.allergies, axis: .vertical)
-                    .lineLimit(1...3)
-                TextField("Existing conditions", text: $profile.conditions, axis: .vertical)
-                    .lineLimit(1...3)
-            } header: {
-                MicroLabel("Medical Background")
-            }
-            .listRowBackground(GlassRowBackground())
-            .listRowSeparatorTint(Editorial.hairline(colorScheme))
-
-            Section {
-                TextField("Contact name", text: $profile.emergencyContactName)
-                TextField("Relationship", text: $profile.emergencyContactRelation)
-                TextField("Phone number", text: $profile.emergencyContactPhone)
-                    .keyboardType(.phonePad)
-                Picker("Organ donor", selection: $profile.organDonorStatus) {
-                    Text("Unknown").tag("")
-                    Text("Yes").tag("yes")
-                    Text("No").tag("no")
-                }
-            } header: {
-                MicroLabel("Emergency")
-            } footer: {
-                Text("Shown on your Medical ID card for quick reference in an emergency.")
-            }
-            .listRowBackground(GlassRowBackground())
-            .listRowSeparatorTint(Editorial.hairline(colorScheme))
-
-            Section {
-                Picker("Weight", selection: $weightUnitRaw) {
-                    ForEach(WeightUnit.allCases) { unit in
-                        Text(unit.label).tag(unit.rawValue)
-                    }
-                }
-                Picker("Temperature", selection: $temperatureUnitRaw) {
-                    ForEach(TemperatureUnit.allCases) { unit in
-                        Text(unit.label).tag(unit.rawValue)
-                    }
-                }
-                Picker("Blood glucose", selection: $glucoseUnitRaw) {
-                    ForEach(GlucoseUnit.allCases) { unit in
-                        Text(unit.label).tag(unit.rawValue)
-                    }
-                }
-            } header: {
-                MicroLabel("Units")
-            } footer: {
-                Text("Values are stored in metric and converted for display and entry.")
-            }
-            .listRowBackground(GlassRowBackground())
-            .listRowSeparatorTint(Editorial.hairline(colorScheme))
-
-            Section {
-                Picker("Theme", selection: $settings.themeChoice) {
-                    ForEach(ThemeChoice.allCases, id: \.self) { choice in
-                        Text(choice.displayName).tag(choice)
-                    }
-                }
-                Picker("Language", selection: $settings.languageChoice) {
-                    ForEach(LanguageChoice.allCases, id: \.self) { choice in
-                        Text(choice.displayName).tag(choice)
-                    }
-                }
-            } header: {
-                MicroLabel("Appearance & Language")
-            } footer: {
-                Text("Language changes apply immediately to most screens; restart the app to apply everywhere.")
-            }
-            .listRowBackground(GlassRowBackground())
-            .listRowSeparatorTint(Editorial.hairline(colorScheme))
-
-            Section {
-                SecureField("Anthropic API key", text: $anthropicAPIKey)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .onChange(of: anthropicAPIKey) { _, newValue in
-                        AISummaryService.apiKey = newValue
-                    }
-            } header: {
-                MicroLabel("AI Summary (Optional)")
-            } footer: {
-                Text("Add your own Anthropic API key to enable plain-language AI summaries of your Health Review. When you tap Generate, only the review text is sent to Anthropic — never your documents or database. The key is stored in the device Keychain. Leave empty to keep Gemocode fully offline.")
-            }
-            .listRowBackground(GlassRowBackground())
-            .listRowSeparatorTint(Editorial.hairline(colorScheme))
-
-            Section {
-                Button {
-                    showingPaywall = true
-                } label: {
-                    HStack {
-                        Label("Gemocode Premium", systemImage: "crown.fill")
-                        Spacer()
-                        if premiumStore.isPremium {
-                            StatusPill(text: "Active", color: .green)
-                        } else {
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(Editorial.muted(colorScheme))
-                        }
-                    }
-                }
-                .foregroundStyle(Editorial.ink(colorScheme))
-                if !premiumStore.isPremium {
-                    HStack {
-                        Label("Free AI reports used", systemImage: "sparkles")
-                        Spacer()
-                        Text("\(AIReportQuota.usedCount(defaults: .standard)) of \(AIReportQuota.freeLifetimeLimit)")
-                            .foregroundStyle(Editorial.muted(colorScheme))
-                            .monospacedDigit()
-                    }
-                    .accessibilityElement(children: .combine)
-                }
-            } header: {
-                MicroLabel("Premium")
-            } footer: {
-                Text("Unlimited AI health reports and future AI features. All core tracking stays free forever.")
-            }
-            .listRowBackground(GlassRowBackground())
-            .listRowSeparatorTint(Editorial.hairline(colorScheme))
-
-            Section {
-                Toggle("Require login", isOn: $appLockEnabled)
-                    .tint(Editorial.tagGood(colorScheme))
-                if appLockEnabled {
-                    Button {
-                        showingPasscodeSetup = true
-                    } label: {
-                        Label(lock.hasPasscode ? "Change Passcode" : "Set Passcode", systemImage: "key.fill")
-                    }
-                    if lock.hasPasscode {
-                        Button(role: .destructive) {
-                            lock.removePasscode()
-                            refreshToggle.toggle()
-                        } label: {
-                            Label("Remove Passcode", systemImage: "key.slash")
-                        }
-                    }
-                    if AppLock.biometricsAvailable {
-                        Toggle("Use \(AppLock.biometryLabel)", isOn: $biometricsEnabled)
-                            .tint(Editorial.tagGood(colorScheme))
-                    }
-                    Toggle("Stay signed in (Remember me)", isOn: $rememberMe)
-                        .tint(Editorial.tagGood(colorScheme))
-                    Button {
-                        lock.signOut()
-                    } label: {
-                        Label("Lock Now", systemImage: "lock.fill")
-                    }
-                }
-            } header: {
-                MicroLabel("Login & Security")
-            } footer: {
-                Text(securityFooter)
-            }
-            .listRowBackground(GlassRowBackground())
-            .listRowSeparatorTint(Editorial.hairline(colorScheme))
-
-            Section {
-                Button {
-                    importFromHealth()
-                } label: {
-                    if isImportingHealth {
-                        HStack(spacing: 8) {
-                            ProgressView()
-                            Text("Importing from Apple Health…")
-                        }
-                    } else {
-                        Label("Import from Apple Health", systemImage: "heart.fill")
-                    }
-                }
-                .disabled(!HealthKitService.isAvailable || isImportingHealth)
-                Toggle("Save new vitals to Apple Health", isOn: $healthWriteBackEnabled)
-                    .tint(Editorial.tagGood(colorScheme))
-                    .disabled(!HealthKitService.isAvailable)
-                    .onChange(of: healthWriteBackEnabled) { _, isEnabled in
-                        guard isEnabled else { return }
-                        Task {
-                            try? await HealthKitService.requestWriteAuthorization()
-                        }
-                    }
-                Toggle("Automatic Sync from Apple Health", isOn: $automaticSyncEnabled)
-                    .tint(Editorial.tagGood(colorScheme))
-                    .disabled(!HealthKitService.isAvailable)
-                    .onChange(of: automaticSyncEnabled) { _, isEnabled in
-                        Task {
-                            if isEnabled {
-                                do {
-                                    try await HealthKitService.requestAuthorization()
-                                    await HealthKitService.startAutomaticSync(container: modelContext.container)
-                                } catch {
-                                    automaticSyncEnabled = false
-                                }
-                            } else {
-                                HealthKitService.stopAutomaticSync()
-                            }
-                        }
-                    }
-                Text("Checks for new readings from your Apple Watch and other devices about once an hour, on-device.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Button {
-                    showingExportPassphraseSheet = true
-                } label: {
-                    Label("Export Backup", systemImage: "square.and.arrow.up.on.square")
-                }
-                Button {
-                    showingImporter = true
-                } label: {
-                    Label("Restore from Backup", systemImage: "square.and.arrow.down.on.square")
-                }
-                Button {
-                    SampleData.load(into: modelContext)
-                } label: {
-                    Label("Load Sample Data", systemImage: "sparkles")
-                }
-                Button(role: .destructive) {
-                    confirmErase = true
-                } label: {
-                    Label("Erase All Data", systemImage: "trash")
-                }
-            } header: {
-                MicroLabel("Data")
-            } footer: {
-                Text("Health import copies your recent readings from Apple Health. When \"Save new vitals to Apple Health\" is on, vitals you log in Gemocode are also written to the Health app. Backups are a single passphrase-encrypted JSON file containing everything — including attachments — that you can store anywhere and restore later (reminders need re-enabling after a restore). Erasing removes all data from this device.")
-            }
-            .listRowBackground(GlassRowBackground())
-            .listRowSeparatorTint(Editorial.hairline(colorScheme))
-
-            Section {
-                NavigationLink {
-                    PrivacyExplainerView()
-                } label: {
-                    Label("Privacy & Your Data", systemImage: "lock.shield")
-                }
-                LabeledContent("Version", value: "1.0")
-                Text(HealthReview.disclaimer)
-                    .font(.footnote)
-                    .foregroundStyle(Editorial.muted(colorScheme))
-            } header: {
-                MicroLabel("About")
-            }
-            .listRowBackground(GlassRowBackground())
-            .listRowSeparatorTint(Editorial.hairline(colorScheme))
+            profileSummarySection
+            privacySecuritySection
+            appSection
+            unitsSection
+            premiumSection
+            aiSummarySection
+            dataManagementSection
+            aboutSection
         }
         .onAppear {
             anthropicAPIKey = AISummaryService.apiKey ?? ""
+        }
+        .task {
+            let settings = await UNUserNotificationCenter.current().notificationSettings()
+            switch settings.authorizationStatus {
+            case .authorized, .provisional, .ephemeral:
+                notificationsAuthorized = true
+            default:
+                notificationsAuthorized = false
+            }
+        }
+        .task(id: premiumStore.isPremium) {
+            await refreshPremiumStatusText()
+        }
+        .sheet(isPresented: $showingProfileEditor) {
+            ProfileEditorSheet(profile: profile)
         }
         .sheet(isPresented: $showingPasscodeSetup) {
             PasscodeSetupSheet(lock: lock)
@@ -421,6 +184,7 @@ private struct ProfileForm: View {
         ) { result in
             if case .success = result {
                 dataMessage = String(localized: "Backup exported.")
+                lastBackupExportAt = Date.now.timeIntervalSince1970
             }
         }
         .fileImporter(
@@ -472,6 +236,473 @@ private struct ProfileForm: View {
         } message: {
             Text(healthImportMessage ?? "")
         }
+    }
+
+    // MARK: - Profile summary card
+
+    private var initials: String? {
+        guard !profile.name.isEmpty else { return nil }
+        let letters = profile.name
+            .split(separator: " ")
+            .compactMap { $0.first }
+            .prefix(2)
+        return letters.isEmpty ? nil : String(letters).uppercased()
+    }
+
+    private var profileSummarySection: some View {
+        Section {
+            HStack(spacing: 12) {
+                profileAvatar
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(profile.name.isEmpty ? String(localized: "Your Name") : profile.name)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Editorial.ink(colorScheme))
+                    if profile.sex != .unspecified {
+                        Text("\(profile.sex.displayName) · sex-specific ranges applied")
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(Editorial.muted(colorScheme))
+                    }
+                }
+                Spacer(minLength: 8)
+                Button {
+                    showingProfileEditor = true
+                } label: {
+                    Text("Edit")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(Editorial.accent(colorScheme))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.vertical, 4)
+            .accessibilityElement(children: .combine)
+        }
+        .listRowBackground(Editorial.insetCard(colorScheme))
+        .listRowSeparatorTint(Editorial.hairline(colorScheme))
+    }
+
+    private var profileAvatar: some View {
+        ZStack {
+            Circle()
+                .fill(Editorial.controlBorder(colorScheme))
+                .frame(width: 40, height: 40)
+            if let initials {
+                Text(initials)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Editorial.muted(colorScheme))
+            } else {
+                Image(systemName: "person.fill")
+                    .foregroundStyle(Editorial.muted(colorScheme))
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    // MARK: - Privacy & Security
+
+    private var privacySecuritySection: some View {
+        Section {
+            Toggle("Face ID app lock", isOn: $appLockEnabled)
+                .tint(Editorial.tagGood(colorScheme))
+            if appLockEnabled {
+                Button {
+                    showingPasscodeSetup = true
+                } label: {
+                    Label(lock.hasPasscode ? "Change Passcode" : "Set Passcode", systemImage: "key.fill")
+                }
+                if lock.hasPasscode {
+                    Button(role: .destructive) {
+                        lock.removePasscode()
+                        refreshToggle.toggle()
+                    } label: {
+                        Label("Remove Passcode", systemImage: "key.slash")
+                    }
+                }
+                if AppLock.biometricsAvailable {
+                    Toggle("Use \(AppLock.biometryLabel)", isOn: $biometricsEnabled)
+                        .tint(Editorial.tagGood(colorScheme))
+                }
+                Toggle("Stay signed in (Remember me)", isOn: $rememberMe)
+                    .tint(Editorial.tagGood(colorScheme))
+                Button {
+                    lock.signOut()
+                } label: {
+                    Label("Lock Now", systemImage: "lock.fill")
+                }
+            }
+            Button {
+                showingExportPassphraseSheet = true
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Encrypted backup")
+                            .foregroundStyle(Editorial.ink(colorScheme))
+                        if lastBackupExportAt > 0 {
+                            Text("Last: \(Date(timeIntervalSince1970: lastBackupExportAt).formatted(date: .abbreviated, time: .shortened))")
+                                .font(.footnote)
+                                .foregroundStyle(Editorial.muted(colorScheme))
+                        }
+                    }
+                    Spacer(minLength: 8)
+                    Text("Export ↗")
+                        .font(.footnote)
+                        .foregroundStyle(Editorial.accent(colorScheme))
+                }
+            }
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Data")
+                        .foregroundStyle(Editorial.ink(colorScheme))
+                    Text("100% on-device — no account, no cloud")
+                        .font(.footnote)
+                        .foregroundStyle(Editorial.muted(colorScheme))
+                }
+                Spacer(minLength: 8)
+                EditorialTag("Local", kind: .good)
+            }
+            .accessibilityElement(children: .combine)
+        } header: {
+            MicroLabel("Privacy & Security")
+        } footer: {
+            Text(securityFooter)
+        }
+        .listRowBackground(GlassRowBackground())
+        .listRowSeparatorTint(Editorial.hairline(colorScheme))
+    }
+
+    // MARK: - App
+
+    private var appSection: some View {
+        Section {
+            HStack {
+                Text("Language")
+                Spacer()
+                languageChips
+            }
+            HStack {
+                Text("Theme")
+                Spacer()
+                themeChips
+            }
+            Toggle(isOn: Binding(get: { notificationsAuthorized ?? false }, set: { _ in })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Retest reminders")
+                    Text("2 weeks before due")
+                        .font(.footnote)
+                        .foregroundStyle(Editorial.muted(colorScheme))
+                }
+            }
+            .tint(Editorial.tagGood(colorScheme))
+            .disabled(true)
+            Toggle(isOn: $automaticSyncEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Apple Health import")
+                    Text("Vitals & labs, read-only")
+                        .font(.footnote)
+                        .foregroundStyle(Editorial.muted(colorScheme))
+                }
+            }
+            .tint(Editorial.tagGood(colorScheme))
+            .disabled(!HealthKitService.isAvailable)
+            .onChange(of: automaticSyncEnabled) { _, isEnabled in
+                Task {
+                    if isEnabled {
+                        do {
+                            try await HealthKitService.requestAuthorization()
+                            await HealthKitService.startAutomaticSync(container: modelContext.container)
+                        } catch {
+                            automaticSyncEnabled = false
+                        }
+                    } else {
+                        HealthKitService.stopAutomaticSync()
+                    }
+                }
+            }
+            Button {
+                importFromHealth()
+            } label: {
+                if isImportingHealth {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("Importing from Apple Health…")
+                    }
+                } else {
+                    Label("Import from Apple Health", systemImage: "heart.fill")
+                }
+            }
+            .disabled(!HealthKitService.isAvailable || isImportingHealth)
+            Toggle("Save new vitals to Apple Health", isOn: $healthWriteBackEnabled)
+                .tint(Editorial.tagGood(colorScheme))
+                .disabled(!HealthKitService.isAvailable)
+                .onChange(of: healthWriteBackEnabled) { _, isEnabled in
+                    guard isEnabled else { return }
+                    Task {
+                        try? await HealthKitService.requestWriteAuthorization()
+                    }
+                }
+            Text("Checks for new readings from your Apple Watch and other devices about once an hour, on-device.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        } header: {
+            MicroLabel("App")
+        } footer: {
+            Text("Language changes apply immediately to most screens; restart the app to apply everywhere. Retest reminders mirror your notification permission — enable notifications in Settings to receive them.")
+        }
+        .listRowBackground(GlassRowBackground())
+        .listRowSeparatorTint(Editorial.hairline(colorScheme))
+    }
+
+    private var languageChips: some View {
+        HStack(spacing: 6) {
+            languageChip(.english, label: "EN")
+            languageChip(.russian, label: "РУ")
+        }
+        .contextMenu {
+            Button {
+                settings.languageChoice = .system
+            } label: {
+                Label("System", systemImage: "gear")
+            }
+        }
+    }
+
+    private func languageChip(_ choice: LanguageChoice, label: String) -> some View {
+        let isSelected = settings.languageChoice == choice
+        return Button {
+            settings.languageChoice = choice
+        } label: {
+            Text(verbatim: label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(isSelected ? Editorial.canvas(colorScheme) : Editorial.muted(colorScheme))
+                .padding(.horizontal, 13)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(isSelected ? Editorial.ink(colorScheme) : Color.clear))
+                .overlay(Capsule().strokeBorder(isSelected ? Color.clear : Editorial.controlBorder(colorScheme), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(choice.displayName))
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private var themeChips: some View {
+        HStack(spacing: 6) {
+            themeChip(.light)
+            themeChip(.dark)
+        }
+        .contextMenu {
+            Button {
+                settings.themeChoice = .system
+            } label: {
+                Label("System", systemImage: "gear")
+            }
+        }
+    }
+
+    private func themeChip(_ choice: ThemeChoice) -> some View {
+        let isSelected = settings.themeChoice == choice
+        return Button {
+            settings.themeChoice = choice
+        } label: {
+            Text(choice.displayName)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(isSelected ? Editorial.canvas(colorScheme) : Editorial.muted(colorScheme))
+                .padding(.horizontal, 13)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(isSelected ? Editorial.ink(colorScheme) : Color.clear))
+                .overlay(Capsule().strokeBorder(isSelected ? Color.clear : Editorial.controlBorder(colorScheme), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    // MARK: - Units
+
+    private var unitsSection: some View {
+        Section {
+            Picker("Weight", selection: $weightUnitRaw) {
+                ForEach(WeightUnit.allCases) { unit in
+                    Text(unit.label).tag(unit.rawValue)
+                }
+            }
+            Picker("Temperature", selection: $temperatureUnitRaw) {
+                ForEach(TemperatureUnit.allCases) { unit in
+                    Text(unit.label).tag(unit.rawValue)
+                }
+            }
+            Picker("Blood glucose", selection: $glucoseUnitRaw) {
+                ForEach(GlucoseUnit.allCases) { unit in
+                    Text(unit.label).tag(unit.rawValue)
+                }
+            }
+        } header: {
+            MicroLabel("Units")
+        } footer: {
+            Text("Values are stored in metric and converted for display and entry.")
+        }
+        .listRowBackground(GlassRowBackground())
+        .listRowSeparatorTint(Editorial.hairline(colorScheme))
+    }
+
+    // MARK: - Premium
+
+    private var premiumSection: some View {
+        Section {
+            if premiumStore.isPremium {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Gemocode Premium")
+                            .foregroundStyle(Editorial.ink(colorScheme))
+                        Text(premiumStatusText ?? String(localized: "Active"))
+                            .font(.footnote)
+                            .foregroundStyle(Editorial.muted(colorScheme))
+                    }
+                    Spacer(minLength: 8)
+                    activeBadge
+                }
+                .accessibilityElement(children: .combine)
+            } else {
+                Button {
+                    showingPaywall = true
+                } label: {
+                    HStack {
+                        Label("Unlock Premium", systemImage: "crown.fill")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(Editorial.muted(colorScheme))
+                    }
+                }
+                .foregroundStyle(Editorial.ink(colorScheme))
+                HStack {
+                    Label("Free AI reports used", systemImage: "sparkles")
+                    Spacer()
+                    Text("\(AIReportQuota.usedCount(defaults: .standard)) of \(AIReportQuota.freeLifetimeLimit)")
+                        .foregroundStyle(Editorial.muted(colorScheme))
+                        .monospacedDigit()
+                }
+                .accessibilityElement(children: .combine)
+            }
+        } header: {
+            MicroLabel("Premium")
+        } footer: {
+            Text("Unlimited AI health reports and future AI features. All core tracking stays free forever.")
+        }
+        .listRowBackground(GlassRowBackground())
+        .listRowSeparatorTint(Editorial.hairline(colorScheme))
+    }
+
+    private var activeBadge: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "sparkle")
+                .font(.system(size: 8, weight: .semibold))
+            Text("Active")
+                .font(.system(size: 10, weight: .medium))
+                .kerning(1.0)
+                .textCase(.uppercase)
+        }
+        .foregroundStyle(Editorial.accent(colorScheme))
+        .padding(.vertical, 4)
+        .padding(.horizontal, 10)
+        .overlay(Capsule().strokeBorder(Editorial.accent(colorScheme), lineWidth: 1))
+        .accessibilityHidden(true)
+    }
+
+    /// Resolves the active plan name + renewal/expiration date directly
+    /// from StoreKit, since `PremiumStore` only publishes `isPremium`.
+    /// Read-only — does not finish or alter any transaction.
+    private func refreshPremiumStatusText() async {
+        guard premiumStore.isPremium else {
+            premiumStatusText = nil
+            return
+        }
+        for await result in Transaction.currentEntitlements {
+            guard case .verified(let transaction) = result,
+                  PremiumStore.productIDs.contains(transaction.productID),
+                  transaction.revocationDate == nil else { continue }
+            let plan = Self.planDisplayName(for: transaction.productID)
+            if let expirationDate = transaction.expirationDate {
+                premiumStatusText = String(localized: "\(plan) · renews \(expirationDate.formatted(date: .abbreviated, time: .omitted))")
+            } else {
+                premiumStatusText = plan
+            }
+            return
+        }
+        premiumStatusText = nil
+    }
+
+    private static func planDisplayName(for productID: String) -> String {
+        switch productID {
+        case PremiumStore.yearlyProductID: return String(localized: "Yearly")
+        case PremiumStore.monthlyProductID: return String(localized: "Monthly")
+        case PremiumStore.lifetimeProductID: return String(localized: "Lifetime")
+        default: return String(localized: "Premium")
+        }
+    }
+
+    // MARK: - AI Summary (BYOK)
+
+    private var aiSummarySection: some View {
+        Section {
+            SecureField("Anthropic API key", text: $anthropicAPIKey)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .onChange(of: anthropicAPIKey) { _, newValue in
+                    AISummaryService.apiKey = newValue
+                }
+        } header: {
+            MicroLabel("AI Summary (Optional)")
+        } footer: {
+            Text("Add your own Anthropic API key to enable plain-language AI summaries of your Health Review. When you tap Generate, only the review text is sent to Anthropic — never your documents or database. The key is stored in the device Keychain. Leave empty to keep Gemocode fully offline.")
+        }
+        .listRowBackground(GlassRowBackground())
+        .listRowSeparatorTint(Editorial.hairline(colorScheme))
+    }
+
+    // MARK: - Data management
+
+    private var dataManagementSection: some View {
+        Section {
+            Button {
+                showingImporter = true
+            } label: {
+                Label("Restore from Backup", systemImage: "square.and.arrow.down.on.square")
+            }
+            Button {
+                SampleData.load(into: modelContext)
+            } label: {
+                Label("Load Sample Data", systemImage: "sparkles")
+            }
+            Button(role: .destructive) {
+                confirmErase = true
+            } label: {
+                Label("Erase All Data", systemImage: "trash")
+            }
+        } header: {
+            MicroLabel("Data Management")
+        } footer: {
+            Text("Health import copies your recent readings from Apple Health. When \"Save new vitals to Apple Health\" is on, vitals you log in Gemocode are also written to the Health app. Backups are a single passphrase-encrypted JSON file containing everything — including attachments — that you can store anywhere and restore later (reminders need re-enabling after a restore). Erasing removes all data from this device.")
+        }
+        .listRowBackground(GlassRowBackground())
+        .listRowSeparatorTint(Editorial.hairline(colorScheme))
+    }
+
+    // MARK: - About
+
+    private var aboutSection: some View {
+        Section {
+            NavigationLink {
+                PrivacyExplainerView()
+            } label: {
+                Label("Privacy & Your Data", systemImage: "lock.shield")
+            }
+            LabeledContent("Version", value: "1.0")
+            Text(HealthReview.disclaimer)
+                .font(.footnote)
+                .foregroundStyle(Editorial.muted(colorScheme))
+        } header: {
+            MicroLabel("About")
+        }
+        .listRowBackground(GlassRowBackground())
+        .listRowSeparatorTint(Editorial.hairline(colorScheme))
     }
 
     /// Called by `BackupExportPassphraseSheet` once a valid passphrase has
@@ -542,6 +773,104 @@ private struct ProfileForm: View {
                 healthImportMessage = String(localized: "Import failed: \(error.localizedDescription)")
             }
             isImportingHealth = false
+        }
+    }
+}
+
+// MARK: - Profile editor sheet
+
+/// The "existing editor" reached via the summary card's "Edit" link:
+/// exactly the identity/medical-background/emergency fields that used to
+/// sit inline at the top of this screen, now presented as a focused sheet
+/// so the redesigned Settings list can stay a lean, grouped ledger. No
+/// field, binding, or validation logic changed — only where it's shown.
+private struct ProfileEditorSheet: View {
+    @Bindable var profile: HealthProfile
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+
+    private static let bloodTypes = ["", "A+", "A−", "B+", "B−", "AB+", "AB−", "O+", "O−"]
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Name", text: $profile.name)
+                    if profile.dateOfBirth != nil {
+                        DatePicker(
+                            "Date of birth",
+                            selection: Binding(
+                                get: { profile.dateOfBirth ?? Date(timeIntervalSince1970: 631_152_000) },
+                                set: { profile.dateOfBirth = $0 }
+                            ),
+                            in: ...Date.now,
+                            displayedComponents: .date
+                        )
+                        if let age = profile.age {
+                            LabeledContent("Age", value: String(localized: "\(age) years"))
+                        }
+                    } else {
+                        Button("Add Date of Birth") {
+                            profile.dateOfBirth = Date(timeIntervalSince1970: 631_152_000)
+                        }
+                    }
+                    Picker("Biological sex", selection: $profile.sex) {
+                        ForEach(BiologicalSex.allCases) { sex in
+                            Text(sex.displayName).tag(sex)
+                        }
+                    }
+                    TextField("Height (cm)", text: heightBinding)
+                        .keyboardType(.decimalPad)
+                    Picker("Blood type", selection: $profile.bloodType) {
+                        ForEach(Self.bloodTypes, id: \.self) { type in
+                            Text(type.isEmpty ? String(localized: "Unknown") : type).tag(type)
+                        }
+                    }
+                } header: {
+                    MicroLabel("About You")
+                } footer: {
+                    Text("Biological sex is used to pick the correct reference ranges for lab tests. Height enables BMI calculation.")
+                }
+                .listRowBackground(GlassRowBackground())
+                .listRowSeparatorTint(Editorial.hairline(colorScheme))
+
+                Section {
+                    TextField("Allergies", text: $profile.allergies, axis: .vertical)
+                        .lineLimit(1...3)
+                    TextField("Existing conditions", text: $profile.conditions, axis: .vertical)
+                        .lineLimit(1...3)
+                } header: {
+                    MicroLabel("Medical Background")
+                }
+                .listRowBackground(GlassRowBackground())
+                .listRowSeparatorTint(Editorial.hairline(colorScheme))
+
+                Section {
+                    TextField("Contact name", text: $profile.emergencyContactName)
+                    TextField("Relationship", text: $profile.emergencyContactRelation)
+                    TextField("Phone number", text: $profile.emergencyContactPhone)
+                        .keyboardType(.phonePad)
+                    Picker("Organ donor", selection: $profile.organDonorStatus) {
+                        Text("Unknown").tag("")
+                        Text("Yes").tag("yes")
+                        Text("No").tag("no")
+                    }
+                } header: {
+                    MicroLabel("Emergency")
+                } footer: {
+                    Text("Shown on your Medical ID card for quick reference in an emergency.")
+                }
+                .listRowBackground(GlassRowBackground())
+                .listRowSeparatorTint(Editorial.hairline(colorScheme))
+            }
+            .ambientScreen()
+            .navigationTitle("Edit Profile")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
     }
 

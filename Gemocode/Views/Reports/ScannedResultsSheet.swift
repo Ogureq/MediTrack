@@ -6,12 +6,18 @@ import SwiftData
 struct ScannedResultsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.modelContext) private var modelContext
     @Query private var profiles: [HealthProfile]
 
     let values: [ScannedLabValue]
     let onAdd: ([ScannedLabValue]) -> Void
 
     @State private var selectedIDs: Set<UUID>
+    /// One-shot, built once in `.task` rather than a live `@Query` — see the
+    /// identical read-only lookup (and the reasoning for it) in
+    /// `ScanReportView.fetchLatestPriorValues()`. Keyed by lowercased
+    /// `seriesKey`/catalog id.
+    @State private var priorValues: [String: Double] = [:]
 
     init(values: [ScannedLabValue], onAdd: @escaping ([ScannedLabValue]) -> Void) {
         self.values = values
@@ -48,6 +54,9 @@ struct ScannedResultsSheet: View {
             .ambientScreen()
             .navigationTitle("Scan Results")
             .navigationBarTitleDisplayMode(.inline)
+            .task {
+                priorValues = fetchLatestPriorValues()
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -114,6 +123,11 @@ struct ScannedResultsSheet: View {
                             value: scanned.value,
                             accessibilityLabel: Text("\(scanned.reference.name) \(scanned.value.compactFormatted) \(scanned.reference.unit), \(status.label)")
                         )
+                        if status.isOutOfRange, let caption = outOfRangeCaption(scanned: scanned, range: range, status: status) {
+                            Text(caption)
+                                .font(.system(size: 11))
+                                .foregroundStyle(Editorial.muted(colorScheme))
+                        }
                     }
 
                     Text("“\(scanned.sourceLine)”")
@@ -135,6 +149,65 @@ struct ScannedResultsSheet: View {
         } else {
             selectedIDs.insert(id)
         }
+    }
+
+    /// "lab range %@–%@ · ↗ up from %@ · supplement suggested" for one
+    /// out-of-range detected value — mirrors `ScanReportView`'s identical
+    /// caption builder (`scannedRowCaption`), duplicated per this file's
+    /// edit-ownership rather than lifted into shared support.
+    private func outOfRangeCaption(scanned: ScannedLabValue, range: ClosedRange<Double>, status: LabStatus) -> String? {
+        var parts: [String] = [
+            String(localized: "lab range \(range.lowerBound.compactFormatted)–\(range.upperBound.compactFormatted)")
+        ]
+        if let prior = priorValues[scanned.reference.id.lowercased()], prior != scanned.value {
+            parts.append(
+                scanned.value > prior
+                    ? String(localized: "↗ up from \(prior.compactFormatted)")
+                    : String(localized: "↘ down from \(prior.compactFormatted)")
+            )
+        }
+        if isSupplementSuggested(scanned: scanned, status: status, range: range) {
+            parts.append(String(localized: "supplement suggested"))
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    /// One-shot fetch of the latest saved value per lab series across every
+    /// already-saved report, read-only — mirrors
+    /// `ScanReportView.fetchLatestPriorValues()`.
+    private func fetchLatestPriorValues() -> [String: Double] {
+        let allResults = (try? modelContext.fetch(FetchDescriptor<LabResult>())) ?? []
+        let grouped = Dictionary(grouping: allResults, by: \.seriesKey)
+        return grouped.compactMapValues { $0.max(by: { $0.date < $1.date })?.value }
+    }
+
+    /// Whether `scanned` would surface an `ActionPlan` supplement suggestion
+    /// — built the same way `ScanReportView.supplementSuggestedLabIDs(for:)`
+    /// is: a minimal, throwaway `HealthReview` wrapping just this one
+    /// snapshot, handed to the real `ActionPlan.generate` rule table so this
+    /// never duplicates that whitelist by hand.
+    private func isSupplementSuggested(scanned: ScannedLabValue, status: LabStatus, range: ClosedRange<Double>?) -> Bool {
+        let snapshot = LabSnapshot(
+            id: scanned.reference.id.lowercased(),
+            name: scanned.reference.name,
+            unit: scanned.reference.unit,
+            value: scanned.value,
+            date: .now,
+            status: status,
+            range: range,
+            reference: scanned.reference
+        )
+        let miniReview = HealthReview(
+            generatedAt: .now,
+            hasData: true,
+            score: 0,
+            summary: "",
+            findings: [],
+            trends: [],
+            labSnapshots: [snapshot]
+        )
+        let plan = ActionPlan.generate(review: miniReview, medications: [], now: .now)
+        return plan.items.contains { $0.labTestID == snapshot.id }
     }
 }
 

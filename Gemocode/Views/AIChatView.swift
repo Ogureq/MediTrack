@@ -37,6 +37,31 @@ struct AIChatView: View {
         String(localized: "What should I ask my doctor?")
     ]
 
+    /// "About: [title] — [date]" under the nav bar, derived only from
+    /// `review` (there's no originating report title/date to thread through
+    /// here — see the file header comment on what this view is given).
+    /// `nil` — and omitted entirely — when there's no report context at all
+    /// (`review.hasData == false`).
+    private var aboutLine: String? {
+        guard review.hasData else { return nil }
+        let dateText = review.generatedAt.formatted(date: .abbreviated, time: .omitted)
+        return String(format: String(localized: "About: %1$@ — %2$@"), String(localized: "Health Review"), dateText)
+    }
+
+    /// Two suggestion chips shown once the very first exchange has landed
+    /// (one user turn, one successful assistant reply) — a natural next
+    /// step without cluttering every later reply. Reuses "What should I ask
+    /// my doctor?" (already a starter question) plus a new "Show the trend"
+    /// prompt; tapping either sends it through the existing `send(text:)` path.
+    private static let followUpSuggestions = [
+        String(localized: "What should I ask my doctor?"),
+        String(localized: "Show the trend"),
+    ]
+
+    private var isFreshConversation: Bool {
+        messages.count == 2 && messages.last?.role == .assistant
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -71,6 +96,14 @@ struct AIChatView: View {
 
     private var chatContent: some View {
         VStack(spacing: 0) {
+            if let aboutLine {
+                Text(aboutLine)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 8)
+            }
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 12) {
@@ -80,6 +113,9 @@ struct AIChatView: View {
                         ForEach(messages) { message in
                             MessageBubble(message: message)
                                 .id(message.id)
+                        }
+                        if isFreshConversation && !isLoading {
+                            followUpSuggestionChips
                         }
                         if isLoading {
                             TypingIndicatorBubble()
@@ -136,6 +172,24 @@ struct AIChatView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: Follow-up suggestion chips
+
+    /// Shown once, right after the first exchange (see `isFreshConversation`)
+    /// — visually mirrors Quick Add's example-chip style (an outlined
+    /// capsule over `Editorial.insetCard`), duplicated locally rather than
+    /// importing `QuickAddView`'s private chip type.
+    private var followUpSuggestionChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Self.followUpSuggestions, id: \.self) { question in
+                    ChatSuggestionChip(label: question) {
+                        send(text: question)
+                    }
+                }
+            }
+        }
     }
 
     // MARK: Error row
@@ -298,5 +352,31 @@ private struct TypingIndicatorBubble: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Assistant is typing")
         .onAppear { animate = true }
+    }
+}
+
+// MARK: - Follow-up suggestion chip
+
+/// Visual mirror of `QuickAddView`'s private `QuickAddExampleChip` (an
+/// outlined capsule over `Editorial.insetCard`) — duplicated here rather
+/// than shared, since that type is file-private to `QuickAddView.swift`.
+private struct ChatSuggestionChip: View {
+    let label: String
+    let action: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Editorial.ink(colorScheme))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(Editorial.insetCard(colorScheme), in: Capsule())
+                .overlay(Capsule().strokeBorder(Editorial.controlBorder(colorScheme), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }

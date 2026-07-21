@@ -7,6 +7,14 @@ struct SymptomsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Query(sort: \SymptomEntry.date, order: .reverse) private var symptoms: [SymptomEntry]
 
+    // Queried only to build the `LabSnapshot`s the insight banner checks
+    // symptoms against — see `review`/`insightBanners(review:)` below.
+    @Query(sort: \MedicalReport.date, order: .reverse) private var reports: [MedicalReport]
+    @Query private var vitals: [VitalSample]
+    @Query private var medications: [Medication]
+    @Query(sort: \Appointment.date) private var appointments: [Appointment]
+    @Query private var profiles: [HealthProfile]
+
     @State private var showingAdd = false
 
     /// Splits the journal into "This Week" and "Earlier" the way 7o's ledger
@@ -24,6 +32,47 @@ struct SymptomsView: View {
         symptoms.filter { $0.date < recentCutoff }
     }
 
+    /// Full `AnalysisEngine` pass, used here only for its `labSnapshots` —
+    /// re-runs on every access, so `body` binds it to one local `let`
+    /// (mirroring `DashboardView.review`) instead of recomputing it inside
+    /// `insightBanners(review:)`.
+    private var review: HealthReview {
+        AnalysisEngine.generateReview(
+            profile: profiles.first,
+            reports: reports,
+            vitals: vitals,
+            medications: medications,
+            symptoms: symptoms,
+            appointments: appointments
+        )
+    }
+
+    /// `SymptomLabHints.hints(for:snapshots:)` against the most recent
+    /// symptom entries — capped at 2 banners, deduplicated by
+    /// symptom+lab pair, and only ever built from a hint the lab is
+    /// ACTUALLY out of range for (that gating lives in `SymptomLabHints`
+    /// itself, never re-checked or loosened here).
+    private func insightBanners(review: HealthReview) -> [SymptomInsight] {
+        var seen: Set<String> = []
+        var results: [SymptomInsight] = []
+        let recentEntries = symptoms.sorted { $0.date > $1.date }.prefix(5)
+        for entry in recentEntries {
+            for hint in SymptomLabHints.hints(for: entry.name, snapshots: review.labSnapshots) {
+                let key = "\(hint.symptomID)|\(hint.labID)"
+                guard !seen.contains(key) else { continue }
+                seen.insert(key)
+                let labName = LabCatalog.reference(for: hint.labID)?.name ?? hint.labID
+                let isLow = hint.status == .low || hint.status == .criticalLow
+                let template = isLow
+                    ? String(localized: "%1$@ can relate to your low %2$@ — noted for your doctor visit.")
+                    : String(localized: "%1$@ can relate to your high %2$@ — noted for your doctor visit.")
+                results.append(SymptomInsight(text: String(format: template, entry.name, labName)))
+                if results.count >= 2 { return results }
+            }
+        }
+        return results
+    }
+
     var body: some View {
         Group {
             if symptoms.isEmpty {
@@ -37,7 +86,17 @@ struct SymptomsView: View {
                         .frame(maxWidth: 220)
                 }
             } else {
+                let insights = insightBanners(review: review)
                 List {
+                    if !insights.isEmpty {
+                        Section {
+                            ForEach(insights) { insight in
+                                SymptomInsightBanner(text: insight.text)
+                            }
+                        }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                    }
                     if !thisWeekSymptoms.isEmpty {
                         Section {
                             ForEach(thisWeekSymptoms) { entry in
@@ -99,6 +158,37 @@ struct SymptomsView: View {
         for index in offsets {
             modelContext.delete(list[index])
         }
+    }
+}
+
+/// One built insight-banner sentence — see `SymptomsView.insightBanners(review:)`.
+private struct SymptomInsight: Identifiable {
+    let id = UUID()
+    let text: String
+}
+
+/// Inset-card banner surfacing one `SymptomLabHints` insight — educational
+/// tone only, never a diagnosis claim. The visible sentence is the entire
+/// accessible label (no separate summary needed).
+private struct SymptomInsightBanner: View {
+    let text: String
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "sparkle")
+                .font(.system(size: 11))
+                .foregroundStyle(Editorial.accent(colorScheme))
+                .accessibilityHidden(true)
+            Text(text)
+                .font(.system(size: 11, weight: .regular))
+                .foregroundStyle(Editorial.muted(colorScheme))
+        }
+        .padding(11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 }
 

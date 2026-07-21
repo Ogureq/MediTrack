@@ -8,13 +8,77 @@ struct ReportDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @Query private var profiles: [HealthProfile]
+    // Additive: needed to compute "What This Scan Changed" for real (the
+    // retest schedule and Action Plan count reflect the WHOLE account's
+    // data, not just this one report) and to build the `HealthReview`
+    // `AIChatView`'s "Ask about this report" needs.
+    @Query(sort: \MedicalReport.date, order: .reverse) private var allReports: [MedicalReport]
+    @Query private var vitals: [VitalSample]
+    @Query private var medications: [Medication]
+    @Query private var symptoms: [SymptomEntry]
+    @Query(sort: \Appointment.date) private var appointments: [Appointment]
+    @ObservedObject private var premiumStore = PremiumStore.shared
 
     let report: MedicalReport
 
     @State private var confirmDelete = false
     @State private var showingEdit = false
+    @State private var showingAIChat = false
+    @State private var showingPaywall = false
 
     private var sex: BiologicalSex? { profiles.first?.sex }
+
+    /// The full-account review, built the same way `ReviewScreen`/
+    /// `ScanReportView` build theirs — used only by "What This Scan Changed"
+    /// (for `ActionPlan.generate`) and by "Ask about this report" (for
+    /// `AIChatView`), so it's a computed property rather than stored state.
+    private var currentReview: HealthReview {
+        AnalysisEngine.generateReview(
+            profile: profiles.first,
+            reports: allReports,
+            vitals: vitals,
+            medications: medications,
+            symptoms: symptoms,
+            appointments: appointments
+        )
+    }
+
+    /// "Retest schedule rebuilt — next due %@", from the same
+    /// `RetestSchedule.items`/`nextDraw` pipeline `RetestScheduleView` uses,
+    /// over every saved report (not just this one) since a retest schedule
+    /// is always account-wide.
+    private var nextRetestDrawDate: Date? {
+        let items = RetestSchedule.items(reports: allReports, now: .now)
+        return RetestSchedule.nextDraw(items: items, now: .now)?.date
+    }
+
+    /// "Action plan — %lld supplement suggestions" — restricted to the
+    /// supplement suggestions that actually trace back to one of THIS
+    /// report's own out-of-range values (not every suggestion the full
+    /// account-wide plan happens to carry), so the count only ever describes
+    /// what this scan itself changed.
+    private var actionPlanCountFromThisReport: Int {
+        let thisReportSeriesKeys = Set(report.labResults.map(\.seriesKey))
+        let plan = ActionPlan.generate(review: currentReview, medications: medications, now: .now)
+        return plan.items.filter { thisReportSeriesKeys.contains($0.labTestID) }.count
+    }
+
+    /// "%lld trends updated" — how many of this report's own lab series now
+    /// have at least 2 stored points across every saved report (i.e. a trend
+    /// line actually exists to look at, the same "results.count >= 2" bar
+    /// `LabDetailView` uses to decide whether to show its trend chart).
+    private var trendsUpdatedCount: Int {
+        let allResults = allReports.flatMap(\.labResults)
+        let grouped = Dictionary(grouping: allResults, by: \.seriesKey)
+        let thisReportSeriesKeys = Set(report.labResults.map(\.seriesKey))
+        return thisReportSeriesKeys.filter { (grouped[$0]?.count ?? 0) >= 2 }.count
+    }
+
+    private var hasScanChanges: Bool {
+        nextRetestDrawDate != nil
+            || (premiumStore.isPremium && actionPlanCountFromThisReport > 0)
+            || trendsUpdatedCount > 0
+    }
 
     /// Every lab result evaluated against its reference range (resolved for
     /// the profile's sex, same as `LabResultRow` below), reused by the stat
@@ -77,6 +141,24 @@ struct ReportDetailView: View {
                     }
                 } header: {
                     MicroLabel("Flagged in This Report")
+                }
+                .listRowBackground(GlassRowBackground())
+                .listRowSeparator(.hidden)
+            }
+
+            if hasScanChanges {
+                Section {
+                    scanChangesRows
+                } header: {
+                    MicroLabel("What This Scan Changed")
+                }
+                .listRowBackground(GlassRowBackground())
+                .listRowSeparator(.hidden)
+            }
+
+            if !report.labResults.isEmpty {
+                Section {
+                    askAboutReportButton
                 }
                 .listRowBackground(GlassRowBackground())
                 .listRowSeparator(.hidden)
@@ -152,6 +234,93 @@ struct ReportDetailView: View {
                 dismiss()
             }
         }
+        .sheet(isPresented: $showingAIChat) {
+            AIChatView(review: currentReview, profileSummary: aiProfileSummary ?? "")
+        }
+        .sheet(isPresented: $showingPaywall) {
+            PaywallView()
+        }
+    }
+
+    // MARK: - What this scan changed
+
+    /// Computed for real, never invented: each row only appears when its
+    /// underlying computation actually has something to say (see
+    /// `hasScanChanges`, `nextRetestDrawDate`, `actionPlanCountFromThisReport`,
+    /// `trendsUpdatedCount` above).
+    @ViewBuilder
+    private var scanChangesRows: some View {
+        if let nextRetestDrawDate {
+            scanChangeRow(String(localized: "Retest schedule rebuilt — next due \(nextRetestDrawDate.formatted(date: .abbreviated, time: .omitted))"))
+        }
+        if premiumStore.isPremium && actionPlanCountFromThisReport > 0 {
+            scanChangeRow(actionPlanCountFromThisReport == 1
+                ? String(localized: "Action plan — 1 supplement suggestion")
+                : String(localized: "Action plan — \(actionPlanCountFromThisReport) supplement suggestions"))
+        }
+        if trendsUpdatedCount > 0 {
+            scanChangeRow(trendsUpdatedCount == 1
+                ? String(localized: "1 trend updated")
+                : String(localized: "\(trendsUpdatedCount) trends updated"))
+        }
+    }
+
+    private func scanChangeRow(_ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text("✓")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Editorial.tagGood(colorScheme))
+            Text(verbatim: text)
+                .font(.system(size: 14))
+                .foregroundStyle(Editorial.ink(colorScheme))
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Outlined "Ask about this report" — premium-gated the exact same way
+    /// `ReviewScreen.aiSummaryCard`'s own chat button is: opens `AIChatView`
+    /// over the full-account review when premium, otherwise the paywall.
+    @ViewBuilder
+    private var askAboutReportButton: some View {
+        let button = Button {
+            if premiumStore.isPremium {
+                showingAIChat = true
+            } else {
+                showingPaywall = true
+            }
+        } label: {
+            Label("Ask About This Report", systemImage: premiumStore.isPremium ? "sparkles" : "lock.fill")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(OutlinedPillButtonStyle())
+
+        if premiumStore.isPremium {
+            button
+        } else {
+            button.accessibilityHint("Chat about your report is a Premium feature. Opens the upgrade screen.")
+        }
+    }
+
+    /// A short, caller-built profile description, identical in spirit to
+    /// `ReviewScreen.aiProfileSummary` — duplicated per this file's
+    /// edit-ownership rather than shared.
+    private var aiProfileSummary: String? {
+        guard let profile = profiles.first else { return nil }
+        var parts: [String] = []
+        if let age = profile.age {
+            parts.append("\(age)-year-old")
+        }
+        if profile.sex != .unspecified {
+            parts.append(profile.sex.displayName.lowercased())
+        }
+        if !profile.conditions.isEmpty {
+            parts.append("conditions: \(profile.conditions)")
+        }
+        if !profile.allergies.isEmpty {
+            parts.append("allergies: \(profile.allergies)")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: "; ")
     }
 
     // MARK: - Header

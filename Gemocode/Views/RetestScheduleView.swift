@@ -25,6 +25,11 @@ struct RetestScheduleView: View {
     /// render, so it's rebuilt only when `signature` changes.
     @State private var items: [RetestItem] = []
 
+    /// The next-draw bundle built over `items` (see `RetestSchedule.nextDraw`)
+    /// — drives both the "Next draw" inset card and the "In This Draw"
+    /// section below. Rebuilt alongside `items` in the same `.task`.
+    @State private var bundle: DrawBundle?
+
     /// Mirrors `DashboardView.retestSignature`: changes exactly when the
     /// number of reports or the total number of lab results changes, which
     /// is exactly when `RetestSchedule.items` could produce a different
@@ -33,16 +38,28 @@ struct RetestScheduleView: View {
         "\(reports.count)-\(reports.reduce(0) { $0 + $1.labResults.count })"
     }
 
+    /// Ids already accounted for by the next-draw bundle — excluded from
+    /// the plain urgency sections below so nothing appears twice.
+    private var bundleIDs: Set<String> {
+        Set(bundle?.items.map(\.id) ?? [])
+    }
+
+    /// Defensive-only: `RetestSchedule.nextDraw` always folds in every
+    /// due/soon item as its bundle seed, so this is normally empty. Kept
+    /// (rather than assumed away) so a future engine change can't silently
+    /// hide an overdue test from this screen.
     private var overdueItems: [RetestItem] {
-        items.filter { $0.status == .overdue }
+        items.filter { $0.status == .overdue && !bundleIDs.contains($0.id) }
     }
 
     private var dueSoonItems: [RetestItem] {
-        items.filter { $0.status == .dueSoon }
+        items.filter { $0.status == .dueSoon && !bundleIDs.contains($0.id) }
     }
 
-    private var upcomingItems: [RetestItem] {
-        items.filter { $0.status == .upcoming }
+    /// Upcoming tests NOT already pulled into the next-draw bundle's
+    /// "might as well" window — the "Not Due — Don't Pay Yet" section.
+    private var notDueItems: [RetestItem] {
+        items.filter { $0.status == .upcoming && !bundleIDs.contains($0.id) }
     }
 
     var body: some View {
@@ -55,12 +72,34 @@ struct RetestScheduleView: View {
                 }
             } else {
                 List {
+                    Section {
+                        HStack {
+                            Spacer()
+                            Text(trackedCountText)
+                                .font(.system(size: 12))
+                                .foregroundStyle(Editorial.muted(colorScheme))
+                        }
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+
+                    if let bundle {
+                        Section {
+                            nextDrawCard(bundle: bundle)
+                        }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets())
+                    }
+
+                    section(title: "In This Draw", items: bundle?.items ?? [])
                     section(title: "Overdue", items: overdueItems)
                     section(title: "Due Soon", items: dueSoonItems)
                     section(
-                        title: "Upcoming",
-                        items: upcomingItems,
-                        footer: "Not due yet — testing these again now is usually unnecessary. Your doctor may advise differently."
+                        title: "Not Due — Don't Pay Yet",
+                        items: notDueItems,
+                        footer: "Not due yet — testing these again now is usually unnecessary. Your doctor may advise differently.",
+                        showWaste: true
                     )
 
                     Section {
@@ -76,19 +115,101 @@ struct RetestScheduleView: View {
         .ambientScreen()
         .navigationTitle("Retest Schedule")
         .task(id: signature) {
-            items = RetestSchedule.items(reports: reports, now: .now)
+            let freshItems = RetestSchedule.items(reports: reports, now: .now)
+            items = freshItems
+            bundle = RetestSchedule.nextDraw(items: freshItems, now: .now)
         }
     }
 
+    private var trackedCountText: String {
+        String(format: String(localized: "%lld tests tracked"), LabCatalog.count)
+    }
+
+    // MARK: - Next draw card
+
+    /// "Next draw — Aug 2 / 3 tests bundled · saves ~$80 est." inset card,
+    /// with an optional "fasting required" chip and a "Book" accent pill
+    /// (kept as the existing no-op-booking action — there's no separate
+    /// booking flow today, matching `DashboardView.nextDrawInsetCard`).
+    private func nextDrawCard(bundle: DrawBundle) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(verbatim: nextDrawTitle(date: bundle.date))
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Editorial.ink(colorScheme))
+                    Text(verbatim: nextDrawSubtitle(bundle: bundle))
+                        .font(.system(size: 12))
+                        .foregroundStyle(Editorial.muted(colorScheme))
+                    if bundle.requiresFasting {
+                        EditorialTag("Fasting Required", kind: .warn)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
+                // Kept as its own standalone control (not folded into the
+                // combined text element above) so VoiceOver users can still
+                // reach it as a separate button, not just hear its label.
+                Button("Book") {}
+                    .buttonStyle(AccentPillButtonStyle())
+            }
+            .padding(14)
+            .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+            // Shown once here — near the top, above every other $ figure on
+            // this screen (the bundle's own savings tail above, and any
+            // "testing now wastes ~$N" line in the Not Due section below).
+            //
+            // `RetestSchedule.pricingFootnote` is a plain runtime `String`
+            // (its own doc comment: "views are responsible for localizing
+            // it"), so `NSLocalizedString` — the one Foundation API that
+            // looks a *runtime* string up in the catalog by its exact
+            // English text, matching this project's "key == English source
+            // text" convention — is used here rather than `Text(_:)`/
+            // `String(localized:)`, which both require a compile-time
+            // literal key.
+            Text(NSLocalizedString(RetestSchedule.pricingFootnote, comment: "Pricing footnote for RetestSchedule money figures"))
+                .font(.system(size: 10))
+                .foregroundStyle(Editorial.muted(colorScheme))
+        }
+    }
+
+    private func nextDrawTitle(date: Date) -> String {
+        String(format: String(localized: "Next draw — %@"), date.formatted(.dateTime.month(.abbreviated).day()))
+    }
+
+    private func nextDrawSubtitle(bundle: DrawBundle) -> String {
+        let count = bundle.items.count
+        if let savings = bundle.estimatedSavings {
+            return String(format: String(localized: "%lld tests bundled · saves ~$%lld est."), count, savings)
+        }
+        return count == 1
+            ? String(localized: "1 test bundled")
+            : String(format: String(localized: "%lld tests bundled"), count)
+    }
+
+    // MARK: - Sections
+
     /// One urgency section — omitted entirely when `items` is empty, per
     /// the screen's "only render sections that have something to show" rule.
+    /// `showWaste` additionally surfaces
+    /// `RetestSchedule.estimatedEarlyTestingWaste` under each row, for the
+    /// "Not Due — Don't Pay Yet" section only.
     @ViewBuilder
-    private func section(title: LocalizedStringKey, items: [RetestItem], footer: LocalizedStringKey? = nil) -> some View {
+    private func section(
+        title: LocalizedStringKey,
+        items: [RetestItem],
+        footer: LocalizedStringKey? = nil,
+        showWaste: Bool = false
+    ) -> some View {
         if !items.isEmpty {
             Section {
                 ForEach(items) { item in
-                    RetestScheduleRow(item: item)
-                        .ledgerRow()
+                    RetestScheduleRow(
+                        item: item,
+                        wasteText: showWaste ? wasteText(for: item) : nil
+                    )
+                    .ledgerRow()
                 }
             } header: {
                 MicroLabel(title)
@@ -103,6 +224,11 @@ struct RetestScheduleView: View {
             .listRowSeparator(.hidden)
         }
     }
+
+    private func wasteText(for item: RetestItem) -> String? {
+        guard let waste = RetestSchedule.estimatedEarlyTestingWaste(for: item, now: .now) else { return nil }
+        return String(format: String(localized: "testing now wastes ~$%lld est."), waste)
+    }
 }
 
 /// One row in `RetestScheduleView`: test name, a status badge (or, for
@@ -112,6 +238,10 @@ struct RetestScheduleView: View {
 /// naturally end-to-end.
 private struct RetestScheduleRow: View {
     let item: RetestItem
+    /// "testing now wastes ~$N est." — only ever set for the "Not Due —
+    /// Don't Pay Yet" section, and only when the test has a known typical
+    /// price (see `RetestScheduleView.wasteText(for:)`).
+    var wasteText: String? = nil
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -179,10 +309,16 @@ private struct RetestScheduleRow: View {
                     .font(.system(size: 11))
                     .foregroundStyle(Editorial.muted(colorScheme))
             }
+            if let wasteText {
+                Text(verbatim: wasteText)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Editorial.muted(colorScheme))
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            "\(item.displayName), last tested \(item.lastTestedAt.formatted(.dateTime.month(.abbreviated).day().year())), \(dueText), \(intervalText)"
+            wasteText.map { "\(item.displayName), last tested \(item.lastTestedAt.formatted(.dateTime.month(.abbreviated).day().year())), \(dueText), \(intervalText), \($0)" }
+                ?? "\(item.displayName), last tested \(item.lastTestedAt.formatted(.dateTime.month(.abbreviated).day().year())), \(dueText), \(intervalText)"
         )
     }
 

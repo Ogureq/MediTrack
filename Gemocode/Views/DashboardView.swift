@@ -27,19 +27,12 @@ struct DashboardView: View {
     @State private var showingQuickAdd = false
     @State private var showingQuarterlyReview = false
 
-    /// Lab series that are overdue or due soon for a re-test, per
-    /// `RetestSchedule.dueOrSoon`. Cached the same way as `earliestDataDate`
-    /// below — it flattens every report's lab results, which is wasted work
-    /// to redo on every render — and rebuilt via `.task(id: retestSignature)`.
-    ///
-    /// Drives `nextDrawCard` together with `nextUpcomingRetestItem`: due/soon
-    /// items take priority; when there are none, the soonest upcoming item
-    /// is named instead.
-    @State private var retestItems: [RetestItem] = []
-
-    /// The soonest `.upcoming` retest item, per `RetestSchedule.nextUpcoming`
-    /// — named in `nextDrawCard` when `retestItems` is empty.
-    @State private var nextUpcomingRetestItem: RetestItem?
+    /// The next-draw bundle — everything worth drawing in one visit right
+    /// now, per `RetestSchedule.nextDraw`. Cached the same way as
+    /// `earliestDataDate` below — building it flattens every report's lab
+    /// results, which is wasted work to redo on every render — and rebuilt
+    /// via `.task(id: retestSignature)`. Drives `nextDrawCard`.
+    @State private var drawBundle: DrawBundle?
 
     private var review: HealthReview {
         AnalysisEngine.generateReview(
@@ -215,8 +208,8 @@ struct DashboardView: View {
             earliestDataDate = Self.computeEarliestDataDate(reports: reports, vitals: vitals, snapshots: snapshots)
         }
         .task(id: retestSignature) {
-            retestItems = RetestSchedule.dueOrSoon(reports: reports, now: .now)
-            nextUpcomingRetestItem = RetestSchedule.nextUpcoming(reports: reports, now: .now)
+            let items = RetestSchedule.items(reports: reports, now: .now)
+            drawBundle = RetestSchedule.nextDraw(items: items, now: .now)
         }
     }
 
@@ -349,33 +342,31 @@ struct DashboardView: View {
     // MARK: Next draw
 
     /// The restyled retest hero: an `insetCard` naming the next lab draw,
-    /// built from the same `RetestSchedule` data the old `retestCard` used.
-    /// Priority mirrors the card it replaces:
+    /// built from `RetestSchedule.nextDraw`'s bundle. Priority mirrors the
+    /// card it replaces:
     ///
-    /// 1. `retestItems` non-empty → names the due/soon tests (up to 3) and
-    ///    keeps `RetestSchedule.disclaimer` alongside them.
-    /// 2. Otherwise, `nextUpcomingRetestItem` set → names the soonest
-    ///    upcoming test.
+    /// 1. `drawBundle` has a due/soon item → names the bundled tests (up to
+    ///    3) and keeps `RetestSchedule.disclaimer` alongside them.
+    /// 2. Otherwise, `drawBundle` is seeded on a lone upcoming item →
+    ///    names just that test, no disclaimer (nothing urgent to caveat).
     /// 3. Otherwise nothing renders here — the always-visible
     ///    `scanReportButton` below covers "no lab data yet" instead of a
     ///    separate hero card.
     @ViewBuilder
     private var nextDrawCard: some View {
-        if !retestItems.isEmpty {
+        if let bundle = drawBundle {
+            let hasDueOrSoon = bundle.items.contains { $0.status != .upcoming }
             VStack(alignment: .leading, spacing: 6) {
                 nextDrawInsetCard(
-                    title: nextDrawTitle(dueDate: retestItems.first?.dueDate ?? .now),
-                    subtitle: nextDrawSubtitle(items: retestItems)
+                    title: nextDrawTitle(dueDate: bundle.date),
+                    subtitle: nextDrawSubtitle(bundle: bundle)
                 )
-                Text(RetestSchedule.disclaimer)
-                    .font(.system(size: 10))
-                    .foregroundStyle(Editorial.muted(colorScheme))
+                if hasDueOrSoon {
+                    Text(RetestSchedule.disclaimer)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Editorial.muted(colorScheme))
+                }
             }
-        } else if let next = nextUpcomingRetestItem {
-            nextDrawInsetCard(
-                title: nextDrawTitle(dueDate: next.dueDate),
-                subtitle: next.displayName
-            )
         }
     }
 
@@ -383,10 +374,18 @@ struct DashboardView: View {
         String(format: String(localized: "Next draw — %@"), dueDate.formatted(.dateTime.month(.abbreviated).day()))
     }
 
-    private func nextDrawSubtitle(items: [RetestItem]) -> String {
-        let names = items.prefix(3).map(\.displayName)
+    /// "HbA1c + LDL + glucose · one visit · saves ~$80 est." — the joined
+    /// test names, the existing "· one visit" tail once there's more than
+    /// one, and (new) a "· saves ~$N est." tail once the bundle actually
+    /// has a savings figure (never true alongside a lone test, since
+    /// `RetestSchedule.estimatedSavings` requires 2+ bundled tests).
+    private func nextDrawSubtitle(bundle: DrawBundle) -> String {
+        let names = bundle.items.prefix(3).map(\.displayName)
         let joined = names.joined(separator: " + ")
         guard names.count > 1 else { return joined }
+        if let savings = bundle.estimatedSavings {
+            return String(format: String(localized: "%@ · one visit · saves ~$%lld est."), joined, savings)
+        }
         return String(format: String(localized: "%@ · one visit"), joined)
     }
 

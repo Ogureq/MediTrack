@@ -116,10 +116,11 @@ struct PaywallView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// "Premium Adds" ledger — the same four features the old icon-card
-    /// feature list described, reflowed as ledger rows. Each row's fuller
-    /// `detail` copy survives as an accessibility hint rather than a second
-    /// visible line, so VoiceOver users still get the complete explanation.
+    /// "Premium Adds" ledger, reflowed as ledger rows. The middle row is a
+    /// deliberate softening of the source mockup's "exact supplements &
+    /// doses" — an orchestrator-level copy decision to avoid implying a
+    /// prescriptive/diagnostic promise (see `AnalysisEngine`'s
+    /// educational-not-diagnostic stance).
     private var premiumLedger: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Premium Adds")
@@ -131,26 +132,17 @@ struct PaywallView: View {
             PaywallLedgerRow(
                 marker: "+",
                 markerColor: Editorial.accent(colorScheme),
-                title: "Scan & decode lab reports",
-                detail: "Photograph any lab report — values extracted and organized automatically."
+                title: "Unlimited scans, decoded in seconds"
             )
             PaywallLedgerRow(
                 marker: "+",
                 markerColor: Editorial.accent(colorScheme),
-                title: "Unlimited AI health reports",
-                detail: "Plain-language narration of your health score and findings, any time."
+                title: "Action plan — supplements & doses to discuss"
             )
             PaywallLedgerRow(
                 marker: "+",
                 markerColor: Editorial.accent(colorScheme),
-                title: "AI-assisted Quick Add and future AI features",
-                detail: "New AI tools land here first as Gemocode grows."
-            )
-            PaywallLedgerRow(
-                marker: "+",
-                markerColor: Editorial.accent(colorScheme),
-                title: "Support ongoing development",
-                detail: "Gemocode has no ads and sells no data — premium is what keeps it going."
+                title: "AI chat about your results"
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -314,12 +306,16 @@ private struct PaywallHeader: View {
             )
             .accessibilityElement(children: .combine)
 
-            Text("Gemocode Premium")
-                .font(.system(size: 28, weight: .regular))
-                .tracking(-0.5)
-                .foregroundStyle(Editorial.ink(colorScheme))
+            (
+                Text("One skipped test\n")
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                + Text("pays for a year.")
+                    .foregroundStyle(Editorial.accent(colorScheme))
+            )
+            .font(.system(size: 28, weight: .regular))
+            .tracking(-0.5)
 
-            Text("More AI narration of your health data. Nothing you track today ever gets locked away.")
+            Text("Scans, plain-words analysis, and your action plan — decided for you after every report.")
                 .font(.system(size: 14, weight: .regular))
                 .foregroundStyle(Editorial.muted(colorScheme))
                 .fixedSize(horizontal: false, vertical: true)
@@ -409,7 +405,7 @@ private struct PaywallProductCard: View {
                 if isPurchasing {
                     ProgressView()
                 } else if isYearly {
-                    Text("Best value")
+                    Text("2 months free")
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(.white.opacity(0.8))
                         .lineLimit(1)

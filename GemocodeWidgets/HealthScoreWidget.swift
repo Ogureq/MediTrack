@@ -16,25 +16,50 @@ struct WidgetVital: Codable {
     let systemImage: String
 }
 
+/// One tracked lab test's urgency, pre-resolved into widget-safe display
+/// strings by `WidgetBridge` — this extension has no strings catalog of
+/// its own, so `name`/`dueLabel` arrive already localized.
+struct WidgetDueTest: Codable {
+    let name: String
+    let dueLabel: String
+    let isOverdue: Bool
+}
+
 /// A point-in-time snapshot of the health review, read from the shared
 /// app group.
+///
+/// `dueTests`/`nextDrawDateISO` are OPTIONAL — a snapshot written by an
+/// older app build never had them, and must still decode here; keep this
+/// struct byte-equivalent in shape with `Gemocode/Services/WidgetBridge.swift`.
+/// `nextDrawDateISO` is a `Date`, riding the same `.iso8601` strategy as
+/// `updatedAt`.
 struct WidgetSnapshot: Codable {
     let score: Int
     let headline: String
     let updatedAt: Date
     let vitals: [WidgetVital]
+    var dueTests: [WidgetDueTest]? = nil
+    var nextDrawDateISO: Date? = nil
 }
 
 extension WidgetSnapshot {
-    /// Sample data used for the widget gallery placeholder/snapshot.
+    /// Sample data used for the widget gallery placeholder/snapshot —
+    /// includes a due-tests set so the gallery preview shows the 6u/7u
+    /// "next test" layout rather than falling back to the legacy vitals list.
     static let sample = WidgetSnapshot(
-        score: 92,
+        score: 78,
         headline: "Looking good",
         updatedAt: .now,
         vitals: [
             WidgetVital(name: "Resting Heart Rate", value: "68 bpm", systemImage: "heart.fill"),
             WidgetVital(name: "Blood Pressure", value: "118/76 mmHg", systemImage: "waveform.path.ecg"),
-        ]
+        ],
+        dueTests: [
+            WidgetDueTest(name: "HbA1c", dueLabel: "Overdue", isOverdue: true),
+            WidgetDueTest(name: "LDL", dueLabel: "2 wks", isOverdue: false),
+            WidgetDueTest(name: "Glucose", dueLabel: "2 wks", isOverdue: false),
+        ],
+        nextDrawDateISO: Calendar.current.date(byAdding: .day, value: 13, to: .now)
     )
 }
 
@@ -119,6 +144,9 @@ private enum WidgetEditorial {
     static func tagGood(_ scheme: ColorScheme) -> Color { Color(wHex: 0x2F8F5B) }
     static func tagWarn(_ scheme: ColorScheme) -> Color { Color(wHex: 0xB98317) }
     static func tagBad(_ scheme: ColorScheme) -> Color { Color(wHex: 0xCF3F2F) }
+    /// The one filled accent — identical in both color schemes, mirroring
+    /// `Editorial.accent`.
+    static func accent(_ scheme: ColorScheme) -> Color { Color(wHex: 0x0A84FF) }
     static func zoneOut(_ scheme: ColorScheme) -> Color {
         scheme == .dark ? Color(wHex: 0x4D3D28) : Color(wHex: 0xE8C9A8)
     }
@@ -313,13 +341,29 @@ private struct SmallHealthScoreView: View {
     let snapshot: WidgetSnapshot
     @Environment(\.colorScheme) private var colorScheme
 
+    /// Every widget string below is a plain English literal by design —
+    /// see the "Score band text" note above: this target has no strings
+    /// catalog, so anything that must be localized (like `dueLabel`/`name`
+    /// on a `WidgetDueTest`) is resolved app-side before it's written here.
+    private var overdueCount: Int {
+        (snapshot.dueTests ?? []).filter(\.isOverdue).count
+    }
+
+    /// "N test(s) overdue" once a schedule snapshot is available; falls
+    /// back to the plain `headline` for an older snapshot with no
+    /// `dueTests` at all, or once nothing is overdue.
+    private var captionText: String {
+        guard overdueCount > 0 else { return snapshot.headline }
+        return overdueCount == 1 ? "1 test overdue" : "\(overdueCount) tests overdue"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             WidgetScoreHeader(score: snapshot.score, numberSize: 40, colorScheme: colorScheme)
 
             Spacer(minLength: 8)
 
-            Text(snapshot.headline)
+            Text(captionText)
                 .font(.system(size: 10))
                 .foregroundStyle(WidgetEditorial.muted(colorScheme))
                 .lineLimit(1)
@@ -329,7 +373,7 @@ private struct SmallHealthScoreView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            "Health score \(snapshot.score), \(widgetScoreLabel(for: snapshot.score)). \(snapshot.headline)"
+            "Health score \(snapshot.score), \(widgetScoreLabel(for: snapshot.score)). \(captionText)"
         )
     }
 }
@@ -341,51 +385,124 @@ private struct MediumHealthScoreView: View {
     let snapshotDate: Date
     @Environment(\.colorScheme) private var colorScheme
 
-    private var vitals: [WidgetVital] { Array(snapshot.vitals.prefix(3)) }
+    private var dueTests: [WidgetDueTest] { snapshot.dueTests ?? [] }
+    private var overdueCount: Int { dueTests.filter(\.isOverdue).count }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 18) {
+        HStack(alignment: .top, spacing: 14) {
+            leftTile
+            rightTile
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+
+    /// Score + tag + bar, plus an overdue-count caption — the 6u/7u left
+    /// tile. Falls back to nothing (just the score header) when there's no
+    /// schedule data yet, matching the small widget's own fallback.
+    private var leftTile: some View {
+        VStack(alignment: .leading, spacing: 8) {
             WidgetScoreHeader(score: snapshot.score, numberSize: 32, colorScheme: colorScheme)
-                .frame(width: 96, alignment: .leading)
-
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(vitals.enumerated()), id: \.offset) { index, vital in
-                    HStack(spacing: 6) {
-                        Image(systemName: vital.systemImage)
-                            .font(.system(size: 11))
-                            .foregroundStyle(WidgetEditorial.muted(colorScheme))
-                            .accessibilityHidden(true)
-                        Text(vital.name)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(WidgetEditorial.ink(colorScheme))
-                            .lineLimit(1)
-                        Spacer(minLength: 4)
-                        Text(vital.value)
-                            .font(.system(size: 11))
-                            .foregroundStyle(WidgetEditorial.muted(colorScheme))
-                            .lineLimit(1)
-                    }
-                    .padding(.vertical, 6)
-                    .overlay(alignment: .bottom) {
-                        if index < vitals.count - 1 {
-                            Rectangle()
-                                .fill(WidgetEditorial.hairline(colorScheme))
-                                .frame(height: 0.5)
-                        }
-                    }
-                    .accessibilityElement(children: .combine)
-                }
-
-                Spacer(minLength: 4)
-
-                (Text("Updated ") + Text(snapshotDate, style: .relative))
-                    .font(.system(size: 9))
+            Spacer(minLength: 4)
+            if overdueCount > 0 {
+                Text(overdueCount == 1 ? "1 test overdue" : "\(overdueCount) tests overdue")
+                    .font(.system(size: 10))
                     .foregroundStyle(WidgetEditorial.muted(colorScheme))
                     .lineLimit(1)
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .frame(width: 96, alignment: .leading)
+    }
+
+    /// "NEXT TEST" + up to 3 due rows + next-draw date + coverage caption
+    /// when there's schedule data (6u/7u); otherwise the legacy vitals
+    /// list this tile showed before the schedule redesign, so an
+    /// old/no-schedule snapshot still renders something useful.
+    @ViewBuilder
+    private var rightTile: some View {
+        if dueTests.isEmpty {
+            legacyVitalsList
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .lastTextBaseline) {
+                    Text("NEXT TEST")
+                        .font(.system(size: 8, weight: .semibold))
+                        .kerning(0.96)
+                        .foregroundStyle(WidgetEditorial.muted(colorScheme))
+                    Spacer()
+                    if let nextDrawDate = snapshot.nextDrawDateISO {
+                        Text(nextDrawDate, format: .dateTime.month(.abbreviated).day())
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(WidgetEditorial.accent(colorScheme))
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Array(dueTests.prefix(3).enumerated()), id: \.offset) { _, test in
+                        HStack(spacing: 4) {
+                            Text(test.name)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(WidgetEditorial.ink(colorScheme))
+                                .lineLimit(1)
+                            Spacer(minLength: 4)
+                            WidgetTag(text: test.dueLabel, kind: test.isOverdue ? .bad : .warn, colorScheme: colorScheme)
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+                .padding(.top, 10)
+
+                Spacer(minLength: 4)
+
+                Text(dueTests.count == 1 ? "one visit covers it" : "one visit covers all \(dueTests.count)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(WidgetEditorial.muted(colorScheme))
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    /// Pre-redesign medium-widget content: up to 3 vitals with a
+    /// "Updated …" relative timestamp. Kept verbatim as the fallback for a
+    /// snapshot with no `dueTests` (e.g. written by an older app build, or
+    /// before the user has any tracked lab tests).
+    private var legacyVitalsList: some View {
+        let vitals = Array(snapshot.vitals.prefix(3))
+        return VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(vitals.enumerated()), id: \.offset) { index, vital in
+                HStack(spacing: 6) {
+                    Image(systemName: vital.systemImage)
+                        .font(.system(size: 11))
+                        .foregroundStyle(WidgetEditorial.muted(colorScheme))
+                        .accessibilityHidden(true)
+                    Text(vital.name)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(WidgetEditorial.ink(colorScheme))
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(vital.value)
+                        .font(.system(size: 11))
+                        .foregroundStyle(WidgetEditorial.muted(colorScheme))
+                        .lineLimit(1)
+                }
+                .padding(.vertical, 6)
+                .overlay(alignment: .bottom) {
+                    if index < vitals.count - 1 {
+                        Rectangle()
+                            .fill(WidgetEditorial.hairline(colorScheme))
+                            .frame(height: 0.5)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+            }
+
+            Spacer(minLength: 4)
+
+            (Text("Updated ") + Text(snapshotDate, style: .relative))
+                .font(.system(size: 9))
+                .foregroundStyle(WidgetEditorial.muted(colorScheme))
+                .lineLimit(1)
+        }
     }
 }
 

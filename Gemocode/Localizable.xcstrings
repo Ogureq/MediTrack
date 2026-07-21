@@ -31,6 +31,26 @@
         }
       }
     },
+    "%1$@ can relate to your high %2$@ — noted for your doctor visit.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ может быть связано с высоким %2$@ — отмечено для визита к врачу."
+          }
+        }
+      }
+    },
+    "%1$@ can relate to your low %2$@ — noted for your doctor visit.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ может быть связано с низким %2$@ — отмечено для визита к врачу."
+          }
+        }
+      }
+    },
     "%@ %@": {
       "localizations": {
         "ru": {
@@ -111,6 +131,16 @@
         }
       }
     },
+    "%@ or %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ или %@"
+          }
+        }
+      }
+    },
     "%@ plan, %@%@%@%@": {
       "localizations": {
         "ru": {
@@ -127,6 +157,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@: %@"
+          }
+        }
+      }
+    },
+    "%@ still out of range — worth discussing": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ всё ещё вне нормы — стоит обсудить с врачом"
           }
         }
       }
@@ -181,12 +221,52 @@
         }
       }
     },
+    "%@ · one visit · saves ~$%lld est.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · один визит · экономия ~$%lld ориент."
+          }
+        }
+      }
+    },
+    "%@ · renews %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · продлится %@"
+          }
+        }
+      }
+    },
+    "%@ · sex-specific ranges applied": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · диапазоны с учётом пола"
+          }
+        }
+      }
+    },
     "%@ → %@ %@": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ → %@ %@"
+          }
+        }
+      }
+    },
+    "%@ → target %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ → цель %@"
           }
         }
       }
@@ -231,6 +311,16 @@
         }
       }
     },
+    "%@, %lld values read, original kept, read": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, %lld значений считано, оригинал сохранён, прочитано"
+          }
+        }
+      }
+    },
     "%@, Profile, settings and data": {
       "localizations": {
         "ru": {
@@ -247,6 +337,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@, последний раз сдан %@, %@, %@"
+          }
+        }
+      }
+    },
+    "%@, or %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, или %@"
           }
         }
       }
@@ -513,6 +613,66 @@
         }
       }
     },
+    "%lld supplement suggestions": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld добавки"
+          }
+        }
+      }
+    },
+    "%lld tests bundled": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld тестов вместе"
+          }
+        }
+      }
+    },
+    "%lld tests bundled · saves ~$%lld est.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld тестов вместе · экономия ~$%lld ориент."
+          }
+        }
+      }
+    },
+    "%lld tests tracked": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld тестов отслеживается"
+          }
+        }
+      }
+    },
+    "%lld trends updated": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обновлено %lld трендов"
+          }
+        }
+      }
+    },
+    "%lld values read · original kept": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld значений · оригинал сохранён"
+          }
+        }
+      }
+    },
     "%lld values · %lld out of range": {
       "localizations": {
         "ru": {
@@ -529,6 +689,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld значений · все в норме"
+          }
+        }
+      }
+    },
+    "%lld wks": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld нед"
           }
         }
       }
@@ -811,6 +981,16 @@
         }
       }
     },
+    "1 goal gets verified by the %@ draw — no extra tests needed.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 цель будет проверена на заборе %@ — дополнительные анализы не нужны."
+          }
+        }
+      }
+    },
     "1 month": {
       "localizations": {
         "ru": {
@@ -831,12 +1011,72 @@
         }
       }
     },
+    "1 test bundled": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 тест в заборе"
+          }
+        }
+      }
+    },
+    "1 trend updated": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обновлён 1 тренд"
+          }
+        }
+      }
+    },
+    "1 wk": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 нед"
+          }
+        }
+      }
+    },
     "100% on this device — no account, no cloud": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "100% на этом устройстве — без аккаунта и облака"
+          }
+        }
+      }
+    },
+    "100% on-device — no account, no cloud": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "100% на устройстве · без аккаунта и облака"
+          }
+        }
+      }
+    },
+    "2 months free": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2 месяца бесплатно"
+          }
+        }
+      }
+    },
+    "2 weeks before due": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "За 2 недели до срока"
           }
         }
       }
@@ -871,6 +1111,16 @@
         }
       }
     },
+    "AI Health Analysis": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ИИ-анализ здоровья"
+          }
+        }
+      }
+    },
     "AI Health Analyst": {
       "localizations": {
         "ru": {
@@ -897,6 +1147,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "AI-сводка (необязательно)"
+          }
+        }
+      }
+    },
+    "AI chat about your results": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI-чат о ваших результатах"
           }
         }
       }
@@ -991,6 +1251,16 @@
         }
       }
     },
+    "About: %1$@ — %2$@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Об отчёте: %1$@ — %2$@"
+          }
+        }
+      }
+    },
     "Acceptable Use": {
       "localizations": {
         "ru": {
@@ -1007,6 +1277,66 @@
           "stringUnit": {
             "state": "translated",
             "value": "Достигнуто"
+          }
+        }
+      }
+    },
+    "Action Plan": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "План действий"
+          }
+        }
+      }
+    },
+    "Action Plan is a Premium feature. Opens the upgrade screen.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "План действий — функция Premium. Открывает экран подписки."
+          }
+        }
+      }
+    },
+    "Action Plan, Premium": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "План действий, Premium"
+          }
+        }
+      }
+    },
+    "Action plan — %lld supplement suggestions": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "План действий — %lld добавки"
+          }
+        }
+      }
+    },
+    "Action plan — 1 supplement suggestion": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "План действий — 1 добавка"
+          }
+        }
+      }
+    },
+    "Action plan — supplements & doses to discuss": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "План действий — добавки и дозы, которые стоит обсудить"
           }
         }
       }
@@ -1177,6 +1507,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Добавить фото"
+          }
+        }
+      }
+    },
+    "Add Plan + Set Reminders": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Принять план + напоминания"
           }
         }
       }
@@ -1361,6 +1701,16 @@
         }
       }
     },
+    "Add to Calendar": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В календарь"
+          }
+        }
+      }
+    },
     "Add vital": {
       "localizations": {
         "ru": {
@@ -1411,6 +1761,56 @@
         }
       }
     },
+    "Added": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавлено"
+          }
+        }
+      }
+    },
+    "Added %lld supplements to Medications with daily reminders.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавлено %lld добавок в Лекарства с ежедневными напоминаниями."
+          }
+        }
+      }
+    },
+    "Added 1 supplement to Medications with a daily reminder.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавлена 1 добавка в Лекарства с ежедневным напоминанием."
+          }
+        }
+      }
+    },
+    "Added to calendar": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавлено в календарь"
+          }
+        }
+      }
+    },
+    "Adding…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавление…"
+          }
+        }
+      }
+    },
     "Age": {
       "localizations": {
         "ru": {
@@ -1437,6 +1837,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Все"
+          }
+        }
+      }
+    },
+    "All %1$lld goals get verified by the %2$@ draw — no extra tests needed.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все %1$lld целей будут проверены на заборе %2$@ — дополнительные анализы не нужны."
           }
         }
       }
@@ -1511,6 +1921,16 @@
         }
       }
     },
+    "Apple Health import": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Импорт Apple Health"
+          }
+        }
+      }
+    },
     "Apple Services — Purchases & Health": {
       "localizations": {
         "ru": {
@@ -1581,6 +2001,26 @@
         }
       }
     },
+    "Ask About This Plan": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Спросить об этом плане"
+          }
+        }
+      }
+    },
+    "Ask About This Report": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Спросить об этом отчёте"
+          }
+        }
+      }
+    },
     "Ask About Your Report": {
       "localizations": {
         "ru": {
@@ -1607,6 +2047,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Задать вопрос об этом отчёте"
+          }
+        }
+      }
+    },
+    "Ask your doctor when to take %@ around the draw": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Спросите врача, когда принимать %@ в день забора"
           }
         }
       }
@@ -1697,6 +2147,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Автоматическая синхронизация с Apple Health"
+          }
+        }
+      }
+    },
+    "Available from the lock screen for first responders — even when the app is locked.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Доступна с экрана блокировки для экстренных служб — даже когда приложение заблокировано."
           }
         }
       }
@@ -2051,12 +2511,32 @@
         }
       }
     },
+    "Call emergency contact": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Позвонить экстренному контакту"
+          }
+        }
+      }
+    },
     "Camera": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Камера"
+          }
+        }
+      }
+    },
+    "Camera access is disabled for Gemocode. Enable it in Settings, or use Choose from Library instead.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Доступ к камере отключён для Gemocode. Включите его в Настройках или используйте «Выбрать из галереи»."
           }
         }
       }
@@ -2071,6 +2551,16 @@
         }
       }
     },
+    "Camera access isn't available. Use Choose from Library instead.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Камера недоступна. Используйте «Выбрать из галереи»."
+          }
+        }
+      }
+    },
     "Camera access isn't available. Use Import PDF or Photo instead.": {
       "localizations": {
         "ru": {
@@ -2081,12 +2571,32 @@
         }
       }
     },
+    "Camera access isn't configured in this build yet. Use Choose from Library instead.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Доступ к камере пока не настроен в этой сборке. Используйте «Выбрать из галереи»."
+          }
+        }
+      }
+    },
     "Camera access isn't configured in this build yet. Use Import PDF or Photo instead.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Доступ к камере ещё не настроен в этой сборке. Используйте импорт PDF или фото."
+          }
+        }
+      }
+    },
+    "Camera access was denied. Enable it in Settings, or use Choose from Library instead.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В доступе к камере отказано. Включите его в Настройках или используйте «Выбрать из галереи»."
           }
         }
       }
@@ -2247,6 +2757,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Выберите файл из вашей библиотеки"
+          }
+        }
+      }
+    },
+    "Choose from Library": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выбрать из галереи"
           }
         }
       }
@@ -2431,6 +2951,16 @@
         }
       }
     },
+    "DISCUSS WITH YOUR DOCTOR": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ОБСУДИТЬ С ВРАЧОМ"
+          }
+        }
+      }
+    },
     "Daily Rhythm": {
       "localizations": {
         "ru": {
@@ -2477,6 +3007,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Данные"
+          }
+        }
+      }
+    },
+    "Data Management": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Управление данными"
           }
         }
       }
@@ -2627,6 +3167,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Обнаруженные показатели"
+          }
+        }
+      }
+    },
+    "Detected Medications": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Распознанные препараты"
           }
         }
       }
@@ -2821,6 +3371,16 @@
         }
       }
     },
+    "Each goal is checked automatically by its lab or vital.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Каждая цель проверяется автоматически по анализу или показателю."
+          }
+        }
+      }
+    },
     "Earlier": {
       "localizations": {
         "ru": {
@@ -2877,6 +3437,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Изменить лекарство"
+          }
+        }
+      }
+    },
+    "Edit Profile": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Изменить профиль"
           }
         }
       }
@@ -2981,6 +3551,16 @@
         }
       }
     },
+    "Encrypted backup": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Шифрованный бэкап"
+          }
+        }
+      }
+    },
     "Encrypting your backup…": {
       "localizations": {
         "ru": {
@@ -3061,6 +3641,16 @@
         }
       }
     },
+    "Estimated typical self-pay prices — your lab and location may differ.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ориентировочные типичные цены при оплате наличными — в вашей лаборатории и регионе цены могут отличаться."
+          }
+        }
+      }
+    },
     "Evening 20:00": {
       "localizations": {
         "ru": {
@@ -3087,6 +3677,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Каждый вечер"
+          }
+        }
+      }
+    },
+    "Every tracked value is currently in range — there's nothing for an Action Plan to suggest.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все отслеживаемые значения сейчас в норме — плану действий пока нечего предложить."
           }
         }
       }
@@ -3181,6 +3781,16 @@
         }
       }
     },
+    "Export as Calendar File": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Экспортировать как файл календаря"
+          }
+        }
+      }
+    },
     "Export as PDF": {
       "localizations": {
         "ru": {
@@ -3201,12 +3811,32 @@
         }
       }
     },
+    "Export ↗": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Экспорт ↗"
+          }
+        }
+      }
+    },
     "Face ID": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Face ID"
+          }
+        }
+      }
+    },
+    "Face ID app lock": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Блокировка Face ID"
           }
         }
       }
@@ -3227,6 +3857,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Наследственность"
+          }
+        }
+      }
+    },
+    "Fast 10–12 hours — water is fine": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Голод 10–12 часов — воду можно"
+          }
+        }
+      }
+    },
+    "Fasting Required": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Требуется голодание"
           }
         }
       }
@@ -3281,6 +3931,16 @@
         }
       }
     },
+    "Folate": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Фолат"
+          }
+        }
+      }
+    },
     "Free AI reports used": {
       "localizations": {
         "ru": {
@@ -3297,6 +3957,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Частота приёма"
+          }
+        }
+      }
+    },
+    "GEMOCODE · HEALTH REPORT": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GEMOCODE · ОТЧЁТ О ЗДОРОВЬЕ"
           }
         }
       }
@@ -3421,6 +4091,16 @@
         }
       }
     },
+    "Gemocode is locked": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gemocode заблокирован"
+          }
+        }
+      }
+    },
     "Gemocode is not directed at children under 13, and we do not knowingly collect information from them. Because Gemocode has no account system and no server-side health data collection, there is no personal information for us to identify as belonging to a child in the first place, and the AI relay's anonymous metadata carries no age or identity signal either.": {
       "localizations": {
         "ru": {
@@ -3487,6 +4167,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Пока напоминание активно, Gemocode будет отправлять локальное уведомление каждый день в это время."
+          }
+        }
+      }
+    },
+    "Gemocode turns your out-of-range lab values into a concrete plan — supplement doses, timing, and when to retest.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gemocode превращает отклонения в анализах в конкретный план — дозы добавок, время приёма и сроки пересдачи."
           }
         }
       }
@@ -3607,6 +4297,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Сформировано %@"
+          }
+        }
+      }
+    },
+    "Generated %@ · structured PDF for your doctor": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Создан %@ · структурный PDF для врача"
           }
         }
       }
@@ -3797,6 +4497,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Импорт из Apple Health копирует ваши последние показания оттуда. Когда включена функция «Сохранять новые показатели в Apple Health», показатели, добавленные в Gemocode, также записываются в приложение «Здоровье». Резервная копия — это единый JSON-файл, зашифрованный кодовой фразой и содержащий всё, включая вложения; его можно хранить где угодно и восстановить позже (напоминания нужно включить заново после восстановления). Удаление стирает все данные с этого устройства."
+          }
+        }
+      }
+    },
+    "Health report": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отчёт о здоровье"
           }
         }
       }
@@ -4031,6 +4741,16 @@
         }
       }
     },
+    "In This Draw": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В этот забор"
+          }
+        }
+      }
+    },
     "In range · %lld": {
       "localizations": {
         "ru": {
@@ -4081,12 +4801,32 @@
         }
       }
     },
+    "Interactions to Review": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проверьте взаимодействия"
+          }
+        }
+      }
+    },
     "Iron": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Железо"
+          }
+        }
+      }
+    },
+    "Iron bisglycinate": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Железа бисглицинат"
           }
         }
       }
@@ -4107,6 +4847,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Боль в суставах и мышцах"
+          }
+        }
+      }
+    },
+    "Keep Watching": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Под наблюдением"
           }
         }
       }
@@ -4201,12 +4951,32 @@
         }
       }
     },
+    "Language changes apply immediately to most screens; restart the app to apply everywhere. Retest reminders mirror your notification permission — enable notifications in Settings to receive them.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Изменения языка применяются сразу на большинстве экранов; перезапустите приложение, чтобы применить везде. Напоминания о пересдаче отражают разрешение на уведомления — включите уведомления в Настройках, чтобы их получать."
+          }
+        }
+      }
+    },
     "Last tested %@": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Последний анализ: %@"
+          }
+        }
+      }
+    },
+    "Last: %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Последний: %@"
           }
         }
       }
@@ -4297,6 +5067,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Загрузка тарифов…"
+          }
+        }
+      }
+    },
+    "Local": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Локально"
           }
         }
       }
@@ -4995,6 +5775,16 @@
         }
       }
     },
+    "No Medication Names Recognized": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Названия препаратов не распознаны"
+          }
+        }
+      }
+    },
     "No Medications": {
       "localizations": {
         "ru": {
@@ -5095,6 +5885,16 @@
         }
       }
     },
+    "No interactions found with %@.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Взаимодействий с %@ не найдено."
+          }
+        }
+      }
+    },
     "No new readings found in Apple Health.": {
       "localizations": {
         "ru": {
@@ -5151,6 +5951,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Полдень"
+          }
+        }
+      }
+    },
+    "Not Due — Don't Pay Yet": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не пора — не платите зря"
           }
         }
       }
@@ -5255,6 +6065,16 @@
         }
       }
     },
+    "Nothing to Flag Right Now": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сейчас нечего отмечать"
+          }
+        }
+      }
+    },
     "Now": {
       "localizations": {
         "ru": {
@@ -5275,6 +6095,16 @@
         }
       }
     },
+    "OUT OF RANGE": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ВНЕ ДИАПАЗОНА"
+          }
+        }
+      }
+    },
     "Omega-3": {
       "localizations": {
         "ru": {
@@ -5291,6 +6121,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "1 раз в день"
+          }
+        }
+      }
+    },
+    "One skipped test\n": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Один пропущенный тест\n"
           }
         }
       }
@@ -5325,12 +6165,42 @@
         }
       }
     },
+    "Open": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть"
+          }
+        }
+      }
+    },
     "Open Gemocode": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Открыть Gemocode"
+          }
+        }
+      }
+    },
+    "Opens read-only emergency medical information without unlocking Gemocode.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открывает медкарту в режиме только для чтения без разблокировки Gemocode."
+          }
+        }
+      }
+    },
+    "Opens supplement suggestions and retest dates for your out-of-range values.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открывает предложения добавок и даты пересдачи для отклонений в анализах."
           }
         }
       }
@@ -5361,6 +6231,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Открывает сканер отчётов."
+          }
+        }
+      }
+    },
+    "Opens this appointment for editing.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открывает запись для редактирования."
           }
         }
       }
@@ -5451,6 +6331,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "PDF-файл"
+          }
+        }
+      }
+    },
+    "Page 1 · educational, not diagnostic": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Стр. 1 · образовательно, не диагноз"
           }
         }
       }
@@ -5645,6 +6535,36 @@
         }
       }
     },
+    "Plain-words summary of all %lld values": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сводка всех %lld значений простыми словами"
+          }
+        }
+      }
+    },
+    "Plain-words summary of your %lld value": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сводка вашего %lld значения простыми словами"
+          }
+        }
+      }
+    },
+    "Plan Added": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "План добавлен"
+          }
+        }
+      }
+    },
     "Possible Interactions": {
       "localizations": {
         "ru": {
@@ -5691,6 +6611,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Подготовка PDF…"
+          }
+        }
+      }
+    },
+    "Preparing…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подготовка…"
+          }
+        }
+      }
+    },
+    "Prescriptions": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Рецепты"
           }
         }
       }
@@ -6249,12 +7189,32 @@
         }
       }
     },
+    "Retest reminders": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Напоминания о пересдаче"
+          }
+        }
+      }
+    },
     "Retest schedule & reminders": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "График пересдач и напоминания"
+          }
+        }
+      }
+    },
+    "Retest schedule rebuilt — next due %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "График пересдач обновлён — следующий %@"
           }
         }
       }
@@ -6299,6 +7259,16 @@
         }
       }
     },
+    "Review each one against the original photo before adding — text recognition can make mistakes.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сверьте каждый пункт с исходным фото перед добавлением — распознавание текста может ошибаться."
+          }
+        }
+      }
+    },
     "Review each value against the original document before adding — text recognition can make mistakes.": {
       "localizations": {
         "ru": {
@@ -6315,6 +7285,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Обычное"
+          }
+        }
+      }
+    },
+    "SUMMARY": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "СВОДКА"
           }
         }
       }
@@ -6399,6 +7379,16 @@
         }
       }
     },
+    "Scan a Prescription": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сканировать рецепт"
+          }
+        }
+      }
+    },
     "Scan a Report": {
       "localizations": {
         "ru": {
@@ -6459,12 +7449,32 @@
         }
       }
     },
+    "Scanning for medication names…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Распознаём названия препаратов…"
+          }
+        }
+      }
+    },
     "Scanning…": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Сканирование…"
+          }
+        }
+      }
+    },
+    "Scans, plain-words analysis, and your action plan — decided for you after every report.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сканы, анализ простыми словами и план действий — после каждого отчёта."
           }
         }
       }
@@ -6669,6 +7679,16 @@
         }
       }
     },
+    "Share PDF": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отправить PDF"
+          }
+        }
+      }
+    },
     "Share as Text": {
       "localizations": {
         "ru": {
@@ -6715,6 +7735,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Поделиться карточкой результата"
+          }
+        }
+      }
+    },
+    "Show %lld more in-range values": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Показать ещё %lld значений в норме"
+          }
+        }
+      }
+    },
+    "Show %lld more ↗": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ещё %lld ↗"
+          }
+        }
+      }
+    },
+    "Show the trend": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Показать тренд"
           }
         }
       }
@@ -6799,6 +7849,16 @@
         }
       }
     },
+    "Start — Worth Discussing With Your Doctor": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Начать — обсудите с врачом"
+          }
+        }
+      }
+    },
     "Started at %@ %@": {
       "localizations": {
         "ru": {
@@ -6859,12 +7919,32 @@
         }
       }
     },
+    "Suggested by your Action Plan": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Предложено планом действий"
+          }
+        }
+      }
+    },
     "Supplements": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Добавки"
+          }
+        }
+      }
+    },
+    "Supplements — from your plan": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавки — из вашего плана"
           }
         }
       }
@@ -6925,6 +8005,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Систолическое давление"
+          }
+        }
+      }
+    },
+    "Take Photo": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать фото"
           }
         }
       }
@@ -7069,6 +8159,16 @@
         }
       }
     },
+    "The event could not be saved to your calendar.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось сохранить событие в календарь."
+          }
+        }
+      }
+    },
     "The rules for using Gemocode, including its educational (not medical) nature and how Premium billing works.": {
       "localizations": {
         "ru": {
@@ -7155,6 +8255,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Это действие нельзя отменить."
+          }
+        }
+      }
+    },
+    "This device doesn't have a camera available. Use Choose from Library instead.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На этом устройстве нет камеры. Используйте «Выбрать из галереи»."
           }
         }
       }
@@ -7389,6 +8499,16 @@
         }
       }
     },
+    "Tracking lab overdue — retest %@ checks if it's working": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Контрольный тест просрочен — пересдача %@ покажет эффект"
+          }
+        }
+      }
+    },
     "Tracking vitals, medications, symptoms, and goals — with your health score, trends, and backups — stays free. Your first AI scan and health report is included free; Premium unlocks unlimited lab report scanning, AI reports, chat, and AI-assisted entry.": {
       "localizations": {
         "ru": {
@@ -7455,6 +8575,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Динамика"
+          }
+        }
+      }
+    },
+    "Trends, medications and questions to ask": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тренды, препараты и вопросы врачу"
           }
         }
       }
@@ -7559,6 +8689,26 @@
         }
       }
     },
+    "Understood — %lld entries found": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Понято — найдено %lld записи"
+          }
+        }
+      }
+    },
+    "Understood — 1 entry found": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Понято — найдена 1 запись"
+          }
+        }
+      }
+    },
     "Unit": {
       "localizations": {
         "ru": {
@@ -7629,6 +8779,16 @@
         }
       }
     },
+    "Unlimited scans, decoded in seconds": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Безлимитные сканы — расшифровка за секунды"
+          }
+        }
+      }
+    },
     "Unlock": {
       "localizations": {
         "ru": {
@@ -7649,6 +8809,16 @@
         }
       }
     },
+    "Unlock Your Action Plan": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Откройте план действий"
+          }
+        }
+      }
+    },
     "Unlock unlimited AI reports": {
       "localizations": {
         "ru": {
@@ -7665,6 +8835,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Разблокировать через %@"
+          }
+        }
+      }
+    },
+    "Unlock your Action Plan with Premium. Gemocode turns your out-of-range lab values into a concrete plan.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Откройте план действий с Premium. Gemocode превращает отклонения в анализах в конкретный план."
           }
         }
       }
@@ -7789,6 +8969,26 @@
         }
       }
     },
+    "View %@ lab detail": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Просмотреть анализ %@"
+          }
+        }
+      }
+    },
+    "View Action Plan": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Посмотреть план действий"
+          }
+        }
+      }
+    },
     "View Original": {
       "localizations": {
         "ru": {
@@ -7849,12 +9049,52 @@
         }
       }
     },
+    "Vitals & labs, read-only": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Показатели и анализы, только чтение"
+          }
+        }
+      }
+    },
+    "Vitamin B12": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Витамин B12"
+          }
+        }
+      }
+    },
     "Vitamin D": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Витамин D"
+          }
+        }
+      }
+    },
+    "Vitamin D3": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Витамин D3"
+          }
+        }
+      }
+    },
+    "We couldn't find any medication names in that photo. Try a clearer photo of the label, or add it manually instead.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось распознать названия препаратов на этом фото. Попробуйте сделать снимок чётче или добавьте препарат вручную."
           }
         }
       }
@@ -8009,6 +9249,16 @@
         }
       }
     },
+    "What This Scan Changed": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Что изменил этот скан"
+          }
+        }
+      }
+    },
     "What We Never Collect": {
       "localizations": {
         "ru": {
@@ -8115,6 +9365,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Достижения"
+          }
+        }
+      }
+    },
+    "Working — %@ in range since started": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Работает — %@ в норме с начала приёма"
           }
         }
       }
@@ -8289,6 +9549,16 @@
         }
       }
     },
+    "Your Name": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ваше имя"
+          }
+        }
+      }
+    },
     "Your Profile": {
       "localizations": {
         "ru": {
@@ -8345,6 +9615,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Первый AI-скан и отчёт"
+          }
+        }
+      }
+    },
+    "Your first report is free — this one used your lifetime trial.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Первый отчёт бесплатный — это был ваш пробный."
+          }
+        }
+      }
+    },
+    "Your health records stay behind %@.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ваши медданные — за %@."
           }
         }
       }
@@ -8429,12 +9719,32 @@
         }
       }
     },
+    "checked at %@ draw/retest": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "проверка при заборе/пересдаче %@"
+          }
+        }
+      }
+    },
     "cm": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "см"
+          }
+        }
+      }
+    },
+    "daily": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ежедневно"
           }
         }
       }
@@ -8529,6 +9839,16 @@
         }
       }
     },
+    "empty stomach + vitamin C": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "натощак + витамин C"
+          }
+        }
+      }
+    },
     "every %lld month%@": {
       "localizations": {
         "ru": {
@@ -8559,12 +9879,42 @@
         }
       }
     },
+    "every other day": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "через день"
+          }
+        }
+      }
+    },
+    "from %@ scan": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "по скану %@"
+          }
+        }
+      }
+    },
     "high >%@": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "выше >%@"
+          }
+        }
+      }
+    },
+    "lab range %@–%@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "диапазон %@–%@"
           }
         }
       }
@@ -8595,6 +9945,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "последний год"
+          }
+        }
+      }
+    },
+    "linked to %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "связано с %@"
           }
         }
       }
@@ -8639,6 +9999,16 @@
         }
       }
     },
+    "no supplement — retest %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "без добавок — пересдача %@"
+          }
+        }
+      }
+    },
     "normal": {
       "localizations": {
         "ru": {
@@ -8665,6 +10035,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "из 100"
+          }
+        }
+      }
+    },
+    "pays for a year.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "окупает год."
+          }
+        }
+      }
+    },
+    "retest %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "пересдача %@"
           }
         }
       }
@@ -8709,12 +10099,42 @@
         }
       }
     },
+    "supplement suggested": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "предложена добавка"
+          }
+        }
+      }
+    },
     "tablets": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "таблетки"
+          }
+        }
+      }
+    },
+    "testing now wastes ~$%lld est.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "сдать сейчас — потратить ~$%lld впустую (ориент.)"
+          }
+        }
+      }
+    },
+    "the typical range": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "типичный диапазон"
           }
         }
       }
@@ -8739,6 +10159,36 @@
         }
       }
     },
+    "with a fatty meal": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "с жирной пищей"
+          }
+        }
+      }
+    },
+    "your current medications": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "текущими препаратами"
+          }
+        }
+      }
+    },
+    "your passcode": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "вашим паролем"
+          }
+        }
+      }
+    },
     "·": {
       "localizations": {
         "ru": {
@@ -8755,6 +10205,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "«%@»"
+          }
+        }
+      }
+    },
+    "↗ up from %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "↗ рост с %@"
+          }
+        }
+      }
+    },
+    "↘ down from %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "↘ снижение с %@"
+          }
+        }
+      }
+    },
+    "✓ Read": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ Считано"
+          }
+        }
+      }
+    },
+    "✓ logged": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ записано"
           }
         }
       }

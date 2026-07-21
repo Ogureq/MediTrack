@@ -1,7 +1,18 @@
 import SwiftUI
 
 /// The lock / login panel shown over the app when the lock is engaged.
-/// Offers passcode entry, Face ID, and a "Remember me" option.
+///
+/// Face ID (or Touch ID) is the primary path when enabled and available: a
+/// filled "Unlock with Face ID" pill re-triggers biometrics, with a quiet
+/// "Enter Passcode" link below as a fallback that reveals the manual
+/// passcode field. Devices without usable biometrics show the passcode
+/// field as the primary (and only) path instead, with the same filled pill
+/// now labeled "Enter Passcode" and acting as the submit button.
+///
+/// A small "Medical ID" link at the bottom presents the read-only emergency
+/// card in a sheet — first responders can reach it without unlocking the
+/// app. All lockout/attempt/"Remember me" semantics live in `AppLock` and
+/// are untouched here; this file only changes presentation.
 struct LoginView: View {
     @ObservedObject var lock: AppLock
 
@@ -9,10 +20,40 @@ struct LoginView: View {
     @State private var rememberMe = false
     @State private var passcode = ""
     @State private var shake = false
+    /// True once the user taps the quiet "Enter Passcode" fallback link
+    /// while Face ID/Touch ID is the primary path shown — reveals the
+    /// passcode field and switches to the passcode-submit CTA.
+    @State private var showPasscodeFallback = false
+    @State private var showingMedicalID = false
     @FocusState private var passcodeFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
 
     private var canSubmit: Bool { passcode.count >= 4 }
+
+    /// True when biometrics is the primary unlock path on first appearance
+    /// — the passcode field is a fallback in that case. False (passcode is
+    /// primary) when biometrics is off or unavailable on this device.
+    private var biometricsPrimary: Bool {
+        lock.biometricsEnabled && AppLock.biometricsAvailable
+    }
+
+    /// Whichever path is actually being presented right now.
+    private var isPasscodeMode: Bool {
+        !biometricsPrimary || showPasscodeFallback
+    }
+
+    private var glyphSystemImage: String {
+        guard biometricsPrimary else { return "lock.fill" }
+        return AppLock.biometryLabel == "Touch ID" ? "touchid" : "faceid"
+    }
+
+    private var lockAuthWord: String {
+        biometricsPrimary ? AppLock.biometryLabel : String(localized: "your passcode")
+    }
+
+    private var lockSubtitle: LocalizedStringKey {
+        "Your health records stay behind \(lockAuthWord)."
+    }
 
     var body: some View {
         ZStack {
@@ -24,78 +65,105 @@ struct LoginView: View {
                         RoundedRectangle(cornerRadius: 24, style: .continuous)
                             .strokeBorder(Editorial.controlBorder(colorScheme), lineWidth: 1.5)
                             .frame(width: 76, height: 76)
-                        Image(systemName: "cross.case.fill")
+                        Image(systemName: glyphSystemImage)
                             .font(.system(size: 32, weight: .medium))
                             .foregroundStyle(Editorial.ink(colorScheme))
                     }
                     .accessibilityHidden(true)
 
-                    Text("Welcome Back")
+                    Text("Gemocode is locked")
                         .font(.system(size: 26, weight: .regular))
                         .tracking(-0.4)
                         .foregroundStyle(Editorial.ink(colorScheme))
-                    Text("Sign in to view your medical data.")
+                    Text(lockSubtitle)
                         .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(Editorial.muted(colorScheme))
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: 250)
                 }
+                .accessibilityElement(children: .combine)
 
-                if lock.hasPasscode {
+                if isPasscodeMode, lock.hasPasscode {
                     passcodeField
                 }
 
                 // Ticks every second so the countdown text and the disabled
-                // Unlock button both clear on their own once the lockout
+                // submit button both clear on their own once the lockout
                 // expires, without requiring another user action.
                 TimelineView(.periodic(from: .now, by: 1)) { _ in
                     let remaining = lock.lockoutRemainingSeconds
 
-                    if remaining > 0 {
-                        Text("Too many attempts. Try again in \(remaining)s.")
-                            .font(.caption)
-                            .foregroundStyle(Editorial.tagBad(colorScheme))
-                            .transition(.opacity)
-                    } else if let error = lock.lastError {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundStyle(Editorial.tagBad(colorScheme))
-                            .transition(.opacity)
-                    }
-
-                    Toggle(isOn: $rememberMe) {
-                        Label("Remember me", systemImage: "checkmark.shield")
-                            .font(.subheadline)
-                    }
-                    .tint(Editorial.tagGood(colorScheme))
-
-                    if lock.hasPasscode {
-                        Button {
-                            submitPasscode()
-                        } label: {
-                            Label("Unlock", systemImage: "lock.open.fill")
+                    VStack(spacing: 14) {
+                        if remaining > 0 {
+                            Text("Too many attempts. Try again in \(remaining)s.")
+                                .font(.caption)
+                                .foregroundStyle(Editorial.tagBad(colorScheme))
+                                .transition(.opacity)
+                        } else if let error = lock.lastError {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundStyle(Editorial.tagBad(colorScheme))
+                                .transition(.opacity)
                         }
-                        .buttonStyle(GlassButtonStyle())
-                        .disabled(!canSubmit || remaining > 0)
-                    }
-                }
 
-                if lock.biometricsEnabled && AppLock.biometricsAvailable {
-                    Button {
-                        Task { await lock.authenticateWithBiometrics(remember: rememberMe) }
-                    } label: {
-                        Label(
-                            "Unlock with \(AppLock.biometryLabel)",
-                            systemImage: AppLock.biometryLabel == "Touch ID" ? "touchid" : "faceid"
-                        )
+                        if isPasscodeMode {
+                            if lock.hasPasscode {
+                                Button {
+                                    submitPasscode()
+                                } label: {
+                                    Text("Enter Passcode")
+                                }
+                                .buttonStyle(LockUnlockButtonStyle())
+                                .disabled(!canSubmit || remaining > 0)
+                            }
+                        } else {
+                            Button {
+                                Task { await lock.authenticateWithBiometrics(remember: rememberMe) }
+                            } label: {
+                                Text("Unlock with \(AppLock.biometryLabel)")
+                            }
+                            .buttonStyle(LockUnlockButtonStyle())
+
+                            if lock.hasPasscode {
+                                Button {
+                                    showPasscodeFallback = true
+                                    passcodeFocused = true
+                                } label: {
+                                    Text("Enter Passcode")
+                                        .font(.system(size: 13, weight: .medium))
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(Editorial.muted(colorScheme))
+                            }
+                        }
+
+                        Toggle(isOn: $rememberMe) {
+                            Label("Remember me", systemImage: "checkmark.shield")
+                                .font(.subheadline)
+                        }
+                        .tint(Editorial.tagGood(colorScheme))
                     }
-                    .buttonStyle(GlassButtonStyle())
                 }
             }
             .padding(24)
             .frame(maxWidth: 340)
             .offset(x: shake ? -8 : 0)
             .animation(.default, value: lock.lastError != nil)
+
+            VStack {
+                Spacer()
+                Button {
+                    showingMedicalID = true
+                } label: {
+                    Text("Medical ID")
+                        .font(.system(size: 12, weight: .regular))
+                        .underline()
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Editorial.muted(colorScheme))
+                .accessibilityHint("Opens read-only emergency medical information without unlocking Gemocode.")
+                .padding(.bottom, 20)
+            }
         }
         .onAppear {
             rememberMe = rememberPreference
@@ -105,6 +173,11 @@ struct LoginView: View {
                 Task { await lock.authenticateWithBiometrics(remember: rememberMe) }
             } else if lock.hasPasscode {
                 passcodeFocused = true
+            }
+        }
+        .sheet(isPresented: $showingMedicalID) {
+            NavigationStack {
+                MedicalIDView()
             }
         }
     }
@@ -136,6 +209,32 @@ struct LoginView: View {
             withAnimation(.spring(response: 0.2, dampingFraction: 0.3)) { shake = true }
             withAnimation(.spring(response: 0.2, dampingFraction: 0.3).delay(0.1)) { shake = false }
         }
+    }
+}
+
+/// The one filled CTA on the lock screen: `Editorial.ink` fill with
+/// `Editorial.canvas` text (black-on-white in light mode, light-on-dark in
+/// dark mode) — the same "ink fill / canvas text" chrome `PillTabBar`
+/// already uses elsewhere. This is a deliberate, mockup-driven exception to
+/// the app-wide "outlined buttons only" rule (`GlassButtonStyle`); it is
+/// intentionally NOT accent-colored.
+private struct LockUnlockButtonStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var colorScheme
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(Editorial.canvas(colorScheme))
+            .multilineTextAlignment(.center)
+            .padding(.vertical, 14)
+            .padding(.horizontal, 32)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Editorial.ink(colorScheme))
+                    .opacity(configuration.isPressed ? 0.85 : 1)
+            )
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.spring(duration: 0.2), value: configuration.isPressed)
     }
 }
 

@@ -27,6 +27,7 @@ struct MedicalIDView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
+                screenHeader
                 heroCard
                 allergiesSection
                 medicationsSection
@@ -42,6 +43,7 @@ struct MedicalIDView: View {
         }
         .ambientScreen()
         .navigationTitle("Medical ID")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 ShareLink(item: shareText) {
@@ -50,6 +52,29 @@ struct MedicalIDView: View {
                 .accessibilityLabel("Share medical ID")
             }
         }
+    }
+
+    // MARK: - Screen header
+
+    /// Large in-content title (the system nav bar is `.inline` above) plus
+    /// the "Emergency" tag and the lock-screen-reachability subtitle from
+    /// the redesign — this card is meant to read as a first-responder
+    /// document, not just another settings screen.
+    private var screenHeader: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text("Medical ID")
+                    .font(.system(size: 28, weight: .regular))
+                    .tracking(-0.4)
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                EditorialTag("Emergency", kind: .bad)
+            }
+            Text("Available from the lock screen for first responders — even when the app is locked.")
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(Editorial.muted(colorScheme))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Hero card
@@ -308,7 +333,7 @@ struct MedicalIDView: View {
                                 .frame(width: 34, height: 34)
                                 .background(Editorial.tagGood(colorScheme), in: Circle())
                         }
-                        .accessibilityLabel("Call \(profile.emergencyContactName)")
+                        .accessibilityLabel("Call emergency contact")
                     }
                 }
                 .accessibilityElement(children: .combine)

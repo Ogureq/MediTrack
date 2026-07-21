@@ -7,11 +7,103 @@ struct GoalsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Query(sort: \HealthGoal.createdAt, order: .reverse) private var goals: [HealthGoal]
     @Query private var vitals: [VitalSample]
+    @Query(sort: \MedicalReport.date, order: .reverse) private var reports: [MedicalReport]
 
     @State private var showingAdd = false
 
+    /// Every catalog-tracked lab's re-test status, per `RetestSchedule.items`
+    /// — cached the same way `RetestScheduleView`/`DashboardView` cache it
+    /// (`.task(id: retestSignature)`), so `labLinkID(for:)`'s lookups and the
+    /// footer's `RetestSchedule.nextDraw` call never re-flatten every
+    /// report's lab results per render.
+    @State private var retestItems: [RetestItem] = []
+
+    private var retestSignature: String {
+        "\(reports.count)-\(reports.reduce(0) { $0 + $1.labResults.count })"
+    }
+
     private var activeGoals: [HealthGoal] { goals.filter(\.isActive) }
     private var completedGoals: [HealthGoal] { goals.filter { !$0.isActive } }
+
+    // MARK: - Goal -> lab linkage (computed only, no schema change)
+    //
+    // `HealthGoal` has no free-text title, only `type: VitalType` and a
+    // `note`. Only `bloodGlucose` has a natural, same-unit `LabCatalog`
+    // correspondent (fastingGlucose, both mg/dL) to fall back to directly;
+    // every other goal's link (if any) comes from matching `note` against
+    // this keyword table — English + a small Russian set, longest-token
+    // wins, same mechanics as `MedicationLabLinks.classKey(for:)`.
+    private static let goalLabKeywordTokens: [(token: String, labID: String)] = [
+        ("vitamin d", "vitaminD"), ("витамин d", "vitaminD"), ("витамин д", "vitaminD"),
+        ("hba1c", "hba1c"), ("hb a1c", "hba1c"), ("гликированный гемоглобин", "hba1c"),
+        ("ldl", "ldlCholesterol"), ("лпнп", "ldlCholesterol"),
+        ("hdl", "hdlCholesterol"), ("лпвп", "hdlCholesterol"),
+        ("cholesterol", "totalCholesterol"), ("холестерин", "totalCholesterol"),
+        ("triglyceride", "triglycerides"), ("триглицерид", "triglycerides"),
+        ("ferritin", "ferritin"), ("ферритин", "ferritin"),
+        ("tsh", "tsh"), ("ттг", "tsh"),
+        ("creatinine", "creatinine"), ("креатинин", "creatinine"),
+        ("uric acid", "uricAcid"), ("мочевая кислота", "uricAcid"),
+        ("magnesium", "magnesium"), ("магний", "magnesium"),
+        ("potassium", "potassium"), ("калий", "potassium"),
+        ("glucose", "fastingGlucose"), ("глюкоз", "fastingGlucose"),
+    ]
+
+    /// The `LabCatalog` id this goal is checked against, or `nil` when it
+    /// has none — a plain vital-only goal (e.g. weight, sleep), which keeps
+    /// its existing manual progress caption.
+    private func labLinkID(for goal: HealthGoal) -> String? {
+        let lower = goal.note.lowercased()
+        var best: (token: String, labID: String)?
+        for entry in Self.goalLabKeywordTokens where lower.contains(entry.token) {
+            if best == nil || entry.token.count > best!.token.count {
+                best = entry
+            }
+        }
+        if let best { return best.labID }
+        if goal.type == .bloodGlucose { return "fastingGlucose" }
+        return nil
+    }
+
+    /// The cached `RetestItem` for this goal's linked lab, or `nil` when the
+    /// goal isn't lab-linked, or that lab has never been tested (so
+    /// `RetestSchedule` has no due date to report yet).
+    private func linkedRetestItem(for goal: HealthGoal) -> RetestItem? {
+        guard let labID = labLinkID(for: goal) else { return nil }
+        return retestItems.first { $0.id.caseInsensitiveCompare(labID) == .orderedSame }
+    }
+
+    /// "checked at %@ draw/retest" caption for a lab-linked goal, or `nil`
+    /// for an unlinked goal (which keeps its manual `dueText` caption).
+    private func retestCaption(for goal: HealthGoal) -> String? {
+        guard let item = linkedRetestItem(for: goal) else { return nil }
+        let dateText = item.dueDate.formatted(.dateTime.month(.abbreviated).day())
+        return String(format: String(localized: "checked at %@ draw/retest"), dateText)
+    }
+
+    /// "All N goals get verified by the [date] draw — no extra tests
+    /// needed." — shown ONLY when there's at least one lab-linked active
+    /// goal AND every one of those goals' labs falls inside the SAME
+    /// `RetestSchedule.nextDraw` bundle; omitted otherwise (e.g. two linked
+    /// goals due on different, non-bundled draws) so this never overstates
+    /// what a single visit actually covers.
+    private var drawBundleFooterText: String? {
+        let linkedItems = activeGoals.compactMap(linkedRetestItem(for:))
+        guard !linkedItems.isEmpty, let bundle = RetestSchedule.nextDraw(items: retestItems, now: .now) else {
+            return nil
+        }
+        let bundleIDs = Set(bundle.items.map(\.id))
+        guard linkedItems.allSatisfy({ bundleIDs.contains($0.id) }) else { return nil }
+
+        let dateText = bundle.date.formatted(.dateTime.month(.abbreviated).day())
+        if linkedItems.count == 1 {
+            return String(format: String(localized: "1 goal gets verified by the %@ draw — no extra tests needed."), dateText)
+        }
+        return String(
+            format: String(localized: "All %1$lld goals get verified by the %2$@ draw — no extra tests needed."),
+            linkedItems.count, dateText
+        )
+    }
 
     var body: some View {
         Group {
@@ -26,11 +118,28 @@ struct GoalsView: View {
                         .frame(maxWidth: 220)
                 }
             } else {
+                // The footer's `RetestSchedule.nextDraw` walk plus every
+                // row's `linkedRetestItem(for:)` lookup all read the same
+                // cached `retestItems` — nothing here re-flattens reports.
+                let footerText = drawBundleFooterText
                 List {
+                    Section {
+                        Text("Each goal is checked automatically by its lab or vital.")
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(Editorial.muted(colorScheme))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+
                     if !activeGoals.isEmpty {
                         Section {
                             ForEach(activeGoals) { goal in
-                                GoalProgressRow(goal: goal, latest: latestValue(for: goal.type))
+                                GoalProgressRow(
+                                    goal: goal,
+                                    latest: latestValue(for: goal.type),
+                                    retestCaption: retestCaption(for: goal)
+                                )
                                     .ledgerRow()
                                     .contextMenu {
                                         Button {
@@ -52,7 +161,11 @@ struct GoalsView: View {
                     if !completedGoals.isEmpty {
                         Section {
                             ForEach(completedGoals) { goal in
-                                GoalProgressRow(goal: goal, latest: latestValue(for: goal.type))
+                                GoalProgressRow(
+                                    goal: goal,
+                                    latest: latestValue(for: goal.type),
+                                    retestCaption: retestCaption(for: goal)
+                                )
                                     .ledgerRow()
                             }
                             .onDelete { offsets in
@@ -62,6 +175,13 @@ struct GoalsView: View {
                             MicroLabel("Completed")
                         }
                         .listRowBackground(GlassRowBackground())
+                        .listRowSeparator(.hidden)
+                    }
+                    if let footerText {
+                        Section {
+                            GoalsDrawBundleFooter(text: footerText)
+                        }
+                        .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                     }
                 }
@@ -83,6 +203,9 @@ struct GoalsView: View {
             .accessibilityLabel("Add goal")
         }
         .sheet(isPresented: $showingAdd) { AddGoalSheet() }
+        .task(id: retestSignature) {
+            retestItems = RetestSchedule.items(reports: reports, now: .now)
+        }
     }
 
     private func latestValue(for type: VitalType) -> Double? {
@@ -152,6 +275,10 @@ struct GoalRow: View {
 private struct GoalProgressRow: View {
     let goal: HealthGoal
     let latest: Double?
+    /// "checked at %@ draw/retest" — set only for a goal `GoalsView` matched
+    /// to a `LabCatalog` test with a known re-test date; `nil` keeps this
+    /// row's existing manual `dueText` caption unchanged.
+    var retestCaption: String? = nil
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -219,11 +346,37 @@ private struct GoalProgressRow: View {
             HStack {
                 Text(progressLine)
                 Spacer(minLength: 8)
-                Text(dueText)
+                Text(retestCaption ?? dueText)
             }
             .font(.system(size: 11, weight: .regular))
             .foregroundStyle(Editorial.muted(colorScheme))
         }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Inset-card footer: "All N goals get verified by the [date] draw — no
+/// extra tests needed." Only ever built by `GoalsView.drawBundleFooterText`
+/// when it's actually true — see that computed property for the honesty
+/// gating.
+private struct GoalsDrawBundleFooter: View {
+    let text: String
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "sparkle")
+                .font(.system(size: 11))
+                .foregroundStyle(Editorial.accent(colorScheme))
+                .accessibilityHidden(true)
+            Text(text)
+                .font(.system(size: 11, weight: .regular))
+                .foregroundStyle(Editorial.muted(colorScheme))
+        }
+        .padding(11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .accessibilityElement(children: .combine)
     }
 }

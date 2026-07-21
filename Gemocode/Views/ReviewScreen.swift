@@ -19,6 +19,7 @@ struct ReviewScreen: View {
     @State private var aiError: String?
     @State private var showingAIChat = false
     @State private var showingPaywall = false
+    @State private var showingActionPlan = false
     @ObservedObject private var premiumStore = PremiumStore.shared
     // Observed so the AI card re-evaluates `AISummaryService.isConfigured`
     // the moment a key is added or removed in Profile — the Keychain itself
@@ -79,6 +80,8 @@ struct ReviewScreen: View {
                         // this modifier would otherwise cancel.
                         aiSummaryCard(review: review)
                             .transaction { $0.animation = nil }
+                        actionPlanRow(review: review)
+                            .transaction { $0.animation = nil }
                         findingsGroup(String(localized: "Critical"), severity: .critical, findings: review.criticalFindings)
                             .transaction { $0.animation = nil }
                         findingsGroup(String(localized: "Needs Attention"), severity: .attention, findings: review.attentionFindings)
@@ -123,6 +126,9 @@ struct ReviewScreen: View {
         .sheet(isPresented: $showingPaywall) {
             PaywallView()
         }
+        .sheet(isPresented: $showingActionPlan) {
+            ActionPlanView(review: review)
+        }
     }
 
     /// Keeps one score snapshot per day so the dashboard can chart history.
@@ -155,7 +161,12 @@ struct ReviewScreen: View {
             .map { sample in
                 WidgetVital(name: sample.type.displayName, value: sample.formattedValue, systemImage: sample.type.systemImage)
             }
-        WidgetBridge.update(score: current.score, headline: current.scoreLabel, vitals: widgetVitals)
+        WidgetBridge.update(
+            score: current.score,
+            headline: current.scoreLabel,
+            vitals: widgetVitals,
+            retestItems: RetestSchedule.items(reports: reports, now: .now)
+        )
     }
 
     /// Notifies the user when a freshly *inserted* snapshot's score moved by
@@ -433,6 +444,60 @@ struct ReviewScreen: View {
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
+    }
+
+    /// Entry point to `ActionPlanView` — a premium-labeled ledger row after
+    /// the AI card, mirroring `aiSummaryCard`'s own "Ask about this report"
+    /// button pattern: tapping it opens the plan when premium, or the
+    /// paywall otherwise (presentation only — `ActionPlanView` re-gates
+    /// itself the same way once opened).
+    private func actionPlanRow(review: HealthReview) -> some View {
+        // Only actually run `ActionPlan.generate` when premium — a free user
+        // sees the same locked row regardless, and this avoids computing a
+        // plan just to gate on it (mirrors `aiSummaryCard`'s own
+        // premium-first checks above).
+        let itemCount = premiumStore.isPremium
+            ? ActionPlan.generate(review: review, medications: medications, now: .now).items.count
+            : 0
+
+        return Button {
+            if premiumStore.isPremium {
+                showingActionPlan = true
+            } else {
+                showingPaywall = true
+            }
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Label("Action Plan", systemImage: premiumStore.isPremium ? "checklist" : "lock.fill")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Editorial.ink(colorScheme))
+                    if itemCount > 0 {
+                        Text("\(itemCount) supplement suggestions")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Editorial.muted(colorScheme))
+                    }
+                }
+                Spacer()
+                if !premiumStore.isPremium {
+                    MicroLabel("Premium")
+                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Editorial.muted(colorScheme))
+                    .accessibilityHidden(true)
+            }
+        }
+        .buttonStyle(.plain)
+        .padding()
+        .glassCard()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(premiumStore.isPremium
+            ? String(localized: "Action Plan")
+            : String(localized: "Action Plan, Premium"))
+        .accessibilityHint(premiumStore.isPremium
+            ? String(localized: "Opens supplement suggestions and retest dates for your out-of-range values.")
+            : String(localized: "Action Plan is a Premium feature. Opens the upgrade screen."))
     }
 
     /// A short, caller-built profile description ("42-year-old male;

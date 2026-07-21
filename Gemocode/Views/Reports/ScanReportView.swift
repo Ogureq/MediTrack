@@ -4,6 +4,7 @@ import PhotosUI
 import UniformTypeIdentifiers
 import AVFoundation
 import UIKit
+import PDFKit
 
 /// Single-flag gate for report *creation*. Flip `reportCreation` to `false`
 /// to make scanning free again — that one-line edit is the entire revert of
@@ -98,6 +99,19 @@ struct ScanReportView: View {
     @State private var isExportingPDF = false
     @State private var pdfExportError: String?
     @State private var shareItem: ShareItem?
+    /// Cached once the AI report PDF has been rendered, so both "Share PDF"
+    /// and "Open" reuse the same bytes instead of calling
+    /// `AIReportPDFExporter.render` (and appending a second, duplicate
+    /// `ReportAttachment`) a second time — see `renderAndAttachPDFIfNeeded()`.
+    @State private var renderedPDFData: Data?
+    @State private var showingPDFPreview = false
+    /// Additive: the "In Range" ledger collapses beyond 3 rows until this is
+    /// flipped by the "Show N more" row (see `confirmedLabsSection`).
+    @State private var showAllInRangeValues = false
+    /// Additive: lets the post-save AI stage link straight to the Action
+    /// Plan when the just-saved report actually has an out-of-range value
+    /// (see `savedReportHasOutOfRangeValue` and `aiReportActionButtons`).
+    @State private var showingActionPlanFromScan = false
 
     /// Free users get exactly one AI scan: the same lifetime meter as the
     /// AI Health Analyst report (`AIReportQuota`), since a scan auto-runs
@@ -359,7 +373,9 @@ struct ScanReportView: View {
     /// Every confirmed value gets the shared "name, value, tag, bar" ledger
     /// grammar, grouped into an "Out of Range" ledger (full row: tag + bar +
     /// range caption) and an "In Range" ledger (a quieter, compact row) —
-    /// exactly the two-tier layout the scan-result mockups use.
+    /// exactly the two-tier layout the scan-result mockups use. The header
+    /// card above it, and the "Show N more" collapse on the in-range list
+    /// below, are additive presentation on top of the same evaluated list.
     private var confirmedLabsSection: some View {
         let sex = fetchProfile()?.sex
         let evaluated = confirmedLabs.map { scanned -> (scanned: ScannedLabValue, status: LabStatus, range: ClosedRange<Double>?) in
@@ -374,13 +390,25 @@ struct ScanReportView: View {
         }
         let outOfRange = evaluated.filter { $0.status.isOutOfRange }
         let inRangeList = evaluated.filter { !$0.status.isOutOfRange }
+        let visibleInRange = showAllInRangeValues ? inRangeList : Array(inRangeList.prefix(3))
+        let hiddenInRangeCount = inRangeList.count - visibleInRange.count
+        let priorValues = fetchLatestPriorValues()
+        let supplementSuggestedIDs = supplementSuggestedLabIDs(for: evaluated)
 
         return VStack(alignment: .leading, spacing: 4) {
+            scannedAttachmentHeaderCard(valuesRead: confirmedLabs.count)
+                .padding(.bottom, 12)
+
             if !outOfRange.isEmpty {
                 MicroLabel("Out of range · \(outOfRange.count)")
                 VStack(spacing: 0) {
                     ForEach(outOfRange, id: \.scanned.id) { entry in
-                        confirmedLabRow(entry, compact: false)
+                        confirmedLabRow(
+                            entry,
+                            compact: false,
+                            priorValue: priorValues[entry.scanned.reference.id.lowercased()],
+                            supplementSuggested: supplementSuggestedIDs.contains(entry.scanned.reference.id.lowercased())
+                        )
                     }
                 }
             }
@@ -388,13 +416,112 @@ struct ScanReportView: View {
                 MicroLabel("In range · \(inRangeList.count)")
                     .padding(.top, outOfRange.isEmpty ? 0 : 16)
                 VStack(spacing: 0) {
-                    ForEach(inRangeList, id: \.scanned.id) { entry in
-                        confirmedLabRow(entry, compact: true)
+                    ForEach(visibleInRange, id: \.scanned.id) { entry in
+                        confirmedLabRow(entry, compact: true, priorValue: nil, supplementSuggested: false)
                     }
+                }
+                if hiddenInRangeCount > 0 {
+                    Button {
+                        withAnimation { showAllInRangeValues = true }
+                    } label: {
+                        Text("Show \(hiddenInRangeCount) more ↗")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Editorial.accent(colorScheme))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 8)
+                    .accessibilityLabel("Show \(hiddenInRangeCount) more in-range values")
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The scan-result header card: a document-style thumbnail, the report
+    /// title/date this save will use (mirrors `save()`'s own title-building —
+    /// see that function's doc comment on why "today" stands in for a real
+    /// document date), a "%lld values read · original kept" line, and a
+    /// small "Read" tag. Shown once at least one value has been confirmed —
+    /// before that there's nothing yet to summarize.
+    private func scannedAttachmentHeaderCard(valuesRead: Int) -> some View {
+        let title = "\(ReportCategory.labReport.displayName) — \(Date.now.formatted(date: .abbreviated, time: .omitted))"
+        return HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Editorial.canvas(colorScheme))
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .strokeBorder(Editorial.controlBorder(colorScheme), lineWidth: 1)
+                Image(systemName: ReportCategory.labReport.systemImage)
+                    .font(.system(size: 15))
+                    .foregroundStyle(Editorial.ink(colorScheme))
+            }
+            .frame(width: 34, height: 44)
+            .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(verbatim: title)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Editorial.ink(colorScheme))
+                Text("\(valuesRead) values read · original kept")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Editorial.muted(colorScheme))
+            }
+            Spacer(minLength: 8)
+            EditorialTag("✓ Read", kind: .good)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(valuesRead) values read, original kept, read")
+    }
+
+    /// One-shot fetch of the latest saved value per lab series across every
+    /// already-saved report — used only to show "up from X" / "down from X"
+    /// on a just-scanned value. Mirrors the seriesKey-based grouping
+    /// `TrendsView`/`LabDetailView` use for their own history lookups, but as
+    /// a single read-only fetch rather than a live `@Query` — this sheet
+    /// deliberately avoids `@Query` (see the type-level comment above), and
+    /// nothing here has been saved yet, so there's no live state to observe.
+    private func fetchLatestPriorValues() -> [String: Double] {
+        let allResults = (try? modelContext.fetch(FetchDescriptor<LabResult>())) ?? []
+        let grouped = Dictionary(grouping: allResults, by: \.seriesKey)
+        return grouped.compactMapValues { $0.max(by: { $0.date < $1.date })?.value }
+    }
+
+    /// Which of the currently-evaluated scanned values would surface an
+    /// `ActionPlan` supplement suggestion, keyed by lowercased catalog id.
+    /// Built by handing a minimal, throwaway `HealthReview` (just today's
+    /// scanned snapshots — no findings/trends/score, none of which
+    /// `ActionPlan.generate` reads) to the real `ActionPlan.generate` rule
+    /// table, so "supplement suggested" always reflects the actual rules in
+    /// `Services/ActionPlan.swift` rather than a duplicated whitelist here.
+    private func supplementSuggestedLabIDs(
+        for evaluated: [(scanned: ScannedLabValue, status: LabStatus, range: ClosedRange<Double>?)]
+    ) -> Set<String> {
+        let snapshots = evaluated.map { entry in
+            LabSnapshot(
+                id: entry.scanned.reference.id.lowercased(),
+                name: entry.scanned.reference.name,
+                unit: entry.scanned.reference.unit,
+                value: entry.scanned.value,
+                date: .now,
+                status: entry.status,
+                range: entry.range,
+                reference: entry.scanned.reference
+            )
+        }
+        let miniReview = HealthReview(
+            generatedAt: .now,
+            hasData: true,
+            score: 0,
+            summary: "",
+            findings: [],
+            trends: [],
+            labSnapshots: snapshots
+        )
+        let plan = ActionPlan.generate(review: miniReview, medications: [], now: .now)
+        return Set(plan.items.map(\.labTestID))
     }
 
     /// A single confirmed-value row. The full (`compact: false`) form shows
@@ -402,10 +529,14 @@ struct ScanReportView: View {
     /// for out-of-range values. The compact form drops the tag (the section
     /// header already says "In Range") and shows a slimmer inline bar next
     /// to the value, matching the quieter in-range ledger in the mockups.
+    /// `priorValue`/`supplementSuggested` only ever feed the full form's
+    /// caption line — the compact in-range rows never pass them.
     @ViewBuilder
     private func confirmedLabRow(
         _ entry: (scanned: ScannedLabValue, status: LabStatus, range: ClosedRange<Double>?),
-        compact: Bool
+        compact: Bool,
+        priorValue: Double?,
+        supplementSuggested: Bool
     ) -> some View {
         if compact {
             HStack(spacing: 12) {
@@ -456,10 +587,43 @@ struct ScanReportView: View {
                         value: entry.scanned.value,
                         accessibilityLabel: Text("\(entry.scanned.reference.name) \(entry.scanned.value.compactFormatted) \(entry.scanned.reference.unit), \(entry.status.label)")
                     )
+                    if let caption = scannedRowCaption(range: range, priorValue: priorValue, currentValue: entry.scanned.value, supplementSuggested: supplementSuggested) {
+                        Text(caption)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Editorial.muted(colorScheme))
+                    }
                 }
             }
             .ledgerRow()
         }
+    }
+
+    /// Builds the "lab range %@–%@ · ↗ up from %@ · supplement suggested"
+    /// caption for one out-of-range confirmed row. Every clause is optional
+    /// and only appears when there's real data behind it: the trend clause
+    /// needs an actual prior saved value for this series, and the supplement
+    /// clause needs this id to actually be one of `ActionPlan`'s rules (see
+    /// `supplementSuggestedLabIDs(for:)`).
+    private func scannedRowCaption(
+        range: ClosedRange<Double>,
+        priorValue: Double?,
+        currentValue: Double,
+        supplementSuggested: Bool
+    ) -> String? {
+        var parts: [String] = [
+            String(localized: "lab range \(range.lowerBound.compactFormatted)–\(range.upperBound.compactFormatted)")
+        ]
+        if let priorValue, priorValue != currentValue {
+            parts.append(
+                currentValue > priorValue
+                    ? String(localized: "↗ up from \(priorValue.compactFormatted)")
+                    : String(localized: "↘ down from \(priorValue.compactFormatted)")
+            )
+        }
+        if supplementSuggested {
+            parts.append(String(localized: "supplement suggested"))
+        }
+        return parts.joined(separator: " · ")
     }
 
     /// The prominent, full-width "Save N values" confirmation — the one
@@ -560,6 +724,40 @@ struct ScanReportView: View {
 
     @ViewBuilder
     private var aiStageBody: some View {
+        switch stage {
+        case .scanning:
+            EmptyView()
+        case .aiGenerating:
+            aiGeneratingHeader
+            aiGeneratingCard
+        case .aiReport:
+            healthReportHeader
+            aiReportPreviewCard
+            aiReportChecklist
+            aiReportActionButtons
+            if savedReportHasOutOfRangeValue {
+                actionPlanLinkButton
+            }
+            if !premiumStore.isPremium {
+                Text("Your first report is free — this one used your lifetime trial.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Editorial.muted(colorScheme))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+            }
+        case .aiFailed(let message):
+            aiGeneratingHeader
+            aiErrorCard(message)
+            doneButton
+        }
+    }
+
+    /// The plain "we're working on it" / "something went wrong" header —
+    /// shown for `.aiGenerating` and `.aiFailed`. The successful `.aiReport`
+    /// stage uses `healthReportHeader` instead (see below): only once a
+    /// verified report exists is there a real generated-at date and PDF to
+    /// describe.
+    private var aiGeneratingHeader: some View {
         VStack(spacing: 10) {
             Image(systemName: "sparkles")
                 .font(.system(size: 26, weight: .semibold))
@@ -573,23 +771,6 @@ struct ScanReportView: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-
-        switch stage {
-        case .scanning:
-            EmptyView()
-        case .aiGenerating:
-            aiGeneratingCard
-        case .aiReport(let report):
-            Group {
-                aiReportCard(report)
-                aiActionButtons
-            }
-        case .aiFailed(let message):
-            Group {
-                aiErrorCard(message)
-                doneButton
-            }
-        }
     }
 
     private var aiGeneratingCard: some View {
@@ -612,47 +793,200 @@ struct ScanReportView: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// Mirrors `ReviewScreen.aiReportContent`'s visual language — overview,
-    /// each section, doctor questions, and the same footer — for a verified
-    /// `AIHealthReport` rendered inline right after a scan.
-    private func aiReportCard(_ report: AIHealthReport) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("AI Health Analyst", systemImage: "sparkles")
-                .font(.subheadline.weight(.semibold))
+    // MARK: - "Health report" presentation (6s)
+
+    /// Left-aligned "Health report" title + "Generated <date> · structured
+    /// PDF for your doctor" subtitle — the editorial-title treatment used
+    /// once a verified `AIHealthReport` actually exists to describe.
+    private var healthReportHeader: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Health report")
+                .font(.system(size: 30, weight: .regular))
+                .tracking(-0.6)
                 .foregroundStyle(Editorial.ink(colorScheme))
-
-            Text(report.overview)
-                .font(.subheadline)
-
-            ForEach(Array(report.sections.enumerated()), id: \.offset) { _, section in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(section.title)
-                        .font(.subheadline.weight(.semibold))
-                    Text(section.body)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .accessibilityElement(children: .combine)
-            }
-
-            if !report.doctorQuestions.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Questions for Your Doctor")
-                        .font(.subheadline.weight(.semibold))
-                    ForEach(Array(report.doctorQuestions.enumerated()), id: \.offset) { _, question in
-                        Label(question, systemImage: "checkmark.circle")
-                            .font(.subheadline)
-                    }
-                }
-            }
-
-            Text("Generated by Claude — informational only, not medical advice.")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+            Text("Generated \(Date.now.formatted(date: .abbreviated, time: .omitted)) · structured PDF for your doctor")
+                .font(.system(size: 13))
+                .foregroundStyle(Editorial.muted(colorScheme))
         }
-        .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard()
+    }
+
+    /// A stylized, non-functional miniature of the real exported PDF — ink
+    /// lines/blocks standing in for its sections, NOT a live render of
+    /// `AIReportPDFExporter`'s actual output. Always paper-white regardless
+    /// of color scheme (it depicts a physical printed page), and hidden from
+    /// VoiceOver since it carries no real information — the two checklist
+    /// lines below it, and the PDF itself via Share/Open, are what's real.
+    private var aiReportPreviewCard: some View {
+        let profileName = fetchProfile()?.name ?? ""
+        let dateText = Date.now.formatted(date: .abbreviated, time: .omitted)
+        let subtitleText = profileName.isEmpty ? dateText : "\(profileName) — \(dateText)"
+
+        return VStack(alignment: .leading, spacing: 5) {
+            Text("GEMOCODE · HEALTH REPORT")
+                .font(.system(size: 8, weight: .semibold))
+                .kerning(0.8)
+                .foregroundStyle(Color(white: 0.55))
+            Text(verbatim: subtitleText)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Color(white: 0.1))
+            Rectangle().fill(Color(white: 0.88)).frame(height: 1).padding(.vertical, 3)
+
+            previewSectionLabel("SUMMARY")
+            previewBar(width: 0.92)
+            previewBar(width: 0.84)
+            previewBar(width: 0.88)
+
+            previewSectionLabel("OUT OF RANGE").padding(.top, 4)
+            HStack(spacing: 4) {
+                Capsule().fill(Editorial.tagWarn(.light)).frame(width: 44, height: 4)
+                Capsule().fill(Color(white: 0.94)).frame(height: 4)
+            }
+            HStack(spacing: 4) {
+                Capsule().fill(Editorial.tagBad(.light)).frame(width: 34, height: 4)
+                Capsule().fill(Color(white: 0.94)).frame(height: 4)
+            }
+
+            previewSectionLabel("DISCUSS WITH YOUR DOCTOR").padding(.top, 4)
+            previewBar(width: 0.9)
+            previewBar(width: 0.7)
+
+            Text("Page 1 · educational, not diagnostic")
+                .font(.system(size: 6))
+                .foregroundStyle(Color(white: 0.55))
+                .padding(.top, 6)
+        }
+        .padding(14)
+        .frame(width: 200, alignment: .leading)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Color.black.opacity(0.08), lineWidth: 1))
+        .shadow(color: .black.opacity(0.10), radius: 10, x: 0, y: 6)
+        .frame(maxWidth: .infinity)
+        .padding(20)
+        .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .accessibilityHidden(true)
+    }
+
+    private func previewSectionLabel(_ text: LocalizedStringKey) -> some View {
+        Text(text)
+            .font(.system(size: 7, weight: .semibold))
+            .kerning(0.6)
+            .foregroundStyle(Color(white: 0.55))
+    }
+
+    private func previewBar(width: CGFloat) -> some View {
+        GeometryReader { geometry in
+            Capsule()
+                .fill(Color(white: 0.94))
+                .frame(width: geometry.size.width * width, height: 4)
+        }
+        .frame(height: 4)
+    }
+
+    /// The two real, data-driven claims about what's inside the PDF —
+    /// everything else on `aiReportPreviewCard` is decorative.
+    private var aiReportChecklist: some View {
+        let valueCount = savedReport?.labResults.count ?? 0
+        let summaryLine = valueCount == 1
+            ? String(localized: "Plain-words summary of your \(valueCount) value")
+            : String(localized: "Plain-words summary of all \(valueCount) values")
+        return VStack(alignment: .leading, spacing: 4) {
+            aiChecklistLine(summaryLine)
+            aiChecklistLine(String(localized: "Trends, medications and questions to ask"))
+        }
+    }
+
+    private func aiChecklistLine(_ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text("✓")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Editorial.tagGood(colorScheme))
+            Text(text)
+                .font(.system(size: 14))
+                .foregroundStyle(Editorial.ink(colorScheme))
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// "Share PDF" (filled) + "Open" (outlined) — both reuse
+    /// `renderAndAttachPDFIfNeeded()`, the same `AIReportPDFExporter.render`
+    /// call and report-attachment write the old single "Save as PDF" button
+    /// used; this only adds a second, in-app preview action on top.
+    private var aiReportActionButtons: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                Button {
+                    shareAIReportPDF()
+                } label: {
+                    Text(isExportingPDF ? "Preparing…" : "Share PDF")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(GlassProminentButtonStyle())
+                .disabled(isExportingPDF)
+
+                Button {
+                    openAIReportPDF()
+                } label: {
+                    Text("Open")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(GlassButtonStyle())
+                .disabled(isExportingPDF)
+            }
+
+            if let pdfExportError {
+                Text(pdfExportError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            doneButton
+        }
+        .sheet(isPresented: $showingPDFPreview) {
+            NavigationStack {
+                PDFKitView(data: renderedPDFData ?? Data())
+                    .ignoresSafeArea(edges: .bottom)
+                    .navigationTitle("AI Health Analysis")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") { showingPDFPreview = false }
+                        }
+                    }
+            }
+        }
+    }
+
+    /// True once the just-saved report has at least one out-of-range lab
+    /// value — the trigger for the "View Action Plan" link right below the
+    /// Share/Open buttons (see `ActionPlanView`, which only ever has
+    /// something to suggest for out-of-range values in the first place).
+    private var savedReportHasOutOfRangeValue: Bool {
+        guard let savedReport else { return false }
+        let sex = fetchProfile()?.sex
+        return savedReport.labResults.contains { result in
+            AnalysisEngine.status(
+                value: result.value,
+                range: result.referenceRange(for: sex),
+                criticalLow: result.catalogReference?.criticalLow,
+                criticalHigh: result.catalogReference?.criticalHigh
+            ).isOutOfRange
+        }
+    }
+
+    private var actionPlanLinkButton: some View {
+        Button {
+            showingActionPlanFromScan = true
+        } label: {
+            Label("View Action Plan", systemImage: "checklist")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(GlassButtonStyle())
+        .sheet(isPresented: $showingActionPlanFromScan) {
+            if let savedReport {
+                ActionPlanView(review: currentReview(including: savedReport), scanDate: savedReport.date)
+            }
+        }
     }
 
     private func aiErrorCard(_ message: String) -> some View {
@@ -671,28 +1005,6 @@ struct ScanReportView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard()
         .accessibilityElement(children: .combine)
-    }
-
-    private var aiActionButtons: some View {
-        VStack(spacing: 10) {
-            Button {
-                exportAIReportPDF()
-            } label: {
-                Label(isExportingPDF ? "Preparing PDF…" : "Save as PDF", systemImage: "doc.richtext")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(GlassProminentButtonStyle())
-            .disabled(isExportingPDF)
-            .accessibilityHint("Creates a PDF of this AI report, attaches it to the saved report, and opens the share sheet.")
-
-            if let pdfExportError {
-                Text(pdfExportError)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-
-            doneButton
-        }
     }
 
     private var doneButton: some View {
@@ -962,8 +1274,8 @@ struct ScanReportView: View {
 
     /// One-shot lookup of the single `HealthProfile` — replaces the removed
     /// `@Query private var profiles`. Shared by `currentReview(including:)`,
-    /// `aiProfileSummary()`, and `exportAIReportPDF()` so there's exactly one
-    /// place that knows how to fetch it.
+    /// `aiProfileSummary()`, and `renderAndAttachPDFIfNeeded()` so there's
+    /// exactly one place that knows how to fetch it.
     private func fetchProfile() -> HealthProfile? {
         (try? modelContext.fetch(FetchDescriptor<HealthProfile>()))?.first
     }
@@ -1097,33 +1409,67 @@ struct ScanReportView: View {
     /// PDF…" button state between those points instead of the whole
     /// synchronous render+write hiding it entirely. The render itself still
     /// runs on the main actor — one beat of latency, not a full off-main fix.
-    private func exportAIReportPDF() {
-        guard case .aiReport(let report) = stage, let savedReport, !isExportingPDF else { return }
+    /// Renders the verified AI report and attaches it to the already-saved
+    /// `MedicalReport` as a `ReportAttachment` (so it shows up in the
+    /// Documents library) — but only the FIRST time either "Share PDF" or
+    /// "Open" is pressed. Both actions call this; caching the result in
+    /// `renderedPDFData` is what keeps a second tap (e.g. sharing, then also
+    /// opening) from calling `AIReportPDFExporter.render` again and
+    /// attaching a second, duplicate PDF to the report.
+    private func renderAndAttachPDFIfNeeded() -> Data? {
+        if let renderedPDFData { return renderedPDFData }
+        guard case .aiReport(let report) = stage, let savedReport else { return nil }
+
+        let review = currentReview(including: savedReport)
+        let data = AIReportPDFExporter.render(
+            report: report,
+            review: review,
+            scannedLabs: savedReport.labResults,
+            profileName: fetchProfile()?.name ?? "",
+            generatedAt: Date.now
+        )
+        guard !data.isEmpty else { return nil }
+
+        let filename = "AI Analysis — \(Date.now.formatted(date: .abbreviated, time: .omitted)).pdf"
+        savedReport.attachments.append(ReportAttachment(filename: filename, kind: .pdf, data: data))
+        renderedPDFData = data
+        return data
+    }
+
+    /// "Share PDF": renders (or reuses) the PDF via
+    /// `renderAndAttachPDFIfNeeded()` and opens the system share sheet with
+    /// the file. The attachment is kept even if the user cancels or the
+    /// share sheet itself can't be prepared — only rendering can fail this
+    /// early, and that's surfaced inline via `pdfExportError`.
+    ///
+    /// `AIReportPDFExporter.render` takes SwiftData model objects directly
+    /// (`scannedLabs: [LabResult]`, and `HealthReview` is built from model
+    /// data too) — SwiftData models aren't `Sendable` and stay pinned to
+    /// this context's actor (main), so genuinely moving the render off-main
+    /// would require the exporter's API to accept `Sendable` value-type
+    /// snapshots instead, which is a larger change than this fix covers.
+    /// The minimal, actor-safe improvement taken here: do the work inside a
+    /// `Task { @MainActor in ... }` with an `await Task.yield()` right after
+    /// `isExportingPDF` flips to true (and again before the temp-file
+    /// write), so SwiftUI gets a chance to actually paint the "Preparing…"
+    /// button state between those points instead of the whole synchronous
+    /// render+write hiding it entirely. The render itself still runs on the
+    /// main actor — one beat of latency, not a full off-main fix.
+    private func shareAIReportPDF() {
+        guard !isExportingPDF else { return }
         isExportingPDF = true
         pdfExportError = nil
 
         Task { @MainActor in
             await Task.yield()
 
-            let review = currentReview(including: savedReport)
-            let now = Date.now
-            let data = AIReportPDFExporter.render(
-                report: report,
-                review: review,
-                scannedLabs: savedReport.labResults,
-                profileName: fetchProfile()?.name ?? "",
-                generatedAt: now
-            )
-
-            guard !data.isEmpty else {
+            guard let data = renderAndAttachPDFIfNeeded() else {
                 pdfExportError = "Couldn't create the PDF. Please try again."
                 isExportingPDF = false
                 return
             }
 
-            let filename = "AI Analysis — \(now.formatted(date: .abbreviated, time: .omitted)).pdf"
-            savedReport.attachments.append(ReportAttachment(filename: filename, kind: .pdf, data: data))
-
+            let filename = "AI Analysis — \(Date.now.formatted(date: .abbreviated, time: .omitted)).pdf"
             let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
             await Task.yield()
             do {
@@ -1132,6 +1478,28 @@ struct ScanReportView: View {
             } catch {
                 pdfExportError = "The PDF was saved to the report, but couldn't be prepared for sharing."
             }
+            isExportingPDF = false
+        }
+    }
+
+    /// "Open": renders (or reuses) the PDF via `renderAndAttachPDFIfNeeded()`
+    /// and previews it in-app with the same `PDFKitView` used for a saved
+    /// attachment's own viewer (`AttachmentViewer` in `ReportDetailView.swift`),
+    /// instead of round-tripping through the system share sheet just to look
+    /// at it.
+    private func openAIReportPDF() {
+        guard !isExportingPDF else { return }
+        isExportingPDF = true
+        pdfExportError = nil
+
+        Task { @MainActor in
+            await Task.yield()
+            guard renderAndAttachPDFIfNeeded() != nil else {
+                pdfExportError = "Couldn't create the PDF. Please try again."
+                isExportingPDF = false
+                return
+            }
+            showingPDFPreview = true
             isExportingPDF = false
         }
     }

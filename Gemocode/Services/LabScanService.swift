@@ -135,6 +135,25 @@ enum LabScanService {
         return results
     }
 
+    // MARK: - Public single-image OCR (additive)
+
+    /// Public wrapper over the private `recognizeLines(in:)` OCR pass, for
+    /// callers that need raw recognized lines from one already-in-memory
+    /// image rather than the lab-catalog-matching `scan(attachments:)` path
+    /// — e.g. `MedicationsView`'s prescription scan, which matches lines
+    /// against `RxNameMatcher` instead of `LabSynonyms`. Downsamples first
+    /// via `ImageDownsampler`, the same convention `ScanReportView` and
+    /// `EditReportView` use before handing a camera/photo-library image to
+    /// Vision, so a full-resolution capture never hits OCR at full size.
+    /// Returns an empty array (never throws) when the image can't be
+    /// encoded/decoded; only Vision's own recognition failure is rethrown.
+    static func recognizeText(in image: UIImage) async throws -> [String] {
+        guard let jpeg = image.jpegData(compressionQuality: 0.9) else { return [] }
+        let downsampled = ImageDownsampler.downsampledJPEG(from: jpeg) ?? jpeg
+        guard let cgImage = UIImage(data: downsampled)?.cgImage else { return [] }
+        return try await recognizeLines(in: cgImage)
+    }
+
     private static func firstNumber(in text: String) -> Double? {
         var current = ""
         var found: String?
