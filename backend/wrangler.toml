@@ -60,14 +60,14 @@ MODEL_EXTRACT_LABS = "claude-sonnet-5"
 ENFORCE_PREMIUM = "false"
 
 # --- KV namespace: the quota ledger (per-user + global daily token counts) ---
-# Not provisioned by this scaffold — there is no Cloudflare account to
-# provision it against yet. Before first deploy:
-#   wrangler kv namespace create QUOTA_KV
-# then uncomment the block below and paste in the `id` that command prints.
-#
-# [[kv_namespaces]]
-# binding = "QUOTA_KV"
-# id = "REPLACE_WITH_ID_FROM_WRANGLER_KV_NAMESPACE_CREATE"
+# The owner's provisioned namespace ("gemocode-relay-QUOTA_KV"). This block
+# MUST stay uncommented: deploying without it strips the worker's QUOTA_KV
+# binding and every quota-gated endpoint then 500s the moment auth succeeds
+# (storage.get on undefined) — exactly the production incident /health/ready
+# now guards against.
+[[kv_namespaces]]
+binding = "QUOTA_KV"
+id = "3e816c495ba24742a31554e3f0c9195e"
 
 # --- Secrets ---
 # NEVER set secrets in this file or anywhere in code — see backend/README.md
