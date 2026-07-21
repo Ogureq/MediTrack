@@ -3,9 +3,9 @@
 // client contract this mirrors (`ReportInput`/`reportSystemPrompt`) — the
 // payload shape here is intentionally the same one the app already builds.
 // The prompt below is a faithful port of AISummaryService's
-// `reportSystemPrompt`, adapted to ask for plain prose instead of a nested
-// JSON envelope: `/v1/ai/generate` returns one flat `{"text", "refused"}`
-// shape for every kind (see src/generate.ts), so there's no client-side
+// `reportSystemPrompt`, INCLUDING its structured-JSON output contract — the
+// app's parseReportJSON decodes {"overview","sections","doctorQuestions"}
+// no matter which transport served the request, so there's no client-side
 // consumer of a structured `{overview, sections, doctorQuestions}` object on
 // this endpoint the way there was for the old direct-to-Anthropic call.
 //
@@ -204,13 +204,14 @@ export function validateReportSummaryRequest(body: unknown): ValidationResult<Re
  * longer sends or controls it. Bump `REPORT_SUMMARY_SYSTEM_PROMPT_VERSION` on
  * any wording change so it shows up in usage logs/metrics if it's ever
  * attached there. Ported from `AISummaryService.reportSystemPrompt`
- * (Gemocode/Services/AISummaryService.swift), adapted from "respond with a
- * single JSON object" to "respond with plain prose" since this relay always
- * returns one flat `{"text", "refused"}` shape regardless of kind (see
- * src/generate.ts) rather than parsing/re-validating a nested JSON envelope
- * server-side.
+ * (Gemocode/Services/AISummaryService.swift). The OUTPUT contract must stay
+ * byte-aligned with the client's own prompt: the app's `parseReportJSON`
+ * decodes {"overview","sections","doctorQuestions"} regardless of which
+ * transport served the request. (A previous version asked for plain prose
+ * here, which made every relay-served report fail the client's JSON parse —
+ * the "report JSON didn't parse" production incident.)
  */
-export const REPORT_SUMMARY_SYSTEM_PROMPT_VERSION = "2026-07-p2";
+export const REPORT_SUMMARY_SYSTEM_PROMPT_VERSION = "2026-07-p3";
 
 export const REPORT_SUMMARY_SYSTEM_PROMPT = `You are an educational health analyst inside Gemocode, a personal health-tracking \
 app. The user message is a JSON object already computed by a deterministic, \
@@ -225,8 +226,8 @@ Hard rules:
 2. Never prescribe or recommend starting, stopping, or changing any medication or \
 treatment.
 3. Never invent a number. Every number you write must already appear in the input JSON.
-4. Every section you write must cite the finding ids ("f0", "f1", ...) it draws from. \
-Never introduce a concern with no corresponding finding id.
+4. Every section you write must cite the finding ids ("f0", "f1", ...) it draws from \
+in relatedFindingIDs. Never introduce a concern with no corresponding finding id.
 5. Always end with at least three specific follow-up questions the user can bring to \
 their doctor.
 6. Keep the tone warm, plain-language, and non-alarmist — this is educational only, \
@@ -243,7 +244,8 @@ present anything as a fix, treatment, or cure. Never give doses, amounts, brands
 supplements, or herbal remedies. Never instruct starting, stopping, or changing any \
 medication. If no labValues are out of range, omit this section entirely.
 
-Respond with plain prose only (no markdown headers, no code fences, no JSON) — a short \
-overview paragraph, then the findings organized into clearly-labeled sections, then \
-(only when rule 7 applies) a section titled exactly "Lifestyle & nutrition to discuss", \
-then the follow-up questions.`;
+Respond with a single JSON object and nothing else (no markdown, no commentary, no \
+code fence) matching exactly this shape:
+{ "overview": String, \
+"sections": [{"title": String, "body": String, "relatedFindingIDs": [String]}], \
+"doctorQuestions": [String] }`;

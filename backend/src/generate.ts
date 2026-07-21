@@ -8,9 +8,10 @@
 //   - "report" -> Gemocode/Services/AISummaryService.swift (src/relay.ts)
 //   - "chat"   -> Gemocode/Services/AIChatService.swift (this file)
 //   - "extract"-> Gemocode/Services/QuickAddAIService.swift (this file)
-// adapted only where the server-relay shape requires it (plain prose instead
-// of a nested JSON envelope for "report"; a date-only `today` instead of a
-// full ISO 8601 timestamp for "extract" — see each builder below).
+// adapted only where the server-relay shape requires it (a date-only
+// `today` instead of a full ISO 8601 timestamp for "extract" — see each
+// builder below; "report" keeps the client's structured-JSON output
+// contract, see relay.ts).
 //
 // This file is split the same way relay.ts is:
 //   - Pure functions (validation, prompt/request building, response mapping)

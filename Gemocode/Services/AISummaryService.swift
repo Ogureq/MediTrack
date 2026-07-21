@@ -362,7 +362,12 @@ enum AISummaryService {
         // sometimes emit even when asked to respond with raw JSON only.
         // Shared with `AIChatService` and the direct/BYOK path in
         // `AITransport` via `AITransport.stripCodeFence`.
-        let cleaned = AITransport.stripCodeFence(raw)
+        var cleaned = AITransport.stripCodeFence(raw)
+        // Belt-and-suspenders for a model that prefixes prose before the
+        // JSON object: extract the outermost brace span before giving up.
+        if !cleaned.hasPrefix("{"), let first = cleaned.firstIndex(of: "{"), let last = cleaned.lastIndex(of: "}"), first < last {
+            cleaned = String(cleaned[first...last])
+        }
         guard let data = cleaned.data(using: .utf8) else {
             throw AISummaryError.badResponse
         }
