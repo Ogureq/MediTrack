@@ -15,6 +15,12 @@ import {
 } from "./auth";
 import { checkQuota, recordUsage, hasUsedFreeReport, markFreeReportUsed, type QuotaLimits } from "./quota";
 import { validateGenerateRequest, maxTokensForKind, callAnthropic, type GenerateKind } from "./generate";
+import {
+  validateExtractLabsRequest,
+  callExtractLabsAnthropic,
+  EXTRACT_LABS_MAX_TOKENS,
+  EXTRACT_LABS_IMAGE_TOKEN_ESTIMATE
+} from "./extractLabs";
 import { hashUserId, buildUsageLogEntry } from "./logging";
 
 // CORS is permissive here because the only caller is a native iOS client
@@ -218,6 +224,118 @@ router.post("/v1/ai/generate", async ({ request, env }: RouteContext<Env>) => {
   await recordUsage(env.QUOTA_KV, claims.sub, tokensReserved, now);
 
   return json({ text: result.result.text, refused: result.result.refused });
+});
+
+// POST /v1/extract-labs — JWT + quota gated relay that extracts lab values
+// from a photographed lab report via a vision-capable Anthropic model. See
+// src/extractLabs.ts for request validation, the server-owned prompt, and
+// response sanity-parsing. Premium gating mirrors "chat"/"extract" on
+// /v1/ai/generate exactly (no free-trial allowance — that's scoped to the
+// "report" kind only). Unlike /v1/ai/generate's pre-flight-reservation-only
+// accounting, this endpoint books the *actual* usage.input_tokens +
+// usage.output_tokens Anthropic reports (falling back to the pre-flight
+// reservation only if that field is missing/zero), since a photo's input
+// token cost varies far more than a fixed per-kind budget can capture.
+router.post("/v1/extract-labs", async ({ request, env }: RouteContext<Env>) => {
+  const token = bearerToken(request);
+  if (!token) return errorResponse(401, "unauthorized", "Missing bearer token.");
+
+  let claims;
+  try {
+    claims = await verifyAnonymousToken(env.JWT_SECRET, token);
+  } catch (err) {
+    const code = err instanceof AuthError ? err.code : "unauthorized";
+    return errorResponse(401, "unauthorized", `Token verification failed: ${code}.`);
+  }
+
+  const rawBody = await readJsonBody(request);
+  if (!rawBody) return errorResponse(400, "bad_request", "Request body must be a JSON object.");
+
+  const validation = validateExtractLabsRequest(rawBody);
+  if (!validation.ok) {
+    return errorResponse(validation.status, validation.code, validation.message);
+  }
+
+  const enforcePremium = env.ENFORCE_PREMIUM === "true";
+  if (enforcePremium && !claims.premium) {
+    return errorResponse(
+      402,
+      "premium_required",
+      "Bloodwork photo extraction requires an active Gemocode Premium subscription."
+    );
+  }
+
+  const now = new Date();
+  // Pre-flight-only sanity ceiling (see extractLabs.ts's doc comment on
+  // EXTRACT_LABS_IMAGE_TOKEN_ESTIMATE) — the real booking below uses
+  // Anthropic's reported usage, not this number.
+  const tokensReserved = EXTRACT_LABS_MAX_TOKENS + EXTRACT_LABS_IMAGE_TOKEN_ESTIMATE;
+  const check = await checkQuota(env.QUOTA_KV, claims.sub, tokensReserved, quotaLimits(env), now);
+  if (!check.allowed) {
+    return errorResponse(429, "quota_exceeded", "Daily AI usage limit reached.");
+  }
+
+  const model = env.MODEL_EXTRACT_LABS;
+  const startedAt = Date.now();
+  const result = await callExtractLabsAnthropic({
+    anthropicApiKey: env.ANTHROPIC_API_KEY,
+    model,
+    image: validation.image
+  });
+
+  const userIdHash = await hashUserId(claims.sub);
+
+  if (!result.ok && result.kind === "upstream") {
+    console.log(
+      JSON.stringify(
+        buildUsageLogEntry({
+          userIdHash,
+          feature: "extract_labs",
+          model,
+          tokensReserved,
+          latencyMs: Date.now() - startedAt,
+          status: result.status
+        })
+      )
+    );
+    return errorResponse(502, "upstream_error", result.message);
+  }
+
+  // Every remaining branch reflects a genuine 2xx Anthropic response, so
+  // real tokens were spent regardless of whether we could use the output —
+  // book the actual usage (falling back to the pre-flight reservation only
+  // if Anthropic's usage field came back missing/zero, so a real call is
+  // never booked as costing nothing).
+  const actualTokens = result.usage.inputTokens + result.usage.outputTokens;
+  const tokensUsed = actualTokens > 0 ? actualTokens : tokensReserved;
+  await recordUsage(env.QUOTA_KV, claims.sub, tokensUsed, now);
+
+  const status = result.ok ? 200 : 502;
+  // Note: `tokensReserved` on this log entry is the amount actually booked
+  // to the ledger for this endpoint (real usage, see above) — not a
+  // pre-flight number as it is for /v1/ai/generate's log entries above.
+  console.log(
+    JSON.stringify(
+      buildUsageLogEntry({
+        userIdHash,
+        feature: "extract_labs",
+        model,
+        tokensReserved: tokensUsed,
+        latencyMs: Date.now() - startedAt,
+        status
+      })
+    )
+  );
+
+  if (!result.ok) {
+    return errorResponse(502, "invalid_model_output", result.message);
+  }
+
+  if (result.refused) {
+    return json({ values: [], refused: true });
+  }
+
+  return json({ values: result.values, refused: false });
 });
 
 export default {

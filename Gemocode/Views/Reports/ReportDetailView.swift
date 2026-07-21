@@ -216,7 +216,7 @@ struct ReportDetailView: View {
         }
         .listStyle(.plain)
         .ambientScreen()
-        .navigationTitle(report.title)
+        .navigationTitle(bloodworkDisplayTitle(report.title))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             Button("Edit") { showingEdit = true }
@@ -344,7 +344,7 @@ struct ReportDetailView: View {
             .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(report.title)
+                Text(bloodworkDisplayTitle(report.title))
                     .font(.system(size: 20, weight: .regular))
                     .tracking(-0.2)
                     .foregroundStyle(Editorial.ink(colorScheme))
@@ -469,6 +469,16 @@ private func flaggedRangeBarAxis(range: ClosedRange<Double>, value: Double) -> (
     let lower = Swift.min(range.lowerBound - pad, value - pad * 0.15)
     let upper = Swift.max(range.upperBound + pad, value + pad * 0.15)
     return (lower, upper)
+}
+
+/// Display-only rename of an already-STORED report `title` from "Lab
+/// Report" to "Bloodwork" — mirrors `ReportsListView`'s identical helper
+/// (see that file's doc comment for the full reasoning), duplicated here
+/// per this pass's file-ownership split rather than shared.
+private func bloodworkDisplayTitle(_ title: String) -> String {
+    let oldLabel = ReportCategory.labReport.displayName
+    guard title.contains(oldLabel) else { return title }
+    return title.replacingOccurrences(of: oldLabel, with: String(localized: "Bloodwork"))
 }
 
 // MARK: - Lab result row

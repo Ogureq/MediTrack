@@ -22,6 +22,7 @@ struct ReportsListView: View {
                 || report.provider.localizedCaseInsensitiveContains(searchText)
                 || report.facility.localizedCaseInsensitiveContains(searchText)
                 || report.category.displayName.localizedCaseInsensitiveContains(searchText)
+                || bloodworkCategoryName(report.category).localizedCaseInsensitiveContains(searchText)
         }
     }
 
@@ -107,7 +108,7 @@ struct ReportsListView: View {
                     selectedCategory = nil
                 }
                 ForEach(availableCategories) { category in
-                    ReportCategoryChip(title: Text(category.displayName), isSelected: selectedCategory == category) {
+                    ReportCategoryChip(title: Text(bloodworkCategoryName(category)), isSelected: selectedCategory == category) {
                         selectedCategory = category
                     }
                 }
@@ -207,7 +208,7 @@ struct ReportRow: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 MicroLabel(verbatim: report.date.formatted(.dateTime.month(.abbreviated).day()))
-                Text(report.title)
+                Text(bloodworkDisplayTitle(report.title))
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(Editorial.ink(colorScheme))
                     .lineLimit(1)
@@ -249,7 +250,7 @@ struct ReportRow: View {
             Text(labSummaryText)
         } else {
             HStack(spacing: 4) {
-                Text(report.category.displayName)
+                Text(bloodworkCategoryName(report.category))
                 if !report.provider.isEmpty {
                     Text("·")
                     Text(report.provider)
@@ -288,8 +289,8 @@ struct ReportRow: View {
     }
 
     private var accessibilitySummary: String {
-        var parts = [report.title, report.date.formatted(date: .abbreviated, time: .omitted)]
-        parts.append(report.labResults.isEmpty ? report.category.displayName : labSummaryText)
+        var parts = [bloodworkDisplayTitle(report.title), report.date.formatted(date: .abbreviated, time: .omitted)]
+        parts.append(report.labResults.isEmpty ? bloodworkCategoryName(report.category) : labSummaryText)
         if let linkedLabName {
             parts.append(String(localized: "linked to \(linkedLabName)"))
         }
@@ -298,4 +299,34 @@ struct ReportRow: View {
         }
         return parts.joined(separator: ", ")
     }
+}
+
+/// Display-only rename of the `.labReport` category's user-facing name,
+/// from "Lab Report" to "Bloodwork" — used wherever this file shows just
+/// the category name on its own (the category filter chips, `ReportRow`'s
+/// no-lab-results subtitle/accessibility summary). `ReportCategory
+/// .displayName` itself lives in `Models/Models.swift` (owned by a
+/// different pass, so its localized "Lab Report" string is left exactly as
+/// it is) — this is a cosmetic substitute, independently duplicated in
+/// `ScanReportView.swift`/`ReportDetailView.swift` per this pass's
+/// file-ownership split.
+private func bloodworkCategoryName(_ category: ReportCategory) -> String {
+    category == .labReport
+        ? String(localized: "Bloodwork")
+        : category.displayName
+}
+
+/// Display-only rename of an already-STORED report `title` (e.g. "Lab
+/// Report — Jul 21, 2026", built once at save time from `category
+/// .displayName` and persisted verbatim — see `ScanReportView.save()`,
+/// which keeps generating that exact stored string unchanged). Substitutes
+/// the CURRENT localized "Lab Report" label for "Bloodwork" wherever it
+/// appears in the title, so a scan-generated title reads as "Bloodwork —
+/// Jul 21, 2026" without ever touching the stored `MedicalReport.title`
+/// field itself. Falls through unchanged for a title the user has since
+/// renamed by hand (one that no longer contains the old label at all).
+private func bloodworkDisplayTitle(_ title: String) -> String {
+    let oldLabel = ReportCategory.labReport.displayName
+    guard title.contains(oldLabel) else { return title }
+    return title.replacingOccurrences(of: oldLabel, with: String(localized: "Bloodwork"))
 }

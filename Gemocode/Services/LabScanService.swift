@@ -55,6 +55,60 @@ enum LabScanService {
 
     // MARK: OCR
 
+    /// Groups OCR fragments (recognized text plus the Vision bounding box it
+    /// was recognized in) into visual rows, and returns each row as a single
+    /// string with its fragments joined left-to-right — turning a columnar
+    /// layout (name / value / unit / reference-range each in their own Vision
+    /// observation) back into one line per row so `parse(lines:)`'s
+    /// same-line/next-line heuristic can associate a name with its value.
+    ///
+    /// Vision's bounding boxes are normalized (0...1 in both axes) with the
+    /// origin at the BOTTOM-LEFT of the image and y increasing upward — so a
+    /// fragment nearer the top of the page has a LARGER y, not a smaller one.
+    ///
+    /// Two fragments are treated as being on the same row when their
+    /// vertical centers (`box.midY`) are within 60% of the smaller of the two
+    /// fragments' box heights: tight enough that two genuinely distinct rows
+    /// in a dense report don't merge, loose enough to absorb the small
+    /// per-fragment vertical jitter Vision produces across one printed line.
+    /// A fragment that is already a whole row on its own (e.g. a wide
+    /// single-observation line, or a note/URL line with nothing else nearby
+    /// in y) simply forms a row of one.
+    ///
+    /// - Parameter fragments: OCR fragments in no particular order.
+    /// - Returns: one string per visual row, ordered top-to-bottom; within a
+    ///   row, fragments are ordered left-to-right by `box.minX` and joined
+    ///   with a single space. Empty input returns `[]`.
+    static func assembleRows(_ fragments: [(text: String, box: CGRect)]) -> [String] {
+        guard !fragments.isEmpty else { return [] }
+
+        // Top-to-bottom means descending y — see the coordinate-space note above.
+        let sortedByY = fragments.sorted { $0.box.midY > $1.box.midY }
+
+        var rows: [[(text: String, box: CGRect)]] = []
+        for fragment in sortedByY {
+            if let lastRowIndex = rows.indices.last {
+                // Compare against the fragment that opened the current row
+                // (not the most-recently-added one) so the row's vertical
+                // reference point stays fixed — deterministic, and immune to
+                // gradual drift across a wide row with many fragments.
+                let anchor = rows[lastRowIndex][0]
+                let tolerance = 0.6 * min(anchor.box.height, fragment.box.height)
+                if abs(fragment.box.midY - anchor.box.midY) <= tolerance {
+                    rows[lastRowIndex].append(fragment)
+                    continue
+                }
+            }
+            rows.append([fragment])
+        }
+
+        return rows.map { row in
+            row.sorted { $0.box.minX < $1.box.minX }
+                .map(\.text)
+                .joined(separator: " ")
+        }
+    }
+
     private static func recognizeLines(in image: CGImage) async throws -> [String] {
         try await withCheckedThrowingContinuation { continuation in
             let request = VNRecognizeTextRequest { request, error in
@@ -62,9 +116,18 @@ enum LabScanService {
                     continuation.resume(throwing: error)
                     return
                 }
-                let lines = (request.results as? [VNRecognizedTextObservation])?
-                    .compactMap { $0.topCandidates(1).first?.string } ?? []
-                continuation.resume(returning: lines)
+                // Keep each observation's bounding box alongside its text so
+                // columnar layouts (name / value / unit / reference-range in
+                // separate boxes) can be reassembled into visual rows below —
+                // Vision hands back an unordered bag of text observations,
+                // not reading-order lines, so the raw strings alone can't be
+                // associated with each other.
+                let fragments: [(text: String, box: CGRect)] = (request.results as? [VNRecognizedTextObservation])?
+                    .compactMap { observation in
+                        guard let string = observation.topCandidates(1).first?.string else { return nil }
+                        return (text: string, box: observation.boundingBox)
+                    } ?? []
+                continuation.resume(returning: assembleRows(fragments))
             }
             request.recognitionLevel = .accurate
             // Russian is Cyrillic-script and needs an explicit language hint;
@@ -225,7 +288,8 @@ enum LabUnitConversion {
         // g/L -> g/dL (divide by 10).
         "hemoglobin": [Rule(tokens: ["g/l", "г/л"], multiplier: 0.1)],
         "albumin": [Rule(tokens: ["g/l", "г/л"], multiplier: 0.1)],
-        "totalProtein": [Rule(tokens: ["g/l", "г/л"], multiplier: 0.1)]
+        "totalProtein": [Rule(tokens: ["g/l", "г/л"], multiplier: 0.1)],
+        "mchc": [Rule(tokens: ["g/l", "г/л"], multiplier: 0.1)]
 
         // Deliberately NOT converted (see LabScanService.swift file header
         // comment / PR notes for the full reasoning):
@@ -235,6 +299,10 @@ enum LabUnitConversion {
         //  - "phosphorus": commonly reported in mmol/L in Russian reports,
         //    but no factor for it was given/verified here, so it is left
         //    unconverted rather than guess at one.
+        //  - "mchc": UK reports commonly print MCHC in g/L (e.g. 358 g/L);
+        //    the catalog's canonical unit is g/dL, so it carries the same
+        //    ×0.1 g/L rule as hemoglobin/albumin/totalProtein (rules are
+        //    keyed per test id, so the shared "g/l" token is unambiguous).
     ]
 
     /// Converts `value` to the catalog's canonical unit for `id` if

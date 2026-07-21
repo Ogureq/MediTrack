@@ -6,23 +6,33 @@ import AVFoundation
 import UIKit
 import PDFKit
 
-/// Single-flag gate for report *creation*. Flip `reportCreation` to `false`
-/// to make scanning free again — that one-line edit is the entire revert of
-/// the premium gate placed around adding reports.
+/// Single-flag gate for the AI-reading paths — the AI scan engine and the
+/// auto-generated AI report after save. Flip `reportCreation` to `false` to
+/// make AI reading unconditionally available — that one-line edit is the
+/// entire revert of the premium gate placed around AI. Report *creation*
+/// itself (photographing/importing a document, on-device OCR, and saving)
+/// is never gated by this flag, and never was meant to be: it's a local
+/// feature and stays free and unmetered regardless of premium/quota state.
 enum PremiumGates {
     static let reportCreation = true
 }
 
-/// Scan-only report creation: photograph or import a document, let
-/// `LabScanService`'s on-device OCR find lab values automatically, confirm,
-/// and save. There is no manual entry form here by design — the manual
-/// form still exists for *editing* an existing report (`EditReportView`),
-/// which is how users fix or fill in anything a scan missed.
+/// Scan-first report creation: photograph or import a document, then choose
+/// how it gets read — AI (reads almost any report, one free lifetime scan,
+/// then Premium) or fully on-device (`LabScanService`'s Vision OCR, free
+/// and unmetered, always). Confirm the recognized values, save. There is no
+/// manual entry form here by design — the manual form still exists for
+/// *editing* an existing report (`EditReportView`), which is how users fix
+/// or fill in anything a scan missed.
 ///
-/// Gated by `PremiumGates.reportCreation`: when the gate is on and the user
-/// isn't premium, the same scan UI is shown underneath a lock card rather
-/// than being replaced by a dead end, and the lock card's own button always
-/// works (it opens `PaywallView`).
+/// AI availability (both the AI engine choice and the post-save auto
+/// report) is gated by `PremiumGates.reportCreation` + `isAIScanLocked`:
+/// premium or a remaining free credit unlocks it, and once that credit is
+/// spent the AI option steps aside for a non-blocking upsell card
+/// (`lockedCard`) while the rest of the screen — on-device scanning,
+/// saving — stays exactly as usable as it always was. Exactly one free AI
+/// credit is spent per flow no matter how many AI actions that flow uses —
+/// see `aiCreditConsumedThisFlow`.
 struct ScanReportView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -64,6 +74,45 @@ struct ScanReportView: View {
 
     @State private var showingCameraAlert = false
     @State private var cameraAlertMessage = ""
+
+    // MARK: - AI vs. on-device scan choice
+
+    /// Presented after new camera/photo attachments arrive and before any
+    /// reading runs — the single-image case (see `promptEngineChoiceIfNeeded`).
+    @State private var showingEngineChoiceDialog = false
+    /// Same choice, presented as a small sheet instead of a confirmation
+    /// dialog when multiple photos arrived in one batch (a photo-library
+    /// multi-select) — richer captions than a dialog's plain button titles
+    /// can show. See `promptEngineChoiceIfNeeded`.
+    @State private var showingEngineChoiceSheet = false
+
+    /// IDs of `scannedValues`/`confirmedLabs` entries that came from
+    /// `AIScanService` rather than `LabScanService` — `ScannedLabValue`
+    /// doesn't carry its own provenance (that struct lives in
+    /// `LabScanService.swift`, which this pass doesn't touch), so this is
+    /// tracked alongside it here, keyed by the value's own stable `id`.
+    /// Read by `save()` to decide whether this save spends the free AI
+    /// credit (see `aiCreditConsumedThisFlow`).
+    @State private var aiSourcedValueIDs: Set<UUID> = []
+
+    /// Set at most once per flow — the moment either an AI-extraction save
+    /// or a successful AI report generation actually completes — so a scan
+    /// that uses AI in more than one way (e.g. AI-extracts, saves, then the
+    /// auto-run report also succeeds) only ever spends ONE free credit.
+    /// Never set for a scan that only used the on-device path, and never
+    /// set just because AI extraction *ran* — only on a completed save or a
+    /// report the user actually saw, matching the existing
+    /// cancel-on-`.onDisappear` semantics for the AI report stage.
+    @State private var aiCreditConsumedThisFlow = false
+
+    @State private var showingAIScanErrorAlert = false
+    @State private var aiScanErrorMessage = ""
+    /// One-shot "AI wasn't available, so Gemocode used the on-device scan
+    /// instead" banner — set when `AIScanService.extract` throws
+    /// `.notConfigured`. Left on for the rest of this flow rather than
+    /// auto-dismissed; there's no ongoing timer to drive that, and it's a
+    /// harmless, low-noise reminder either way.
+    @State private var showingAINotConfiguredNotice = false
 
     // MARK: - Post-save AI stage
 
@@ -113,18 +162,23 @@ struct ScanReportView: View {
     /// (see `savedReportHasOutOfRangeValue` and `aiReportActionButtons`).
     @State private var showingActionPlanFromScan = false
 
-    /// Free users get exactly one AI scan: the same lifetime meter as the
-    /// AI Health Analyst report (`AIReportQuota`), since a scan auto-runs
-    /// one report. The meter is only consumed on a successful generation
-    /// (see `onAIReportGenerated`), so a failed scan never costs the trial.
-    private var isLocked: Bool {
+    /// Whether the scan flow is locked: not premium AND the free lifetime
+    /// `AIReportQuota` credit is already spent. Gates BOTH scan engines
+    /// (owner decision: all scan types are one-free-then-Premium) plus the
+    /// post-save auto AI report. The credit itself is only ever consumed
+    /// once per flow, when a scan save or AI report actually completes —
+    /// see `aiCreditConsumedThisFlow` — never merely by checking this.
+    private var isAIScanLocked: Bool {
         PremiumGates.reportCreation
             && !premiumStore.isPremium
             && AIReportQuota.remaining(defaults: .standard) == 0
     }
 
+    /// Saving is part of the metered scan flow: locked once the free scan
+    /// credit is spent without Premium — unless the credit was consumed in
+    /// THIS flow, which keeps the current flow's save/report path usable.
     private var canSave: Bool {
-        !attachments.isEmpty && !isScanning && !isLocked
+        !attachments.isEmpty && !isScanning && (!isAIScanLocked || aiCreditConsumedThisFlow)
     }
 
     /// True once a scan has run over every current attachment and found
@@ -132,6 +186,20 @@ struct ScanReportView: View {
     /// "couldn't find lab values" note.
     private var nothingExtracted: Bool {
         hasScanned && !isScanning && confirmedLabs.isEmpty && scannedValues.isEmpty
+    }
+
+    /// Display-only rename of `ReportCategory.labReport`'s user-facing
+    /// name from "Lab Report" to "Bloodwork". `ReportCategory.displayName`
+    /// itself lives in `Models/Models.swift` (owned by a different pass, so
+    /// its localized "Lab Report" string — `report.category.labReport` in
+    /// `Model.xcstrings` — is left exactly as it is); this is purely a
+    /// cosmetic substitute used everywhere THIS file needs to show that
+    /// category name to a user. `ReportsListView`/`ReportDetailView` carry
+    /// their own identically-named, independently-duplicated copy of this
+    /// same idea (per this pass's file-ownership split), since they need it
+    /// to rename an already-STORED title rather than build one fresh.
+    private var bloodworkCategoryLabel: String {
+        String(localized: "Bloodwork")
     }
 
     var body: some View {
@@ -143,7 +211,7 @@ struct ScanReportView: View {
                 .padding()
             }
             .ambientScreen()
-            .navigationTitle(stage.isScanning ? "New Report" : "AI Analysis")
+            .navigationTitle(stage.isScanning ? "Scan Bloodwork" : "AI Analysis")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if stage.isScanning {
@@ -180,7 +248,7 @@ struct ScanReportView: View {
                         kind: .image,
                         data: data
                     ))
-                    scanAttachments()
+                    promptEngineChoiceIfNeeded()
                 }
                 .ignoresSafeArea()
             }
@@ -199,6 +267,40 @@ struct ScanReportView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(cameraAlertMessage)
+            }
+            // Single new photo (the common case — one camera capture, or a
+            // single library pick): a plain confirmation dialog, following
+            // the same pattern `MedicationsView`'s own "Scan a Prescription"
+            // choice already uses in this codebase.
+            .confirmationDialog(
+                "How should Gemocode read this?",
+                isPresented: $showingEngineChoiceDialog,
+                titleVisibility: .visible
+            ) {
+                Button("AI scan — reads almost any report. Your photo is sent for AI reading, not stored.") {
+                    scanAttachmentsWithAI()
+                }
+                Button("On-device scan — private, may not read every report.") {
+                    scanAttachments()
+                }
+                Button("Cancel", role: .cancel) {}
+            }
+            // Multiple new photos in one batch (a photo-library multi-
+            // select): a small sheet instead, so each option keeps its own
+            // separate title + caption rather than one combined button
+            // title — a confirmation dialog can't lay out two independent
+            // lines per button.
+            .sheet(isPresented: $showingEngineChoiceSheet) {
+                ScanEngineChoiceSheet(
+                    onChooseAI: { scanAttachmentsWithAI() },
+                    onChooseOnDevice: { scanAttachments() }
+                )
+            }
+            .alert("AI Scan Failed", isPresented: $showingAIScanErrorAlert) {
+                Button("Try On-Device Instead") { scanAttachments() }
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(aiScanErrorMessage)
             }
             .sheet(item: $shareItem) { item in
                 ActivityShareSheet(activityItems: [item.url]) {
@@ -229,26 +331,8 @@ struct ScanReportView: View {
         case .scanning:
             Group {
                 ScanReportHeader()
-
-                if isLocked {
-                    // Nulled: an ambient transaction already in flight when
-                    // this appears (e.g. the camera sheet dismissing, or
-                    // `premiumStore` publishing its async-loaded entitlement
-                    // moments after appear) must not be inherited by this
-                    // ZStack's insertion — same reasoning as ReviewScreen's
-                    // cards.
-                    ZStack {
-                        unlockedBody
-                            .disabled(true)
-                            .opacity(0.28)
-                            .accessibilityHidden(true)
-                        lockedCard
-                    }
+                unlockedBody
                     .transaction { $0.animation = nil }
-                } else {
-                    unlockedBody
-                        .transaction { $0.animation = nil }
-                }
             }
         case .aiGenerating, .aiReport, .aiFailed:
             aiStageBody
@@ -258,7 +342,23 @@ struct ScanReportView: View {
     @ViewBuilder
     private var unlockedBody: some View {
         VStack(spacing: 16) {
-            scanActions
+            if isAIScanLocked {
+                lockedCard
+                    .transaction { $0.animation = nil }
+            } else {
+                scanActions
+            }
+
+            if showingAINotConfiguredNotice {
+                Label(
+                    "AI scanning isn't available right now — Gemocode used the on-device scan instead.",
+                    systemImage: "info.circle"
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
+            }
 
             if isScanning {
                 HStack(spacing: 10) {
@@ -444,7 +544,13 @@ struct ScanReportView: View {
     /// small "Read" tag. Shown once at least one value has been confirmed —
     /// before that there's nothing yet to summarize.
     private func scannedAttachmentHeaderCard(valuesRead: Int) -> some View {
-        let title = "\(ReportCategory.labReport.displayName) — \(Date.now.formatted(date: .abbreviated, time: .omitted))"
+        // Pure display — never stored (see `save()`, which still builds the
+        // ACTUAL saved title from `category.displayName`, unchanged, since
+        // that string IS persisted). "Bloodwork" here is purely cosmetic:
+        // it previews what `ReportsListView`/`ReportDetailView` will show
+        // once saved, since those apply the identical rename at their own
+        // display time — see `bloodworkDisplayTitle` in those files.
+        let title = "\(bloodworkCategoryLabel) — \(Date.now.formatted(date: .abbreviated, time: .omitted))"
         return HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -687,6 +793,9 @@ struct ScanReportView: View {
         .glassCard()
     }
 
+    /// Blocking upsell card, shown IN PLACE of the scan actions once the
+    /// free scan credit is spent without Premium — both engines are
+    /// metered, so there is nothing scannable to offer underneath it.
     private var lockedCard: some View {
         VStack(spacing: 14) {
             Image(systemName: "lock.fill")
@@ -694,13 +803,13 @@ struct ScanReportView: View {
                 .foregroundStyle(Editorial.ink(colorScheme))
                 .accessibilityHidden(true)
             MicroLabel("Premium")
-            Text("Scan Lab Reports with Premium")
+            Text("Unlock Unlimited Scans")
                 .font(.headline)
-            Text("Photograph or import a lab report and Gemocode extracts your results automatically — no manual typing.")
+            Text("Unlimited scans with Premium — every report decoded in seconds.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            Text("You've used your free AI scan. Premium unlocks unlimited scans and AI reports.")
+            Text("You've used your free scan.")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
@@ -716,7 +825,7 @@ struct ScanReportView: View {
         .frame(maxWidth: .infinity)
         .glassCard()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Scan lab reports with Premium. Photograph or import a lab report and Gemocode extracts your results automatically. You've used your free AI scan; Premium unlocks unlimited scans and AI reports.")
+        .accessibilityLabel("Unlock unlimited scans. Unlimited scans with Premium — every report decoded in seconds. You've used your free scan.")
         .accessibilityHint("Double tap Unlock Premium to see plans.")
     }
 
@@ -1039,7 +1148,7 @@ struct ScanReportView: View {
             }
         }
         photoItems = []
-        if addedAny { scanAttachments() }
+        if addedAny { promptEngineChoiceIfNeeded() }
     }
 
     // `.fileImporter` above is restricted to `allowedContentTypes: [.pdf]`,
@@ -1062,7 +1171,9 @@ struct ScanReportView: View {
                 addedAny = true
             }
         }
-        if addedAny { scanAttachments() }
+        // PDFs skip the engine choice (AI extraction takes images only)
+        // but not the meter: no free-ride scan for locked flows.
+        if addedAny, !isAIScanLocked || aiCreditConsumedThisFlow { scanAttachments() }
     }
 
     private func removeAttachment(_ attachment: AttachmentDraft) {
@@ -1080,7 +1191,12 @@ struct ScanReportView: View {
             // photographing pages" path `scanAttachments()` optimizes below.
             scannedAttachmentIDs = []
             scannedValues = []
-            scanAttachments()
+            // Mid-flow rescan of an already-authorized flow — permitted
+            // when the flow consumed its credit even though the global
+            // meter now reads locked.
+            if !isAIScanLocked || aiCreditConsumedThisFlow {
+                scanAttachments()
+            }
         }
     }
 
@@ -1120,6 +1236,118 @@ struct ScanReportView: View {
             // Belt-and-suspenders on top of the cancellation guard above:
             // never present a sheet once the view has already torn down.
             if !found.isEmpty && !hasDisappeared {
+                showingScanResults = true
+            }
+        }
+    }
+
+    /// After new camera/photo attachments arrive (never PDFs — those go
+    /// straight to `scanAttachments()` via `handleFileImport`, since
+    /// `AIScanService.extract` only takes a `UIImage`), lets the user pick
+    /// the reading engine before anything runs. Does nothing while the
+    /// scan flow is locked (`isAIScanLocked`) — both engines are metered,
+    /// and `lockedCard` explains why over in `unlockedBody`.
+    private func promptEngineChoiceIfNeeded() {
+        // Owner decision: ALL scan types share the one-free-then-Premium
+        // gate. When the credit is spent and there's no subscription,
+        // neither engine runs — `lockedCard` (shown in place of the scan
+        // actions) explains and routes to the paywall.
+        guard !isAIScanLocked else { return }
+        let pendingCount = attachments.filter { !scannedAttachmentIDs.contains($0.id) }.count
+        guard pendingCount > 0 else { return }
+        if pendingCount > 1 {
+            showingEngineChoiceSheet = true
+        } else {
+            showingEngineChoiceDialog = true
+        }
+    }
+
+    /// AI-first counterpart to `scanAttachments()` above — identical
+    /// re-entrancy guard, identical delta-only "unscanned" set keyed by
+    /// `scannedAttachmentIDs`, identical existing-key dedupe against
+    /// already-scanned/confirmed values, identical cancellation/
+    /// `hasDisappeared` belt-and-suspenders. Differs only in HOW each new
+    /// attachment is read: one `AIScanService.extract(from:)` call per
+    /// image instead of `LabScanService.scan(attachments:)`'s on-device
+    /// Vision OCR.
+    ///
+    /// `AIScanError.notConfigured` is service-wide (missing key/relay), not
+    /// per-image, so the loop stops at the first one and routes the WHOLE
+    /// batch to the on-device path instead (see `showingAINotConfiguredNotice`)
+    /// — none of `unscanned` is marked into `scannedAttachmentIDs` in that
+    /// case, so `scanAttachments()` still sees all of them as unscanned.
+    /// Any other per-image failure (refused/malformed/transport) surfaces
+    /// `showingAIScanErrorAlert` once for the whole batch, and — unlike the
+    /// `notConfigured` case — that specific attachment IS left unscanned
+    /// too, so "Try On-Device Instead" in the alert can still pick it up.
+    ///
+    /// Never spends the free AI credit itself — see `aiCreditConsumedThisFlow`,
+    /// which is only set on a completed save or a report the user actually
+    /// saw, not by extraction succeeding.
+    private func scanAttachmentsWithAI() {
+        guard !isScanning else { return }
+        let unscanned = attachments.filter { !scannedAttachmentIDs.contains($0.id) }
+        guard !unscanned.isEmpty else { return }
+        isScanning = true
+        let existingKeys = Set(confirmedLabs.map { $0.reference.id.lowercased() })
+            .union(scannedValues.map { $0.reference.id.lowercased() })
+
+        scanTask = Task {
+            var found: [ScannedLabValue] = []
+            var succeededIDs: Set<UUID> = []
+            var hadPerImageFailure = false
+            var hitNotConfigured = false
+
+            for draft in unscanned {
+                guard !Task.isCancelled else { return }
+                guard let image = UIImage(data: draft.data) else {
+                    // Undecodable bytes would fail an on-device retry for
+                    // the same reason — treat as "read, nothing found"
+                    // rather than a retryable failure.
+                    succeededIDs.insert(draft.id)
+                    continue
+                }
+                do {
+                    let values = try await AIScanService.extract(from: image)
+                    found.append(contentsOf: values)
+                    succeededIDs.insert(draft.id)
+                } catch AIScanError.notConfigured {
+                    hitNotConfigured = true
+                    break
+                } catch {
+                    hadPerImageFailure = true
+                }
+            }
+
+            // Cancelled (sheet dismissed mid-AI-read) — skip every
+            // mutation, exactly like `scanAttachments()`'s own guard.
+            guard !Task.isCancelled else { return }
+            isScanning = false
+
+            if hitNotConfigured {
+                showingAINotConfiguredNotice = true
+                scanAttachments()
+                return
+            }
+
+            let deduped = found.filter { !existingKeys.contains($0.reference.id.lowercased()) }
+            aiSourcedValueIDs.formUnion(deduped.map(\.id))
+            scannedValues.append(contentsOf: deduped)
+            scannedAttachmentIDs.formUnion(succeededIDs)
+            hasScanned = true
+
+            // Shown whenever at least one image in the batch genuinely
+            // failed to read — even if another image in the same batch DID
+            // produce values — since the failed one specifically still
+            // needs a retry; it was deliberately left out of
+            // `scannedAttachmentIDs` above so "Try On-Device Instead" can
+            // pick it up.
+            if hadPerImageFailure {
+                aiScanErrorMessage = String(localized: "AI couldn't read this photo — try the on-device scan or retake the photo.")
+                showingAIScanErrorAlert = true
+            }
+
+            if !deduped.isEmpty && !hasDisappeared {
                 showingScanResults = true
             }
         }
@@ -1218,11 +1446,40 @@ struct ScanReportView: View {
 
         Haptics.success()
 
+        // Metering: the free AI credit is spent the first time an AI
+        // action in this flow actually COMPLETES — either this save (when
+        // at least one of the values just saved came from the AI-
+        // extraction path, tracked in `aiSourcedValueIDs`) or, below, a
+        // successful AI report generation. Setting the flag synchronously
+        // here — rather than inside the `Task` that does the actual
+        // bookkeeping — is what lets the auto-report gate a few lines down
+        // see it in time to allow that follow-on report for free within
+        // this same flow, instead of racing an unstructured `Task` that
+        // hasn't necessarily run yet.
+        // Owner decision: BOTH engines are metered — a completed save that
+        // imported scanned values consumes the free credit regardless of
+        // which engine read them (recordAICreditUse itself no-ops for
+        // premium users, matching the original pattern).
+        let usedScanThisSave = !dedupedLabs.isEmpty
+        if usedScanThisSave && !aiCreditConsumedThisFlow {
+            aiCreditConsumedThisFlow = true
+            // Deliberately NOT tied to `scanTask`/`aiTask` cancellation:
+            // the report above has already been inserted — this is a
+            // completed save, not an in-flight AI action — so swiping the
+            // sheet away moments later must not undo the metering.
+            Task { await recordAICreditUse() }
+        }
+
         // Auto-run the AI Health Analyst on the just-saved scan whenever a
         // lab value was confirmed and AI is reachable, instead of
-        // dismissing — see `generateAIReport(for:)` below. Otherwise this
-        // is the original, unchanged save-and-dismiss behavior.
-        if !report.labResults.isEmpty, AISummaryService.isConfigured {
+        // dismissing — see `generateAIReport(for:)` below. Gated on AI
+        // availability for THIS flow: premium, quota remaining, or the
+        // credit this save just spent above (never a second charge for the
+        // same flow — see `aiCreditConsumedThisFlow`).
+        let aiReportAvailable = aiCreditConsumedThisFlow
+            || premiumStore.isPremium
+            || AIReportQuota.remaining(defaults: .standard) > 0
+        if !report.labResults.isEmpty, AISummaryService.isConfigured, aiReportAvailable {
             savedReport = report
             generateAIReport(for: report)
         } else {
@@ -1360,14 +1617,21 @@ struct ScanReportView: View {
                 )
                 // Sheet was dismissed while the request was in flight — do
                 // NOT set `stage` (there's no view left to show it) and, in
-                // particular, do NOT call `onAIReportGenerated()`: the free
+                // particular, do NOT call `recordAICreditUse()`: the free
                 // lifetime AI trial must only be spent when the user
                 // actually saw the result, not for a report generated after
                 // they'd already swiped the sheet away.
                 guard !Task.isCancelled else { return }
                 Haptics.success()
                 stage = .aiReport(generated)
-                await onAIReportGenerated()
+                // Spend the free credit here too, UNLESS this flow's save()
+                // already spent it for the AI-extraction that fed this same
+                // report (see `aiCreditConsumedThisFlow`) — one credit
+                // covers the whole flow, never two.
+                if !aiCreditConsumedThisFlow {
+                    aiCreditConsumedThisFlow = true
+                    await recordAICreditUse()
+                }
             } catch {
                 guard !Task.isCancelled else { return }
                 stage = .aiFailed(error.localizedDescription)
@@ -1375,12 +1639,15 @@ struct ScanReportView: View {
         }
     }
 
-    /// Metering hook: called once, right after an auto-generated AI report
-    /// is produced and has passed `AISummaryService`'s verification guards.
-    /// Mirrors `ReviewScreen`: the free trial is only spent on success, and
-    /// entitlements are resolved first so a paying subscriber whose
-    /// StoreKit state hasn't loaded yet never burns the trial.
-    private func onAIReportGenerated() async {
+    /// Metering side effect shared by both AI-credit triggers in this file:
+    /// a save() that included AI-extracted values, and a successful AI
+    /// report generation the user actually saw. Callers are responsible for
+    /// the `aiCreditConsumedThisFlow` once-per-flow guard (see both call
+    /// sites) — this just does the actual entitlement-then-record work,
+    /// mirroring `ReviewScreen`'s identical pattern: entitlements are
+    /// resolved first so a paying subscriber whose StoreKit state hasn't
+    /// loaded yet never burns the trial.
+    private func recordAICreditUse() async {
         await premiumStore.ensureEntitlementsLoaded()
         if !premiumStore.isPremium {
             AIReportQuota.recordUse(defaults: .standard)
@@ -1522,23 +1789,33 @@ private func rangeBarAxis(range: ClosedRange<Double>, value: Double) -> (min: Do
 
 // MARK: - Header
 
+/// AI-first hero: the primary line pitches the AI reading path (fast, reads
+/// almost any report, free the first time), with the on-device option as a
+/// quieter secondary remark right underneath — matching the same
+/// AI-primary-then-on-device ordering used everywhere else this pass
+/// touches (the engine-choice dialog/sheet, `lockedCard`'s copy).
 private struct ScanReportHeader: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: 10) {
-            Image(systemName: "doc.text.viewfinder")
+            Image(systemName: "sparkles")
                 .font(.system(size: 26, weight: .semibold))
                 .foregroundStyle(Editorial.ink(colorScheme))
                 .accessibilityHidden(true)
-            Text("Scan a Report")
+            Text("Scan Bloodwork")
                 .font(.title2.bold())
-            Text("Photograph or import a document — Gemocode reads the lab values for you.")
+            Text("Photograph any bloodwork — AI reads it in seconds. First scan free.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+            Text("Or scan on-device — private, works offline.")
+                .font(.footnote)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -1579,6 +1856,69 @@ private struct ScanActionCard: View {
         .padding(16)
         .frame(maxWidth: .infinity)
         .background(Editorial.insetCard(colorScheme), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+// MARK: - Engine choice (multi-photo case)
+
+/// The AI-vs-on-device engine choice for a batch of new photos, presented
+/// as a small sheet rather than `ScanReportView`'s single-photo
+/// `.confirmationDialog` — a dialog's buttons can only carry one line of
+/// plain text each, and this needs a real title + a separate caption per
+/// option (matching the copy specified for this choice), which only a
+/// genuine SwiftUI view can lay out reliably. Reuses `ScanActionCard`'s
+/// existing title/subtitle row treatment rather than inventing a new one.
+private struct ScanEngineChoiceSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let onChooseAI: () -> Void
+    let onChooseOnDevice: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 14) {
+                Button {
+                    dismiss()
+                    onChooseAI()
+                } label: {
+                    ScanActionCard(
+                        icon: "sparkles",
+                        title: "AI scan — reads almost any report",
+                        subtitle: "Your photo is sent for AI reading — not stored."
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("AI scan, reads almost any report")
+                .accessibilityHint("Your photo is sent for AI reading, not stored.")
+
+                Button {
+                    dismiss()
+                    onChooseOnDevice()
+                } label: {
+                    ScanActionCard(
+                        icon: "lock.shield",
+                        title: "On-device scan",
+                        subtitle: "Private · may not read every report."
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("On-device scan")
+                .accessibilityHint("Private, may not read every report.")
+
+                Spacer(minLength: 0)
+            }
+            .padding()
+            .ambientScreen()
+            .navigationTitle("Choose Scan Method")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
     }
 }
 

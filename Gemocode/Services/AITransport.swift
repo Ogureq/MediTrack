@@ -532,3 +532,295 @@ enum AITransport {
         return text
     }
 }
+
+// MARK: - Image extraction (additive: AI bloodwork-photo extraction)
+//
+// A separate, self-contained path for the one AI feature that needs to send
+// image content (`AIScanService`). Kept apart from `DirectSpec`/`generate` —
+// which only ever carry plain-text messages — rather than growing those
+// types to support content-block arrays: every existing caller
+// (AISummaryService, AIChatService, QuickAddAIService) keeps working
+// unchanged. Mirrors the existing relay-vs-BYOK branching, 401 retry-once,
+// timeout, and refusal-before-content-read conventions exactly.
+
+extension AITransport {
+
+    /// One image to send as a Messages API `image` content block (direct/BYOK
+    /// path) or as the relay's `{"image": {...}}` request body. Callers
+    /// (`AIScanService`) downsample and base64-encode before constructing this.
+    struct ImageBlock {
+        let mediaType: String
+        let base64Data: String
+    }
+
+    /// Direct/BYOK-path model + system prompt + user instruction for image
+    /// extraction. The message is always exactly one user turn containing
+    /// the image block followed by a short trigger text — mirrors the
+    /// relay's own request shape (`content: [imageBlock, textBlock]` in
+    /// `backend/src/extractLabs.ts`'s `callExtractLabsAnthropic`) so the
+    /// BYOK path behaves identically to the relay path; unlike `DirectSpec`
+    /// there's no free-form `messages` array to plumb through, since the
+    /// turn shape is always exactly these two blocks. `temperature` defaults
+    /// to 0 for deterministic extraction, matching both
+    /// `QuickAddAIService`'s convention and the relay's own
+    /// `EXTRACT_LABS_TEMPERATURE`.
+    struct DirectImageSpec {
+        let model: String
+        let system: String
+        let userInstruction: String
+        let maxTokens: Int
+        let temperature: Double?
+
+        init(model: String, system: String, userInstruction: String, maxTokens: Int, temperature: Double? = 0) {
+            self.model = model
+            self.system = system
+            self.userInstruction = userInstruction
+            self.maxTokens = maxTokens
+            self.temperature = temperature
+        }
+    }
+
+    /// Extracts lab values from `image`: relay when configured (POST
+    /// `<baseURL>/v1/extract-labs` — no prompt/model is sent, the relay owns
+    /// both), else a direct BYOK call using `direct`. Same routing/failure
+    /// rule as `generate(route:input:direct:)`.
+    static func extractLabs(image: ImageBlock, direct: DirectImageSpec) async throws -> String {
+        if RelayConfig.baseURL != nil {
+            return try await extractLabsViaRelay(image: image, isRetry: false)
+        }
+        if let key = AISummaryService.apiKey, !key.isEmpty {
+            return try await extractLabsDirect(image: image, spec: direct, apiKey: key)
+        }
+        throw AITransportError.notConfigured
+    }
+
+    // MARK: Relay wire shape
+
+    /// The relay's `POST /v1/extract-labs` request body — `{"image":
+    /// {"media_type", "data"}}`. No prompt/model/kind field: the relay owns
+    /// everything except the image, generalizing the "server owns prompts"
+    /// rule `GenerateRequestBody` already follows for `/v1/ai/generate`.
+    /// Kept internal (not private) so `AIScanServiceTests` can assert on the
+    /// wire shape directly — same convention `GenerateRequestBody` uses.
+    struct ExtractLabsRequestBody: Encodable {
+        struct ImagePayload: Encodable {
+            let mediaType: String
+            let data: String
+        }
+        let image: ImagePayload
+    }
+
+    private static func extractLabsViaRelay(image: ImageBlock, isRetry: Bool) async throws -> String {
+        guard let baseURL = RelayConfig.baseURL else {
+            throw AITransportError.notConfigured
+        }
+
+        let token: String
+        do {
+            token = try await RelayAuthState.shared.validToken(baseURL: baseURL)
+        } catch let error as AITransportError {
+            throw error
+        } catch {
+            throw AITransportError.network(error)
+        }
+
+        var request = URLRequest(url: baseURL.appendingPathComponent("v1/extract-labs"))
+        request.httpMethod = "POST"
+        request.timeoutInterval = relayGenerateTimeoutInterval
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        do {
+            request.httpBody = try encoder.encode(
+                ExtractLabsRequestBody(image: .init(mediaType: image.mediaType, data: image.base64Data))
+            )
+        } catch {
+            throw AITransportError.badResponse
+        }
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            throw AITransportError.network(error)
+        }
+        guard let http = response as? HTTPURLResponse else {
+            throw AITransportError.badResponse
+        }
+
+        // Same single-retry-on-401 rule as generateViaRelay.
+        if http.statusCode == 401, !isRetry {
+            await RelayAuthState.shared.invalidate()
+            return try await extractLabsViaRelay(image: image, isRetry: true)
+        }
+
+        guard (200..<300).contains(http.statusCode) else {
+            throw mapRelayError(status: http.statusCode, data: data)
+        }
+
+        guard let decoded = try? JSONDecoder().decode(ExtractLabsResponseBody.self, from: data) else {
+            throw AITransportError.badResponse
+        }
+        if decoded.refused {
+            throw AITransportError.refused
+        }
+        // Re-serialize the relay's already-sanity-parsed `values` array back
+        // into the same `{"values":[...]}` JSON text shape
+        // `AIScanService.mapValues` expects, so that function stays the
+        // single source of truth for catalog-matching/unit-conversion/
+        // plausibility regardless of which path served the request.
+        guard let reencoded = try? JSONEncoder().encode(ValuesEnvelope(values: decoded.values)),
+              let text = String(data: reencoded, encoding: .utf8) else {
+            throw AITransportError.badResponse
+        }
+        return text
+    }
+
+    /// The relay's `POST /v1/extract-labs` response — `{"values":
+    /// [{"name","value","unit","sourceText"}], "refused": Bool}`. Unlike
+    /// `/v1/ai/generate`'s `{"text","refused"}` envelope, the relay has
+    /// ALREADY sanity-parsed the model's raw text into a structured array
+    /// server-side (see `backend/src/extractLabs.ts`'s
+    /// `parseExtractedLabsText`) — there is no free-text `"text"` field to
+    /// re-parse here. Field names are camelCase on the wire (the relay's
+    /// `LabValue` TypeScript interface uses `sourceText`, not
+    /// `source_text` — no snake_case conversion on this decode). Kept
+    /// internal (not private) so `AIScanServiceTests` can assert on it
+    /// directly.
+    struct ExtractLabsResponseBody: Decodable {
+        struct Value: Codable {
+            let name: String
+            let value: Double
+            let unit: String
+            let sourceText: String
+        }
+        let values: [Value]
+        let refused: Bool
+    }
+
+    /// Re-serializes an already-relay-validated `values` array back into the
+    /// `{"values":[...]}` JSON text shape `AIScanService.mapValues` expects
+    /// as input — see `extractLabsViaRelay` above.
+    private struct ValuesEnvelope<Value: Encodable>: Encodable {
+        let values: [Value]
+    }
+
+    // MARK: Direct (BYOK) wire shape
+
+    /// Kept internal (not private) so `AIScanServiceTests` can assert on the
+    /// wire shape directly.
+    struct DirectImageSource: Encodable {
+        let type: String = "base64"
+        let mediaType: String
+        let data: String
+    }
+
+    /// One user-message content block — either an image or a plain text
+    /// block. Kept as a single flexible type (rather than an enum) so
+    /// `Encodable` synthesis can omit whichever field doesn't apply
+    /// (`encodeIfPresent` on the `Optional` properties), matching the
+    /// existing decode-side `DirectContentBlock`'s shape convention. Kept
+    /// internal (not private) so `AIScanServiceTests` can assert on the wire
+    /// shape directly.
+    struct DirectImageContentBlock: Encodable {
+        let type: String
+        let source: DirectImageSource?
+        let text: String?
+
+        static func image(mediaType: String, data: String) -> DirectImageContentBlock {
+            DirectImageContentBlock(type: "image", source: DirectImageSource(mediaType: mediaType, data: data), text: nil)
+        }
+
+        static func text(_ text: String) -> DirectImageContentBlock {
+            DirectImageContentBlock(type: "text", source: nil, text: text)
+        }
+    }
+
+    /// Kept internal (not private) so `AIScanServiceTests` can assert on the
+    /// wire shape directly.
+    struct DirectImageMessage: Encodable {
+        let role: String
+        let content: [DirectImageContentBlock]
+    }
+
+    /// Kept internal (not private) so `AIScanServiceTests` can assert on the
+    /// wire shape directly.
+    struct DirectImageRequestBody: Encodable {
+        let model: String
+        let maxTokens: Int
+        let temperature: Double?
+        let system: String
+        let messages: [DirectImageMessage]
+    }
+
+    private static func extractLabsDirect(image: ImageBlock, spec: DirectImageSpec, apiKey: String) async throws -> String {
+        var request = URLRequest(url: directEndpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = directTimeoutInterval
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+
+        let bodyEncoder = JSONEncoder()
+        bodyEncoder.keyEncodingStrategy = .convertToSnakeCase
+        let body = DirectImageRequestBody(
+            model: spec.model,
+            maxTokens: spec.maxTokens,
+            temperature: spec.temperature,
+            system: spec.system,
+            // Image block first, then the trigger text — mirrors the
+            // relay's own `content: [imageBlock, textBlock]` order exactly
+            // (backend/src/extractLabs.ts's callExtractLabsAnthropic).
+            messages: [DirectImageMessage(role: "user", content: [
+                .image(mediaType: image.mediaType, data: image.base64Data),
+                .text(spec.userInstruction)
+            ])]
+        )
+        do {
+            request.httpBody = try bodyEncoder.encode(body)
+        } catch {
+            throw AITransportError.badResponse
+        }
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            throw AITransportError.network(error)
+        }
+        guard let http = response as? HTTPURLResponse else {
+            throw AITransportError.badResponse
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            let message = (try? JSONDecoder().decode(DirectAPIErrorBody.self, from: data))?
+                .error.message ?? "no details"
+            throw AITransportError.http(http.statusCode, message)
+        }
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        guard let decoded = try? decoder.decode(DirectResponseBody.self, from: data) else {
+            throw AITransportError.badResponse
+        }
+
+        // Check the stop reason before reading content — same rule as
+        // generateDirect: a safety refusal returns HTTP 200 with an empty
+        // or partial content array.
+        if decoded.stopReason == "refusal" {
+            throw AITransportError.refused
+        }
+
+        let text = decoded.content
+            .filter { $0.type == "text" }
+            .compactMap(\.text)
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            throw AITransportError.badResponse
+        }
+        return text
+    }
+}

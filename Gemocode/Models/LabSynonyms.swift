@@ -32,22 +32,28 @@ enum LabSynonyms {
 
         // MARK: Hematology (CBC)
         // (name "Hgb"/"Hct"/"WBC"/"RBC"/"PLT" short names are auto-matched)
+        // "haemoglobin" (UK spelling) was already added in a prior wave —
+        // no change needed here.
         "hemoglobin": [
             "haemoglobin",
             "гемоглобин" // ru (tr spelling matches the English name already)
         ],
+        // "haematocrit" (UK spelling) was already added in a prior wave.
+        // There is no separate "hct" catalog id to alias onto — the single
+        // "hematocrit" entry's own shortName ("Hct") already auto-matches
+        // bare "HCT"/"Hct" on a report, so nothing further is needed.
         "hematocrit": [
             "haematocrit", "pcv",
             "гематокрит", // ru
             "hematokrit" // tr
         ],
         "redBloodCells": [
-            "erythrocytes",
+            "erythrocytes", "red cell count", // uk
             "эритроциты", // ru
             "eritrosit" // tr
         ],
         "whiteBloodCells": [
-            "leukocytes", "leucocytes",
+            "leukocytes", "leucocytes", "white cell count", // uk
             "лейкоциты", // ru
             "lökosit", "lokosit" // tr
         ],
@@ -56,6 +62,8 @@ enum LabSynonyms {
             "тромбоциты", // ru
             "trombosit" // tr
         ],
+        // "Platelet Count" is the catalog's own `name`, so it is already
+        // auto-matched by `match(in:)` without needing an alias here.
         "neutrophilsPercent": [
             "neut", "neutrophil",
             "нейтрофилы", // ru
@@ -71,7 +79,7 @@ enum LabSynonyms {
 
         // MARK: Lipid Panel
         "totalCholesterol": [
-            "cholesterol", "cholesterol total", "total chol",
+            "cholesterol", "cholesterol total", "total chol", "fasting cholesterol", // uk
             "холестерин общий", "общий холестерин", // ru
             "total kolesterol", "toplam kolesterol" // tr
         ],
@@ -86,14 +94,14 @@ enum LabSynonyms {
             "hdl kolesterol" // tr
         ],
         "triglycerides": [
-            "trigs", "triglyceride",
+            "trigs", "triglyceride", "fasting triglycerides", // uk
             "триглицериды", // ru
             "trigliserid", "trigliserit" // tr (both spellings seen on reports)
         ],
 
         // MARK: Metabolic
         "fastingGlucose": [
-            "glucose", "glucose fasting", "fasting blood sugar", "fbs", "blood sugar",
+            "glucose", "glucose fasting", "fasting blood glucose", "fasting blood sugar", "fbs", "blood sugar", // uk adds "fasting blood glucose"
             "глюкоза", "глюкоза натощак", // ru
             "glukoz", "açlık kan şekeri", "aclik kan sekeri" // tr
         ],
@@ -124,8 +132,19 @@ enum LabSynonyms {
             "хлор", "хлориды", // ru
             "klor", "klorür", "klorur" // tr
         ],
+        // "corrected calcium" (albumin-adjusted) is added as an alias to the
+        // same "calcium" catalog id rather than a separate test — the
+        // catalog has no distinct entry for it. On a typical UK panel the
+        // plain "Calcium" row is printed before "Corrected Calcium", and
+        // `parse(lines:)` dedupes by first occurrence (`seenIDs`), so when
+        // both rows are present the RAW (uncorrected) value is the one that
+        // gets imported and the corrected row is silently skipped. That's an
+        // accepted limitation here, not a bug this alias introduces: without
+        // the alias, "Corrected Calcium" wouldn't import at all; with it,
+        // whichever of the two rows appears first in the report wins, same
+        // as every other duplicate-test row in this parser.
         "calcium": [
-            "serum calcium", "calcium total",
+            "serum calcium", "calcium total", "corrected calcium",
             "кальций", // ru
             "kalsiyum" // tr
         ],
@@ -145,7 +164,7 @@ enum LabSynonyms {
             "kreatinin" // tr
         ],
         "bun": [
-            "urea nitrogen", "urea",
+            "urea nitrogen", "urea", // "urea" alone already covers UK reports that print just "Urea"
             "мочевина", "азот мочевины крови", // ru
             "üre", "ure", "kan üre azotu", "kan ure azotu" // tr
         ],
@@ -162,12 +181,12 @@ enum LabSynonyms {
 
         // MARK: Liver Function
         "alt": [
-            "sgpt", "alanine transaminase",
+            "sgpt", "alanine transaminase", "alanine transferase", // uk (imprecise but seen on reports)
             "алт", "аланинаминотрансфераза", // ru
             "alanin aminotransferaz" // tr (also written "ALT", auto-matched)
         ],
         "ast": [
-            "sgot", "aspartate transaminase",
+            "sgot", "aspartate transaminase", "aspartate transferase", // uk (imprecise but seen on reports)
             "аст", "аспартатаминотрансфераза", // ru
             "aspartat aminotransferaz" // tr (also written "AST", auto-matched)
         ],
@@ -176,6 +195,7 @@ enum LabSynonyms {
             "щелочная фосфатаза", // ru
             "alkalen fosfataz" // tr
         ],
+        // "gamma gt" (UK form) was already added in a prior wave.
         "ggt": [
             "gamma gt", "gamma-gt", "gamma glutamyl transferase",
             "ггт", "гамма-глутамилтрансфераза", "гамма-гт", // ru
@@ -193,6 +213,9 @@ enum LabSynonyms {
         ],
         "totalProtein": [
             "protein total", "total protein serum",
+            // "total protein" (UK form) is also the catalog's own `name`
+            // ("Total Protein"), so it is already auto-matched by
+            // `match(in:)` without needing to be repeated here.
             "общий белок", "белок общий", // ru
             "total protein", "toplam protein" // tr
         ],
@@ -235,6 +258,12 @@ enum LabSynonyms {
         ],
         "tibc": [
             "total iron binding capacity", "iron binding capacity",
+            // Dotted UK form. Plain "tibc" already auto-matches via the
+            // catalog's own shortName ("TIBC" -> lowercased "tibc"); the dots
+            // here are non-letters, so the word-boundary check in
+            // `match(in:)` (which only looks at the characters immediately
+            // outside the matched range) is unaffected by them.
+            "t.i.b.c",
             "ожсс", "общая железосвязывающая способность", // ru
             "demir bağlama kapasitesi", "demir baglama kapasitesi", "tdbk" // tr
         ],
@@ -244,6 +273,11 @@ enum LabSynonyms {
             "железо", "сывороточное железо", // ru
             "demir" // tr
         ],
+        // Transferrin saturation ("TSAT", "% saturation") appears on some UK
+        // iron panels but has no corresponding entry in `LabCatalog` — it is
+        // NOT added here. Adding an alias without a matching catalog id would
+        // have nowhere to route the match, so per the task's own instruction
+        // ("only for tests that EXIST in LabCatalog"), this one is skipped.
 
         // MARK: Inflammation
         "crp": [

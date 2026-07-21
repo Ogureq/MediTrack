@@ -28,6 +28,14 @@ export interface Env {
   MODEL_EXTRACT: string;
 
   /**
+   * Model for the vision-based bloodwork-photo extraction endpoint (POST
+   * /v1/extract-labs, src/extractLabs.ts) — deliberately a separate knob
+   * from `MODEL_EXTRACT` above, which is dedicated to the unrelated
+   * free-text Quick Add parsing kind on `/v1/ai/generate`.
+   */
+  MODEL_EXTRACT_LABS: string;
+
+  /**
    * "true" or "false" (a Wrangler `[vars]` string, not a TOML boolean — kept
    * as a string so the comparison at the call site, `env.ENFORCE_PREMIUM ===
    * "true"`, is explicit and grep-able rather than relying on truthy

@@ -506,16 +506,16 @@ struct DashboardView: View {
         }
     }
 
-    // MARK: Scan a report
+    // MARK: Scan Bloodwork
 
-    /// Always-visible outlined CTA — the mockup's persistent "Scan a
-    /// report" button, wired to the same `showingAddReport` entry point the
-    /// toolbar menu and empty state already use.
+    /// Always-visible outlined CTA — the mockup's persistent "Scan
+    /// Bloodwork" button, wired to the same `showingAddReport` entry point
+    /// the toolbar menu and empty state already use.
     private var scanReportButton: some View {
         Button {
             showingAddReport = true
         } label: {
-            Label("Scan a Report", systemImage: "doc.text.viewfinder")
+            Label("Scan Bloodwork", systemImage: "doc.text.viewfinder")
         }
         .buttonStyle(OutlinedPillButtonStyle())
         .accessibilityHint("Opens the report scanner.")

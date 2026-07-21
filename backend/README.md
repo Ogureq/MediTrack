@@ -26,8 +26,9 @@ All error responses (any non-200) share one shape:
 ```
 
 with codes: `401 unauthorized`, `402 premium_required`, `429 quota_exceeded`,
-`400 bad_request`, `502 upstream_error` (plus `404 not_found` for unknown
-routes).
+`400 bad_request`, `413 payload_too_large` (POST /v1/extract-labs only),
+`502 upstream_error`, `502 invalid_model_output` (POST /v1/extract-labs
+only) (plus `404 not_found` for unknown routes).
 
 ### `POST /v1/auth/anonymous`
 
@@ -101,6 +102,48 @@ level, nested — an `attachment`/`imageData` field fails the request rather
 than being dropped), oversized fields or payloads (`report` input is capped
 at ~32KB total), and base64-blob-shaped strings in any text field.
 
+### `POST /v1/extract-labs`
+
+`Authorization: Bearer <jwt>`. Extracts lab values from a photographed lab
+report via a vision-capable Anthropic model — a premium AI fallback that
+complements (does not replace) the on-device deterministic OCR path
+(`Gemocode/Services/LabScanService.swift`). The server owns the entire
+extraction prompt: the request accepts only an `image` field, so there is no
+way for a client to supply or override any prompt content.
+
+```json
+// request
+{ "image": { "media_type": "image/jpeg", "data": "<base64, ~4MB decoded max>" } }
+
+// 200 response
+{ "values": [
+    { "name": "Fasting Glucose", "value": 95, "unit": "mg/dL", "sourceText": "Fasting Glucose 95 mg/dL" }
+  ], "refused": false }
+
+// 200 response when Anthropic ends with stop_reason == "refusal"
+{ "values": [], "refused": true }
+```
+
+- `media_type` must be exactly `"image/jpeg"` or `"image/png"` (400
+  otherwise); `data` must be valid base64 (400 if malformed) and decode to
+  ~4MB or less (`413 payload_too_large` otherwise — checked before the
+  base64-shape check, so an oversized garbage string is reported as "too
+  large" rather than "malformed").
+- Model: `MODEL_EXTRACT_LABS` (default `claude-sonnet-5`; a harder
+  perception task than `MODEL_EXTRACT`'s free-text parsing, so it defaults to
+  a stronger model despite the extra cost — a misread lab value has real
+  correctness stakes). `max_tokens` 2000, `temperature` 0.
+- If Anthropic's response text doesn't parse into `{"values": [...]}` (even
+  after tolerantly stripping code fences / wrapper prose), the relay returns
+  `502 invalid_model_output` rather than passing through garbage.
+- Premium gating mirrors `chat`/`extract` exactly — **no** one-lifetime-free
+  allowance (that's scoped to the `report` kind only).
+- Token accounting for this endpoint books Anthropic's *actual*
+  `usage.input_tokens + usage.output_tokens` against the daily ledger
+  (falling back to a fixed pre-flight estimate only if that field is
+  missing), rather than `/v1/ai/generate`'s fixed per-kind reservation —
+  image input-token cost varies too widely by photo size to fixed-budget.
+
 ## Premium enforcement
 
 `ENFORCE_PREMIUM` (wrangler `[vars]`, string `"true"`/`"false"`, default
@@ -153,6 +196,10 @@ backend/
     generate.ts   — /v1/ai/generate: kind dispatch, chat/extract schemas +
                     prompts, non-streaming Anthropic call + refusal mapping
     relay.ts      — the "report" kind's request schema + system prompt
+    extractLabs.ts — /v1/extract-labs: image request validation, the
+                    vision-extraction system prompt, the Anthropic call
+                    (image content block), and tolerant response sanity
+                    parsing (code-fence stripping, values[] shape check)
     validation.ts — shared field validators (unknown-key + base64-blob rejection)
     logging.ts    — metadata-only (never content) usage log entries
     env.ts        — the `Env` bindings/vars/secrets interface
@@ -328,6 +375,7 @@ logged basis — not a change to the global backstop.
 | `/health` | GET | none | Liveness check |
 | `/v1/auth/anonymous` | POST | none (App Attest is a GA-checklist item) | Exchange a `deviceID` for a 24h JWT with a `premium` claim |
 | `/v1/ai/generate` | POST | `Authorization: Bearer <JWT>` | Premium- and quota-gated non-streaming relay to Anthropic (`report`/`chat`/`extract`) |
+| `/v1/extract-labs` | POST | `Authorization: Bearer <JWT>` | Premium- and quota-gated relay that extracts lab values from a photographed lab report |
 
 The earlier scaffold's `/v1/auth/refresh`, `/v1/usage/me`, and streaming
 `/v1/ai/report-summary` routes were replaced by this contract (clients
@@ -344,6 +392,7 @@ follow-up). Their underlying token-pair helpers remain in `src/auth.ts`
 | `MODEL_REPORT` | `[vars]` | Model for `kind: "report"` (default `claude-opus-4-8`) |
 | `MODEL_CHAT` | `[vars]` | Model for `kind: "chat"` (default `claude-sonnet-5`) |
 | `MODEL_EXTRACT` | `[vars]` | Model for `kind: "extract"` (default `claude-haiku-4-5-20251001`) |
-| `ENFORCE_PREMIUM` | `[vars]` | `"true"`/`"false"` — gate `/v1/ai/generate` on the `premium` claim |
+| `MODEL_EXTRACT_LABS` | `[vars]` | Model for `/v1/extract-labs` (default `claude-sonnet-5`) |
+| `ENFORCE_PREMIUM` | `[vars]` | `"true"`/`"false"` — gate `/v1/ai/generate` and `/v1/extract-labs` on the `premium` claim |
 | `ANTHROPIC_API_KEY` | secret | Owner's Anthropic key — `wrangler secret put` only |
 | `JWT_SECRET` | secret | HS256 signing key — `wrangler secret put` only |

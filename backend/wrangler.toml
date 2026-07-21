@@ -43,6 +43,15 @@ MODEL_REPORT = "claude-opus-4-8"
 MODEL_CHAT = "claude-sonnet-5"
 MODEL_EXTRACT = "claude-haiku-4-5-20251001"
 
+# Model for the vision-based bloodwork-photo extraction endpoint
+# (POST /v1/extract-labs, src/extractLabs.ts). This is a harder
+# perception/OCR task than MODEL_EXTRACT's free-text Quick Add parsing —
+# misreading a printed lab value has real correctness stakes in a
+# health-tracking app — so this defaults to Sonnet rather than Haiku despite
+# the extra cost. Tune independently of MODEL_EXTRACT if usage data suggests
+# otherwise.
+MODEL_EXTRACT_LABS = "claude-sonnet-5"
+
 # Premium enforcement gate for /v1/ai/generate (src/index.ts). "false" until
 # App Store subscription verification (auth.ts#verifyAppTransactionPlaceholder)
 # and App Attest are both implemented — see README.md's GA checklist before

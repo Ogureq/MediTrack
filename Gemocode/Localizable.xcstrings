@@ -1141,6 +1141,16 @@
         }
       }
     },
+    "AI Scan Failed": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ошибка ИИ-сканирования"
+          }
+        }
+      }
+    },
     "AI Summary (Optional)": {
       "localizations": {
         "ru": {
@@ -1161,12 +1171,62 @@
         }
       }
     },
+    "AI couldn't read this photo — try the on-device scan or retake the photo.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ИИ не смог прочитать это фото — попробуйте сканирование на устройстве или переснимите фото."
+          }
+        }
+      }
+    },
     "AI fill failed: %@": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Не удалось заполнить с помощью ИИ: %@"
+          }
+        }
+      }
+    },
+    "AI scan — reads almost any report": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ИИ-сканирование — читает почти любой отчёт"
+          }
+        }
+      }
+    },
+    "AI scan — reads almost any report. Your photo is sent for AI reading, not stored.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ИИ-сканирование — читает почти любой отчёт. Ваше фото отправляется на ИИ-чтение и не сохраняется."
+          }
+        }
+      }
+    },
+    "AI scan, reads almost any report": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ИИ-сканирование, читает почти любой отчёт"
+          }
+        }
+      }
+    },
+    "AI scanning isn't available right now — Gemocode used the on-device scan instead.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ИИ-сканирование сейчас недоступно — Gemocode использовал сканирование на устройстве."
           }
         }
       }
@@ -2441,6 +2501,16 @@
         }
       }
     },
+    "Bloodwork": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Анализ крови"
+          }
+        }
+      }
+    },
     "Body Basics": {
       "localizations": {
         "ru": {
@@ -2707,6 +2777,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Холестерин"
+          }
+        }
+      }
+    },
+    "Choose Scan Method": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выберите способ сканирования"
           }
         }
       }
@@ -4601,6 +4681,16 @@
         }
       }
     },
+    "How should Gemocode read this?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Как Gemocode должен прочитать это?"
+          }
+        }
+      }
+    },
     "Icon": {
       "localizations": {
         "ru": {
@@ -6115,6 +6205,26 @@
         }
       }
     },
+    "On-device scan": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сканирование на устройстве"
+          }
+        }
+      }
+    },
+    "On-device scan — private, may not read every report.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сканирование на устройстве — приватно, может прочитать не каждый отчёт."
+          }
+        }
+      }
+    },
     "Once daily": {
       "localizations": {
         "ru": {
@@ -6241,6 +6351,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Открывает запись для редактирования."
+          }
+        }
+      }
+    },
+    "Or scan on-device — private, works offline.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Или сканируйте на устройстве — приватно, работает офлайн."
           }
         }
       }
@@ -6485,6 +6605,16 @@
         }
       }
     },
+    "Photograph any bloodwork — AI reads it in seconds. First scan free.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сфотографируйте любой анализ крови — ИИ прочитает его за секунды. Первое сканирование бесплатно."
+          }
+        }
+      }
+    },
     "Photograph any lab report — values extracted and organized automatically.": {
       "localizations": {
         "ru": {
@@ -6661,6 +6791,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Конфиденциальность по умолчанию"
+          }
+        }
+      }
+    },
+    "Private · may not read every report.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приватно · может прочитать не каждый отчёт."
+          }
+        }
+      }
+    },
+    "Private, may not read every report.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приватно, может прочитать не каждый отчёт."
           }
         }
       }
@@ -7355,6 +7505,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Сканирование и расшифровка анализов"
+          }
+        }
+      }
+    },
+    "Scan Bloodwork": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сканировать анализ крови"
           }
         }
       }
@@ -8589,6 +8749,16 @@
         }
       }
     },
+    "Try On-Device Instead": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Использовать сканирование на устройстве"
+          }
+        }
+      }
+    },
     "Try again in %llds.": {
       "localizations": {
         "ru": {
@@ -8779,6 +8949,16 @@
         }
       }
     },
+    "Unlimited scans with Premium — every report decoded in seconds.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Безлимитные сканирования с Премиум — любой отчёт расшифровывается за секунды."
+          }
+        }
+      }
+    },
     "Unlimited scans, decoded in seconds": {
       "localizations": {
         "ru": {
@@ -8805,6 +8985,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Открыть Premium"
+          }
+        }
+      }
+    },
+    "Unlock Unlimited Scans": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Разблокируйте безлимитные сканирования"
           }
         }
       }
@@ -9509,6 +9699,16 @@
         }
       }
     },
+    "You've used your free scan.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вы использовали бесплатное сканирование."
+          }
+        }
+      }
+    },
     "Your BMI is in the %@ range — you'll see this reflected in your Health Review.": {
       "localizations": {
         "ru": {
@@ -9655,6 +9855,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ваше имя, дата рождения, группа крови, аллергии, медицинская карта и оригиналы документов никогда не включаются в этот запрос."
+          }
+        }
+      }
+    },
+    "Your photo is sent for AI reading — not stored.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ваше фото отправляется на ИИ-чтение — не сохраняется."
+          }
+        }
+      }
+    },
+    "Your photo is sent for AI reading, not stored.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ваше фото отправляется на ИИ-чтение, не сохраняется."
           }
         }
       }
