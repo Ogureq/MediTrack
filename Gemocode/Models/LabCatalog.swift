@@ -84,6 +84,10 @@ struct LabReference: Identifiable, Hashable {
     let lowMeaning: String      // plain-language meaning of a LOW value
     let highMeaning: String     // plain-language meaning of a HIGH value
     let about: String           // what this test measures
+    /// Whether this test is typically drawn fasting (e.g. an 8–12 hour fast).
+    /// Defaults to `false` so every existing initializer call below keeps
+    /// compiling unchanged; only fasting-sensitive tests set it `true`.
+    var requiresFasting: Bool = false
 
     /// Resolved reference range for the given sex. Falls back to `commonRange`,
     /// and finally to the widest span across the sex-specific ranges.
@@ -301,7 +305,8 @@ enum LabCatalog {
             criticalHigh: nil,
             lowMeaning: String(localized: "lab.totalCholesterol.lowMeaning", defaultValue: "A low value is generally not a concern on its own and is usually considered favorable for heart health.", table: "Engine"),
             highMeaning: String(localized: "lab.totalCholesterol.highMeaning", defaultValue: "A high value may relate to diet, activity level, genetics, or other conditions and can raise cardiovascular risk over time. Discuss elevated results with a clinician.", table: "Engine"),
-            about: String(localized: "lab.totalCholesterol.about", defaultValue: "Total cholesterol sums the cholesterol carried by all lipoprotein particles in your blood.", table: "Engine")
+            about: String(localized: "lab.totalCholesterol.about", defaultValue: "Total cholesterol sums the cholesterol carried by all lipoprotein particles in your blood.", table: "Engine"),
+            requiresFasting: true
         ),
         LabReference(
             id: "ldlCholesterol",
@@ -316,7 +321,8 @@ enum LabCatalog {
             criticalHigh: nil,
             lowMeaning: String(localized: "lab.ldlCholesterol.lowMeaning", defaultValue: "A low value is generally desirable and associated with lower cardiovascular risk.", table: "Engine"),
             highMeaning: String(localized: "lab.ldlCholesterol.highMeaning", defaultValue: "A high value can build up in artery walls and raise cardiovascular risk over time. Diet, activity, genetics, and other factors contribute; discuss elevated results with a clinician.", table: "Engine"),
-            about: String(localized: "lab.ldlCholesterol.about", defaultValue: "LDL, sometimes called \"bad\" cholesterol, can contribute to plaque buildup in arteries.", table: "Engine")
+            about: String(localized: "lab.ldlCholesterol.about", defaultValue: "LDL, sometimes called \"bad\" cholesterol, can contribute to plaque buildup in arteries.", table: "Engine"),
+            requiresFasting: true
         ),
         LabReference(
             id: "hdlCholesterol",
@@ -331,7 +337,8 @@ enum LabCatalog {
             criticalHigh: nil,
             lowMeaning: String(localized: "lab.hdlCholesterol.lowMeaning", defaultValue: "A low value offers less protective benefit and is linked to higher cardiovascular risk. Regular activity and other habits can help; discuss with a clinician.", table: "Engine"),
             highMeaning: String(localized: "lab.hdlCholesterol.highMeaning", defaultValue: "A higher value is generally considered protective for heart health.", table: "Engine"),
-            about: String(localized: "lab.hdlCholesterol.about", defaultValue: "HDL, sometimes called \"good\" cholesterol, helps remove other cholesterol from the bloodstream.", table: "Engine")
+            about: String(localized: "lab.hdlCholesterol.about", defaultValue: "HDL, sometimes called \"good\" cholesterol, helps remove other cholesterol from the bloodstream.", table: "Engine"),
+            requiresFasting: true
         ),
         LabReference(
             id: "triglycerides",
@@ -346,7 +353,8 @@ enum LabCatalog {
             criticalHigh: 500.0,
             lowMeaning: String(localized: "lab.triglycerides.lowMeaning", defaultValue: "A low value is generally desirable.", table: "Engine"),
             highMeaning: String(localized: "lab.triglycerides.highMeaning", defaultValue: "A high value can relate to diet, alcohol, excess weight, uncontrolled blood sugar, or a recent non-fasting sample. Very high values warrant prompt discussion with a clinician.", table: "Engine"),
-            about: String(localized: "lab.triglycerides.about", defaultValue: "Triglycerides are a type of fat in the blood used and stored for energy.", table: "Engine")
+            about: String(localized: "lab.triglycerides.about", defaultValue: "Triglycerides are a type of fat in the blood used and stored for energy.", table: "Engine"),
+            requiresFasting: true
         ),
 
         // MARK: Metabolic
@@ -364,7 +372,8 @@ enum LabCatalog {
             criticalHigh: 250.0,
             lowMeaning: String(localized: "lab.fastingGlucose.lowMeaning", defaultValue: "A low value can follow prolonged fasting, intense exercise, or certain medications, and may cause shakiness or lightheadedness. Frequent low readings deserve a clinician's attention.", table: "Engine"),
             highMeaning: String(localized: "lab.fastingGlucose.highMeaning", defaultValue: "A high value can reflect a non-fasting sample, stress, or elevated blood sugar. Repeated high values should be reviewed with a clinician.", table: "Engine"),
-            about: String(localized: "lab.fastingGlucose.about", defaultValue: "Fasting glucose measures blood sugar after not eating, typically for at least 8 hours.", table: "Engine")
+            about: String(localized: "lab.fastingGlucose.about", defaultValue: "Fasting glucose measures blood sugar after not eating, typically for at least 8 hours.", table: "Engine"),
+            requiresFasting: true
         ),
         LabReference(
             id: "hba1c",
@@ -394,7 +403,8 @@ enum LabCatalog {
             criticalHigh: nil,
             lowMeaning: String(localized: "lab.insulin.lowMeaning", defaultValue: "A low value can simply reflect fasting. Interpretation depends on your blood sugar at the same time; discuss with a clinician if you have questions.", table: "Engine"),
             highMeaning: String(localized: "lab.insulin.highMeaning", defaultValue: "A high value can accompany insulin resistance and is often linked to excess weight or inactivity. Consider reviewing elevated results with a clinician.", table: "Engine"),
-            about: String(localized: "lab.insulin.about", defaultValue: "Insulin is the hormone that helps move sugar from the blood into cells for energy.", table: "Engine")
+            about: String(localized: "lab.insulin.about", defaultValue: "Insulin is the hormone that helps move sugar from the blood into cells for energy.", table: "Engine"),
+            requiresFasting: true
         ),
 
         // MARK: Kidney & Electrolytes
@@ -766,7 +776,8 @@ enum LabCatalog {
             criticalHigh: nil,
             lowMeaning: String(localized: "lab.ferritin.lowMeaning", defaultValue: "A low value is a sensitive sign of low iron stores and can accompany fatigue. Diet or iron supplements may help; discuss with a clinician.", table: "Engine"),
             highMeaning: String(localized: "lab.ferritin.highMeaning", defaultValue: "A high value can reflect iron overload but also rises with inflammation or infection. Discuss persistent elevation with a clinician.", table: "Engine"),
-            about: String(localized: "lab.ferritin.about", defaultValue: "Ferritin reflects the amount of iron your body has in storage.", table: "Engine")
+            about: String(localized: "lab.ferritin.about", defaultValue: "Ferritin reflects the amount of iron your body has in storage.", table: "Engine"),
+            requiresFasting: true
         ),
         LabReference(
             id: "iron",
@@ -781,7 +792,8 @@ enum LabCatalog {
             criticalHigh: nil,
             lowMeaning: String(localized: "lab.iron.lowMeaning", defaultValue: "A low value can accompany iron deficiency or blood loss and varies through the day. It is interpreted with ferritin and TIBC; discuss with a clinician.", table: "Engine"),
             highMeaning: String(localized: "lab.iron.highMeaning", defaultValue: "A high value can follow iron supplements, a recent iron-rich meal, or iron overload. Consider reviewing persistent elevation with a clinician.", table: "Engine"),
-            about: String(localized: "lab.iron.about", defaultValue: "Serum iron measures the amount of iron circulating in the blood at the time of the test.", table: "Engine")
+            about: String(localized: "lab.iron.about", defaultValue: "Serum iron measures the amount of iron circulating in the blood at the time of the test.", table: "Engine"),
+            requiresFasting: true
         ),
         LabReference(
             id: "tibc",
@@ -796,7 +808,8 @@ enum LabCatalog {
             criticalHigh: nil,
             lowMeaning: String(localized: "lab.tibc.lowMeaning", defaultValue: "A low value can be seen with inflammation or iron overload. It is interpreted with iron and ferritin; discuss with a clinician if needed.", table: "Engine"),
             highMeaning: String(localized: "lab.tibc.highMeaning", defaultValue: "A high value often accompanies iron deficiency, as the blood has more capacity to carry iron. Discuss with a clinician alongside iron and ferritin.", table: "Engine"),
-            about: String(localized: "lab.tibc.about", defaultValue: "TIBC measures the blood's total capacity to bind and transport iron, reflecting iron status.", table: "Engine")
+            about: String(localized: "lab.tibc.about", defaultValue: "TIBC measures the blood's total capacity to bind and transport iron, reflecting iron status.", table: "Engine"),
+            requiresFasting: true
         ),
 
         // MARK: Inflammation
@@ -862,4 +875,11 @@ enum LabCatalog {
     static func tests(in category: LabCategory) -> [LabReference] {
         tests.filter { $0.category == category }
     }
+
+    /// Total number of tests in the catalog — the "46 tests tracked" figure.
+    /// Distinct from `RetestSchedule.trackedTestCount`, which counts only the
+    /// smaller subset of catalog tests that have a suggested re-test cadence
+    /// (currently 38); this counts every reference test in `LabCatalog`,
+    /// cadence or not.
+    static var count: Int { tests.count }
 }

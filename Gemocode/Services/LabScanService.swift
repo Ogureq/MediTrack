@@ -67,6 +67,17 @@ enum LabScanService {
                 continuation.resume(returning: lines)
             }
             request.recognitionLevel = .accurate
+            // Russian is Cyrillic-script and needs an explicit language hint;
+            // Turkish is Latin-script and reads acceptably under English
+            // recognition, so it is intentionally not added here — Vision's
+            // supported-language list for .accurate on iOS 17 has not been
+            // verified for "tr-TR", and an unsupported language code makes
+            // perform(_:) throw.
+            request.recognitionLanguages = ["en-US", "ru-RU"]
+            request.automaticallyDetectsLanguage = true
+            // Left off: language correction would try to "fix" Cyrillic
+            // tokens (and numbers) against an English dictionary, which is
+            // more likely to corrupt a lab value/label than help it.
             request.usesLanguageCorrection = false
             do {
                 try VNImageRequestHandler(cgImage: image).perform([request])
@@ -93,22 +104,33 @@ enum LabScanService {
             guard let (reference, range) = LabSynonyms.match(in: lower),
                   !seenIDs.contains(reference.id) else { continue }
 
+            // Text to scan for a unit token: the matched line, plus the
+            // fallback value line when the value came from there instead.
+            var unitSearchText = lower
             var value = firstNumber(in: String(lower[range.upperBound...]))
             if value == nil, index + 1 < lines.count {
                 let next = lines[index + 1].lowercased()
                 if LabSynonyms.match(in: next) == nil {
                     value = firstNumber(in: next)
+                    unitSearchText += " " + next
                 }
             }
-            guard let value, value > 0, value < 1_000_000 else { continue }
+            guard var resolvedValue = value, resolvedValue > 0, resolvedValue < 1_000_000 else { continue }
+
+            // Convert non-canonical (mostly Russian/European) units to the
+            // catalog's canonical unit before the plausibility check below.
+            resolvedValue = LabUnitConversion.convert(resolvedValue, id: reference.id, searchText: unitSearchText)
 
             // Discard values wildly outside the plausible range (dates, IDs…).
-            if let plausible = reference.referenceRange(for: nil), value > plausible.upperBound * 50 {
+            // Checked AFTER unit conversion so e.g. a glucose of 5.4 mmol/L
+            // (→ ~97 mg/dL) is judged against the mg/dL reference range,
+            // not the raw mmol/L number.
+            if let plausible = reference.referenceRange(for: nil), resolvedValue > plausible.upperBound * 50 {
                 continue
             }
 
             seenIDs.insert(reference.id)
-            results.append(ScannedLabValue(reference: reference, value: value, sourceLine: trimmed))
+            results.append(ScannedLabValue(reference: reference, value: resolvedValue, sourceLine: trimmed))
         }
         return results
     }
@@ -132,5 +154,98 @@ enum LabScanService {
             token.removeLast()
         }
         return Double(token)
+    }
+}
+
+/// Table-driven unit conversion for lab values reported in a non-canonical
+/// unit — chiefly the mmol/L, µmol/L, and g/L units used on Russian/European
+/// lab reports where `LabCatalog` stores the canonical value in mg/dL,
+/// µg/dL, or g/dL. Applied only to catalog ids where BOTH the canonical
+/// unit and a standard molar-conversion factor could be verified against
+/// `LabCatalog`; see `LabScanService.parse` callers for where this is used.
+///
+/// Electrolytes reported in mmol/L whose catalog unit is already
+/// numerically equivalent (sodium, potassium, chloride — mEq/L) have no
+/// entry here on purpose: `convert` returns the value unchanged when an id
+/// has no rule, which is exactly the desired pass-through behavior.
+enum LabUnitConversion {
+
+    /// One source-unit token (or spelling variant) plus the multiplier that
+    /// turns a value reported in that unit into the catalog's canonical unit
+    /// for a given test id.
+    struct Rule {
+        let tokens: [String]
+        let multiplier: Double
+    }
+
+    /// Catalog id -> convertible source-unit rules. The search text (the
+    /// matched OCR line, already lowercased) is scanned for each token in
+    /// turn; the first one found wins.
+    static let rules: [String: [Rule]] = [
+        // mmol/L -> mg/dL (standard molar conversion factors).
+        "fastingGlucose": [Rule(tokens: ["mmol/l", "ммоль/л"], multiplier: 18.016)],
+        "totalCholesterol": [Rule(tokens: ["mmol/l", "ммоль/л"], multiplier: 38.67)],
+        "ldlCholesterol": [Rule(tokens: ["mmol/l", "ммоль/л"], multiplier: 38.67)],
+        "hdlCholesterol": [Rule(tokens: ["mmol/l", "ммоль/л"], multiplier: 38.67)],
+        "triglycerides": [Rule(tokens: ["mmol/l", "ммоль/л"], multiplier: 88.57)],
+        "calcium": [Rule(tokens: ["mmol/l", "ммоль/л"], multiplier: 4.008)],
+        "magnesium": [Rule(tokens: ["mmol/l", "ммоль/л"], multiplier: 2.431)],
+        // Urea (mmol/L) -> Blood Urea Nitrogen (mg/dL): the catalog's "bun"
+        // id is nitrogen content, not whole-molecule urea, so the factor is
+        // urea-mg/dL (×6.006) times the nitrogen fraction 28/60.06 (×0.4663)
+        // = ×2.8 overall — the standard clinical urea(mmol/L)->BUN(mg/dL)
+        // conversion factor.
+        "bun": [Rule(tokens: ["mmol/l", "ммоль/л"], multiplier: 2.8)],
+
+        // µmol/L -> mg/dL (creatinine, bilirubin, uric acid) or µg/dL (iron).
+        "creatinine": [Rule(tokens: ["µmol/l", "umol/l", "мкмоль/л"], multiplier: 1 / 88.42)],
+        "totalBilirubin": [Rule(tokens: ["µmol/l", "umol/l", "мкмоль/л"], multiplier: 1 / 17.104)],
+        "uricAcid": [Rule(tokens: ["µmol/l", "umol/l", "мкмоль/л"], multiplier: 1 / 59.48)],
+        "iron": [Rule(tokens: ["µmol/l", "umol/l", "мкмоль/л"], multiplier: 5.585)],
+
+        // g/L -> g/dL (divide by 10).
+        "hemoglobin": [Rule(tokens: ["g/l", "г/л"], multiplier: 0.1)],
+        "albumin": [Rule(tokens: ["g/l", "г/л"], multiplier: 0.1)],
+        "totalProtein": [Rule(tokens: ["g/l", "г/л"], multiplier: 0.1)]
+
+        // Deliberately NOT converted (see LabScanService.swift file header
+        // comment / PR notes for the full reasoning):
+        //  - "iron" via mmol/L->mg/dL (×5.585): iron's catalog unit is
+        //    µg/dL, not mg/dL, so that particular factor does not apply;
+        //    the µmol/L->µg/dL rule above is the one that's actually used.
+        //  - "phosphorus": commonly reported in mmol/L in Russian reports,
+        //    but no factor for it was given/verified here, so it is left
+        //    unconverted rather than guess at one.
+    ]
+
+    /// Converts `value` to the catalog's canonical unit for `id` if
+    /// `searchText` (already lowercased) contains one of that id's
+    /// recognized source-unit tokens. Returns `value` unchanged when there
+    /// is no rule for `id`, or no token from its rules is found — which is
+    /// also the correct behavior for units already matching the canonical
+    /// unit (or electrolytes reported in mmol/L, numerically equal to their
+    /// mEq/L canonical unit).
+    static func convert(_ value: Double, id: String, searchText: String) -> Double {
+        guard let candidateRules = rules[id] else { return value }
+        for rule in candidateRules {
+            for token in rule.tokens where containsToken(token, in: searchText) {
+                return value * rule.multiplier
+            }
+        }
+        return value
+    }
+
+    /// Same word-boundary rule as `LabSynonyms.match`: the characters
+    /// immediately before/after the token (if any) must not be letters, so
+    /// e.g. "г/л" doesn't fire inside "мг/л" or "мкг/л".
+    private static func containsToken(_ token: String, in text: String) -> Bool {
+        guard let range = text.range(of: token) else { return false }
+        if range.lowerBound > text.startIndex, text[text.index(before: range.lowerBound)].isLetter {
+            return false
+        }
+        if range.upperBound < text.endIndex, text[range.upperBound].isLetter {
+            return false
+        }
+        return true
     }
 }

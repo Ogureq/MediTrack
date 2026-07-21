@@ -426,6 +426,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Gemocode;
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Gemocode uses Face ID to keep your medical data private.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Gemocode uses the camera to photograph lab reports so their values can be read on your device.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "Gemocode uses calendar access only to add appointments you choose to export — nothing is read from your calendar.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Gemocode imports your vitals from Apple Health so they can be included in your health reviews.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Gemocode can save the vitals you log back to Apple Health.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -461,6 +462,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Gemocode;
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Gemocode uses Face ID to keep your medical data private.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Gemocode uses the camera to photograph lab reports so their values can be read on your device.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "Gemocode uses calendar access only to add appointments you choose to export — nothing is read from your calendar.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Gemocode imports your vitals from Apple Health so they can be included in your health reviews.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Gemocode can save the vitals you log back to Apple Health.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

@@ -300,4 +300,179 @@ final class RetestScheduleTests: XCTestCase {
         XCTAssertEqual(next.id, "triglycerides")
         XCTAssertEqual(next.status, .upcoming)
     }
+
+    // MARK: - Draw bundling: nextDraw
+
+    /// Builds a `RetestItem` directly (no report/context round-trip needed —
+    /// `nextDraw` operates purely on already-built items).
+    private func makeItem(id: String, dueDate: Date, status: RetestStatus, intervalMonths: Int = 12) -> RetestItem {
+        RetestItem(
+            id: id,
+            displayName: id,
+            lastTestedAt: dueDate,
+            intervalMonths: intervalMonths,
+            dueDate: dueDate,
+            status: status
+        )
+    }
+
+    func testNextDrawReturnsNilForEmptyItems() {
+        XCTAssertNil(RetestSchedule.nextDraw(items: [], now: fixedNow))
+    }
+
+    func testNextDrawBundlesOverdueDueSoonAndUpcomingWithinACustomWindow() throws {
+        // Anchors on `now` because an overdue item is present. With the
+        // default 30-day window an upcoming item (by definition >30 days out
+        // from `now`) could never be pulled in, so this test widens the
+        // window to demonstrate all three statuses bundling together.
+        let overdueDue = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: -5, to: fixedNow))
+        let dueSoonDue = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 10, to: fixedNow))
+        let upcomingWithinDue = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 40, to: fixedNow))
+        let upcomingOutsideDue = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 50, to: fixedNow))
+
+        let items = [
+            makeItem(id: "hba1c", dueDate: overdueDue, status: .overdue),
+            makeItem(id: "tsh", dueDate: dueSoonDue, status: .dueSoon),
+            makeItem(id: "vitaminD", dueDate: upcomingWithinDue, status: .upcoming),
+            makeItem(id: "freeT3", dueDate: upcomingOutsideDue, status: .upcoming),
+        ]
+
+        let bundle = try XCTUnwrap(RetestSchedule.nextDraw(items: items, now: fixedNow, windowDays: 45))
+
+        XCTAssertEqual(Set(bundle.items.map(\.id)), ["hba1c", "tsh", "vitaminD"])
+        XCTAssertTrue(Calendar.current.isDate(bundle.date, inSameDayAs: fixedNow))
+        XCTAssertEqual(bundle.estimatedSavings, 30) // 3 tests -> 2 avoided draws * $15
+    }
+
+    func testNextDrawWindowEdgeTwentyNineDaysIncludedThirtyOneDaysExcluded() throws {
+        // No overdue item, so the anchor is the due-soon item's own due
+        // date (day +10), not `now`. Upcoming items are then measured
+        // against THAT anchor, not `now`.
+        let dueSoonDue = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 10, to: fixedNow))
+        let within29Due = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 10 + 29, to: fixedNow))
+        let outside31Due = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 10 + 31, to: fixedNow))
+
+        let items = [
+            makeItem(id: "tsh", dueDate: dueSoonDue, status: .dueSoon),
+            makeItem(id: "vitaminD", dueDate: within29Due, status: .upcoming),
+            makeItem(id: "freeT3", dueDate: outside31Due, status: .upcoming),
+        ]
+
+        let bundle = try XCTUnwrap(RetestSchedule.nextDraw(items: items, now: fixedNow))
+
+        XCTAssertEqual(Set(bundle.items.map(\.id)), ["tsh", "vitaminD"])
+        XCTAssertTrue(Calendar.current.isDate(bundle.date, inSameDayAs: dueSoonDue))
+    }
+
+    func testNextDrawFallsBackToSoonestUpcomingItemWhenNothingIsDueOrSoon() throws {
+        let soonestDue = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 35, to: fixedNow))
+        let withinWindowDue = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 35 + 20, to: fixedNow))
+        let outsideWindowDue = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 35 + 40, to: fixedNow))
+
+        let items = [
+            makeItem(id: "vitaminD", dueDate: soonestDue, status: .upcoming),
+            makeItem(id: "tsh", dueDate: withinWindowDue, status: .upcoming),
+            makeItem(id: "freeT3", dueDate: outsideWindowDue, status: .upcoming),
+        ]
+
+        let bundle = try XCTUnwrap(RetestSchedule.nextDraw(items: items, now: fixedNow))
+
+        XCTAssertEqual(bundle.items.map(\.id), ["vitaminD", "tsh"])
+        XCTAssertTrue(Calendar.current.isDate(bundle.date, inSameDayAs: soonestDue))
+        XCTAssertEqual(bundle.estimatedSavings, 15) // 2 tests -> 1 avoided draw * $15
+    }
+
+    func testNextDrawRequiresFastingWhenAnyBundledTestRequiresFasting() throws {
+        let overdueDue = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: -1, to: fixedNow))
+        let dueSoonDue = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 5, to: fixedNow))
+
+        let fastingItems = [
+            makeItem(id: "tsh", dueDate: overdueDue, status: .overdue),        // not fasting
+            makeItem(id: "fastingGlucose", dueDate: dueSoonDue, status: .dueSoon), // fasting
+        ]
+        let fastingBundle = try XCTUnwrap(RetestSchedule.nextDraw(items: fastingItems, now: fixedNow))
+        XCTAssertTrue(fastingBundle.requiresFasting)
+
+        let nonFastingItems = [
+            makeItem(id: "tsh", dueDate: overdueDue, status: .overdue),
+            makeItem(id: "hba1c", dueDate: dueSoonDue, status: .dueSoon),
+        ]
+        let nonFastingBundle = try XCTUnwrap(RetestSchedule.nextDraw(items: nonFastingItems, now: fixedNow))
+        XCTAssertFalse(nonFastingBundle.requiresFasting)
+    }
+
+    // MARK: - Savings math
+
+    func testEstimatedSavingsForOneTestBundleIsNil() {
+        XCTAssertNil(RetestSchedule.estimatedSavings(forBundleOf: 1))
+        XCTAssertNil(RetestSchedule.estimatedSavings(forBundleOf: 0))
+    }
+
+    func testEstimatedSavingsForTwoTestBundleIsOneAvoidedDrawFee() {
+        XCTAssertEqual(RetestSchedule.estimatedSavings(forBundleOf: 2), RetestSchedule.drawFeePerVisit)
+    }
+
+    func testEstimatedSavingsForThreeTestBundleIsTwoAvoidedDrawFees() {
+        XCTAssertEqual(RetestSchedule.estimatedSavings(forBundleOf: 3), RetestSchedule.drawFeePerVisit * 2)
+    }
+
+    // MARK: - Estimated pricing
+
+    func testEstimatedPriceKnownIDsReturnConservativeFigures() {
+        XCTAssertEqual(RetestSchedule.estimatedPrice(for: "hba1c"), 15)
+        XCTAssertEqual(RetestSchedule.estimatedPrice(for: "vitaminD"), 40)
+        XCTAssertEqual(RetestSchedule.estimatedPrice(for: "HBA1C"), 15) // case-insensitive
+    }
+
+    func testEstimatedPriceReturnsNilForIDsOutsideTheIntervalCatalog() {
+        // CRP has no re-test cadence and no price entry, by design.
+        XCTAssertNil(RetestSchedule.estimatedPrice(for: "crp"))
+        XCTAssertNil(RetestSchedule.estimatedPrice(for: "notARealTest"))
+    }
+
+    // MARK: - Early-testing waste
+
+    func testEstimatedEarlyTestingWasteOnlyAppliesToUpcomingItems() throws {
+        let upcomingDue = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 60, to: fixedNow))
+        let dueSoonDue = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 5, to: fixedNow))
+        let overdueDue = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: -5, to: fixedNow))
+
+        let upcomingItem = makeItem(id: "vitaminD", dueDate: upcomingDue, status: .upcoming)
+        let dueSoonItem = makeItem(id: "vitaminD", dueDate: dueSoonDue, status: .dueSoon)
+        let overdueItem = makeItem(id: "vitaminD", dueDate: overdueDue, status: .overdue)
+
+        XCTAssertEqual(RetestSchedule.estimatedEarlyTestingWaste(for: upcomingItem, now: fixedNow), 40)
+        XCTAssertNil(RetestSchedule.estimatedEarlyTestingWaste(for: dueSoonItem, now: fixedNow))
+        XCTAssertNil(RetestSchedule.estimatedEarlyTestingWaste(for: overdueItem, now: fixedNow))
+    }
+
+    func testEstimatedEarlyTestingWasteIsNilWhenTestHasNoPriceEntry() throws {
+        let upcomingDue = try XCTUnwrap(Calendar.current.date(byAdding: .day, value: 60, to: fixedNow))
+        let unpricedUpcomingItem = makeItem(id: "notARealTest", dueDate: upcomingDue, status: .upcoming)
+
+        XCTAssertNil(RetestSchedule.estimatedEarlyTestingWaste(for: unpricedUpcomingItem, now: fixedNow))
+    }
+
+    // MARK: - Fasting flag (LabCatalog)
+
+    func testFastingFlagIsSetForFastingSensitiveTests() {
+        for id in ["fastingGlucose", "totalCholesterol", "ldlCholesterol", "hdlCholesterol", "triglycerides", "insulin", "ferritin", "iron", "tibc"] {
+            XCTAssertEqual(LabCatalog.reference(for: id)?.requiresFasting, true, "\(id) should require fasting")
+        }
+    }
+
+    func testFastingFlagDefaultsFalseForNonFastingTests() {
+        for id in ["hba1c", "tsh", "hemoglobin", "crp", "vitaminD"] {
+            XCTAssertEqual(LabCatalog.reference(for: id)?.requiresFasting, false, "\(id) should not require fasting")
+        }
+    }
+
+    // MARK: - Tracked test count
+
+    func testTrackedTestCountMatchesIntervalCatalogAndDiffersFromLabCatalogCount() {
+        XCTAssertEqual(RetestSchedule.trackedTestCount, RetestSchedule.intervalMonthsByCatalogID.count)
+        XCTAssertEqual(RetestSchedule.trackedTestCount, 38)
+        XCTAssertEqual(LabCatalog.count, 46)
+        XCTAssertLessThan(RetestSchedule.trackedTestCount, LabCatalog.count)
+    }
 }
