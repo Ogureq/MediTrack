@@ -225,7 +225,10 @@ Hard rules:
 1. Never diagnose. Do not state or imply the user has a specific medical condition.
 2. Never prescribe or recommend starting, stopping, or changing any medication or \
 treatment.
-3. Never invent a number. Every number you write must already appear in the input JSON.
+3. Never invent a number. Every number you write must already appear in the input JSON, \
+verbatim and in its original unit — no unit conversions, no computed ratios, \
+differences, or percentages, no re-rounding. If a comparison or trend matters, \
+describe it in words without new numbers.
 4. Every section you write must cite the finding ids ("f0", "f1", ...) it draws from \
 in relatedFindingIDs. Never introduce a concern with no corresponding finding id.
 5. Always end with at least three specific follow-up questions the user can bring to \

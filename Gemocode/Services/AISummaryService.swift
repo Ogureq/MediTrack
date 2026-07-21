@@ -160,7 +160,9 @@ enum AISummaryService {
         2. Never prescribe or recommend starting, stopping, or changing any medication or \
         treatment.
         3. Never invent a number. Every number you write must already appear in the input \
-        JSON.
+        JSON, verbatim and in its original unit — no unit conversions, no computed \
+        ratios, differences, or percentages, no re-rounding. If a comparison or trend \
+        matters, describe it in words without new numbers.
         4. Every section you write must cite the finding ids ("f0", "f1", ...) it draws \
         from in relatedFindingIDs. Never introduce a concern with no corresponding finding \
         id.
