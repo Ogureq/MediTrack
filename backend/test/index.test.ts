@@ -147,6 +147,36 @@ afterEach(() => {
 // POST /v1/auth/anonymous
 // ---------------------------------------------------------------------------
 
+describe("GET /health/ready", () => {
+  it("returns 200 ready when jwt, kv, and the upstream key are all present", async () => {
+    const res = await call(makeEnv(), "/health/ready");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toMatchObject({ status: "ready", jwt: true, kv: true, anthropicKey: true });
+  });
+
+  it("returns 503 with jwt:false when JWT_SECRET is empty (the zero-length-HMAC production incident)", async () => {
+    const res = await call(makeEnv({ JWT_SECRET: "" }), "/health/ready");
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toMatchObject({ status: "not_ready", jwt: false });
+  });
+
+  it("returns 503 with kv:false when the KV binding is missing (commented-out wrangler.toml block)", async () => {
+    const res = await call(makeEnv({ QUOTA_KV: undefined as unknown as Env["QUOTA_KV"] }), "/health/ready");
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toMatchObject({ status: "not_ready", kv: false });
+  });
+
+  it("returns 503 with anthropicKey:false when the upstream key is empty", async () => {
+    const res = await call(makeEnv({ ANTHROPIC_API_KEY: "" }), "/health/ready");
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toMatchObject({ status: "not_ready", anthropicKey: false });
+  });
+});
+
 describe("POST /v1/auth/anonymous", () => {
   it("issues a 24h token for a valid deviceID, with premium=false", async () => {
     const env = makeEnv();

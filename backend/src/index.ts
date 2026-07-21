@@ -98,6 +98,37 @@ const router = new Router<Env>();
 
 router.get("/health", () => json({ status: "ok" }));
 
+// GET /health/ready — deployment self-check, born from a production incident
+// where a missing JWT_SECRET surfaced only as a bare 500 on
+// /v1/auth/anonymous (zero-length HMAC key: crashes on workerd, silently
+// tolerated by Node, so no unit test can catch it — hence the explicit
+// length checks here rather than relying on jose to throw). Exercises every
+// config landmine without spending an upstream call: JWT signing round-trip,
+// KV binding shape, Anthropic key presence (never its validity — that would
+// cost tokens). 503 with named fields when anything is off, so one browser
+// visit after a deploy names the broken piece.
+router.get("/health/ready", async ({ env }: RouteContext<Env>) => {
+  const checks = { jwt: false, kv: false, anthropicKey: false };
+
+  checks.anthropicKey = typeof env.ANTHROPIC_API_KEY === "string" && env.ANTHROPIC_API_KEY.length > 0;
+
+  if (typeof env.JWT_SECRET === "string" && env.JWT_SECRET.length >= 16) {
+    try {
+      const issued = await issueAnonymousToken({ secret: env.JWT_SECRET, deviceId: "health-check", premium: false });
+      await verifyAnonymousToken(env.JWT_SECRET, issued.token);
+      checks.jwt = true;
+    } catch {
+      // stays false — surfaced by the named field below instead of a 500
+    }
+  }
+
+  const kv = env.QUOTA_KV as unknown as { get?: unknown; put?: unknown } | undefined;
+  checks.kv = kv !== undefined && kv !== null && typeof kv.get === "function" && typeof kv.put === "function";
+
+  const ready = checks.jwt && checks.kv && checks.anthropicKey;
+  return json({ status: ready ? "ready" : "not_ready", ...checks }, ready ? 200 : 503);
+});
+
 // POST /v1/auth/anonymous — exchange a deviceID for a 24h JWT. No App Attest
 // gate on this endpoint yet (see README.md's GA checklist item (b)); the
 // `premium` claim is resolved from an optional `appTransaction`, which today
