@@ -244,6 +244,16 @@ This document records the phased plan executed to build Gemocode, a privacy-firs
 - [x] Display rename "Lab report" → "Bloodwork" (ru «Анализ крови»), stored data untouched
 - [ ] Follow-ups: supplement–drug interaction rules (levothyroxine+iron etc.) in MedicationInteractions; goal↔lab schema linkage; retest-reminder preference; transferrin saturation catalog entry; server-side free-trial allowance when ENFORCE_PREMIUM flips on
 
+## Phase 30 — Owner Device-Test Fix Wave
+
+- [x] AI-scan 500 hardened — CPU-lean sampled base64 validation (the free-plan CPU-limit kill was the prime suspect), a global crash catch returning structured errors, and the client surfacing the server's message; clinic-name (facility) extraction added to the endpoint contract
+- [x] Book works — BookDrawSheet creates a real appointment (bundle date, night-before reminder, location field with facility pre-fill hook) + a nearby-lab Maps search; wired on Dashboard and Schedule
+- [x] Custom scan chooser — the system confirmationDialog replaced by an editorial bottom sheet (two cards, five-word captions, single privacy footnote)
+- [x] Auto-supplements in the scan flow — SupplementPlanApplier creates dose-midpoint supplement medications + reminders automatically on save (undo banner), listed on the new Supplements page (More-grid entry); clinic-detected reports offer the next draw as an appointment (ask-first)
+- [x] Declutter — Today reduced to score/next-draw/attention/scan with larger type and a compact "Saves ~$N" tag; tab renamed Trends; the chart's overpainted reference band toned to 0.12 with hairline rules; paywall/settings copy trimmed; app-wide 13pt caption floor in touched files
+- [x] Debug-only Developer settings — premium test toggle overlaying isPremium and a free-scan-credit reset, fully compiled out of release builds
+- [ ] Follow-ups: silent auto-add has no undo banner when no AI-report stage follows (supplements remain deletable on their page); reminders discovery when the Today card is hidden now covered by the More entry
+
 ## Future Milestones
 
 Not part of the current plan; captured here for future scoping:
