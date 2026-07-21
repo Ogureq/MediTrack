@@ -263,7 +263,6 @@ final class AIScanServiceTests: XCTestCase {
         let body = AITransport.DirectImageRequestBody(
             model: "claude-sonnet-5",
             maxTokens: 2000,
-            temperature: 0,
             system: "extraction prompt",
             messages: [
                 AITransport.DirectImageMessage(role: "user", content: [
@@ -279,7 +278,7 @@ final class AIScanServiceTests: XCTestCase {
 
         XCTAssertEqual(json["model"] as? String, "claude-sonnet-5")
         XCTAssertEqual(json["max_tokens"] as? Int, 2000)
-        XCTAssertEqual(json["temperature"] as? Double, 0)
+        XCTAssertNil(json["temperature"], "temperature is deprecated for current models and must not be sent")
         XCTAssertEqual(json["system"] as? String, "extraction prompt")
 
         let messages = try XCTUnwrap(json["messages"] as? [[String: Any]])

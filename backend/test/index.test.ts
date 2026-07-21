@@ -291,7 +291,7 @@ describe("POST /v1/ai/generate — happy paths", () => {
     expect(sent.messages).toEqual([{ role: "user", content: "What does my score mean?" }]);
   });
 
-  it("extract: 200 with text, MODEL_EXTRACT, max_tokens 800, temperature 0", async () => {
+  it("extract: 200 with text, MODEL_EXTRACT, max_tokens 800, no temperature", async () => {
     const upstream = stubUpstream(() => anthropicSuccess('{"kind":"vital","type":"bloodPressure","value":120,"secondary":80}'));
     const env = makeEnv();
     const token = await mintToken(false);
@@ -305,7 +305,7 @@ describe("POST /v1/ai/generate — happy paths", () => {
     const sent = JSON.parse(String((upstream.mock.calls[0] as [unknown, RequestInit])[1].body)) as Record<string, unknown>;
     expect(sent.model).toBe("model-extract");
     expect(sent.max_tokens).toBe(800);
-    expect(sent.temperature).toBe(0);
+    expect(sent.temperature).toBeUndefined();
     expect(String(sent.system)).toContain("2026-07-13");
   });
 
@@ -585,7 +585,7 @@ describe("POST /v1/extract-labs — validation", () => {
 });
 
 describe("POST /v1/extract-labs — happy path", () => {
-  it("200 with values passed through, MODEL_EXTRACT_LABS, max_tokens 2000, temperature 0, image content block sent", async () => {
+  it("200 with values passed through, MODEL_EXTRACT_LABS, max_tokens 2000, no temperature, image content block sent", async () => {
     const upstream = stubUpstream(() =>
       anthropicExtractLabsSuccess('{"values":[{"name":"Fasting Glucose","value":95,"unit":"mg/dL","sourceText":"Fasting Glucose 95 mg/dL"}]}')
     );
@@ -602,7 +602,7 @@ describe("POST /v1/extract-labs — happy path", () => {
     const sent = JSON.parse(String((upstream.mock.calls[0] as [unknown, RequestInit])[1].body)) as Record<string, unknown>;
     expect(sent.model).toBe("model-extract-labs");
     expect(sent.max_tokens).toBe(2000);
-    expect(sent.temperature).toBe(0);
+    expect(sent.temperature).toBeUndefined();
     expect(String(sent.system)).toContain("Extraction only");
     const messages = sent.messages as Array<{ content: Array<Record<string, unknown>> }>;
     expect(messages[0]!.content[0]).toEqual({

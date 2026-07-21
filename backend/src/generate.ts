@@ -31,7 +31,6 @@ export type GenerateKind = "report" | "chat" | "extract";
 export const REPORT_MAX_TOKENS = 1500;
 export const CHAT_MAX_TOKENS = 700;
 export const EXTRACT_MAX_TOKENS = 800;
-export const EXTRACT_TEMPERATURE = 0;
 
 export const MAX_CHAT_CONTEXT_LENGTH = 8000;
 export const MAX_CHAT_MESSAGE_LENGTH = 2000;
@@ -270,7 +269,6 @@ function buildChatRequest(input: ChatInput): AnthropicRequestSpec {
 function buildExtractRequest(input: ExtractInput): AnthropicRequestSpec {
   return {
     max_tokens: EXTRACT_MAX_TOKENS,
-    temperature: EXTRACT_TEMPERATURE,
     system: buildExtractSystemPrompt(input.today),
     messages: [{ role: "user", content: input.text }]
   };

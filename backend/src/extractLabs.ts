@@ -268,7 +268,6 @@ export const EXTRACT_LABS_USER_INSTRUCTION =
   "Extract every lab analyte with a numeric result from this photo, following your instructions exactly.";
 
 export const EXTRACT_LABS_MAX_TOKENS = 2000;
-export const EXTRACT_LABS_TEMPERATURE = 0;
 
 /**
  * Rough pre-flight quota reservation for a single image's input-token cost,
@@ -469,7 +468,6 @@ export async function callExtractLabsAnthropic(opts: {
   const body = {
     model: opts.model,
     max_tokens: EXTRACT_LABS_MAX_TOKENS,
-    temperature: EXTRACT_LABS_TEMPERATURE,
     system: EXTRACT_LABS_SYSTEM_PROMPT,
     messages: [{ role: "user", content: [imageBlock, textBlock] }]
   };

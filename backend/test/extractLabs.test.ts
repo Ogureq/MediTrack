@@ -3,7 +3,6 @@ import {
   EXTRACT_LABS_MAX_TOKENS,
   EXTRACT_LABS_SYSTEM_PROMPT,
   EXTRACT_LABS_SYSTEM_PROMPT_VERSION,
-  EXTRACT_LABS_TEMPERATURE,
   MAX_IMAGE_DECODED_BYTES,
   callExtractLabsAnthropic,
   parseExtractedLabsText,
@@ -437,7 +436,7 @@ describe("callExtractLabsAnthropic", () => {
     return vi.fn(async (_input: unknown, _init?: unknown) => respond());
   }
 
-  it("sends the image content block, the server-owned prompt, max_tokens 2000, temperature 0, and no stream field", async () => {
+  it("sends the image content block, the server-owned prompt, max_tokens 2000, and no temperature or stream fields", async () => {
     const fetchImpl = stubFetch(
       () =>
         new Response(
@@ -464,7 +463,7 @@ describe("callExtractLabsAnthropic", () => {
     const sent = JSON.parse(String(init.body)) as Record<string, unknown>;
     expect(sent.model).toBe("claude-sonnet-5");
     expect(sent.max_tokens).toBe(EXTRACT_LABS_MAX_TOKENS);
-    expect(sent.temperature).toBe(EXTRACT_LABS_TEMPERATURE);
+    expect(sent.temperature).toBeUndefined();
     expect(String(sent.system)).toContain("Extraction only");
     expect("stream" in sent).toBe(false);
 

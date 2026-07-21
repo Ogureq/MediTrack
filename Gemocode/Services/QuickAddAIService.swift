@@ -276,8 +276,7 @@ enum QuickAddAIService {
             model: model,
             system: system,
             maxTokens: maxTokens,
-            messages: [(role: "user", text: userText)],
-            temperature: 0
+            messages: [(role: "user", text: userText)]
         )
         let text = try await AITransport.generate(route: .extract, input: input, direct: spec)
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)

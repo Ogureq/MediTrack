@@ -571,7 +571,7 @@ extension AITransport {
         let maxTokens: Int
         let temperature: Double?
 
-        init(model: String, system: String, userInstruction: String, maxTokens: Int, temperature: Double? = 0) {
+        init(model: String, system: String, userInstruction: String, maxTokens: Int, temperature: Double? = nil) {
             self.model = model
             self.system = system
             self.userInstruction = userInstruction

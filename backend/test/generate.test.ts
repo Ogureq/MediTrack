@@ -3,7 +3,6 @@ import {
   ANTHROPIC_MESSAGES_URL,
   CHAT_MAX_TOKENS,
   EXTRACT_MAX_TOKENS,
-  EXTRACT_TEMPERATURE,
   MAX_CHAT_CONTEXT_LENGTH,
   MAX_CHAT_MESSAGES,
   MAX_CHAT_MESSAGE_LENGTH,
@@ -181,13 +180,13 @@ describe("validateChatInput — rejections", () => {
 });
 
 describe("validateGenerateRequest — extract", () => {
-  it("builds an extract request with temperature 0, 800 max_tokens, and the raw text as the user message", () => {
+  it("builds an extract request with no temperature field, 800 max_tokens, and the raw text as the user message", () => {
     const result = validateGenerateRequest({ kind: "extract", input: validExtractInput() });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.kind).toBe("extract");
     expect(result.request.max_tokens).toBe(EXTRACT_MAX_TOKENS);
-    expect(result.request.temperature).toBe(EXTRACT_TEMPERATURE);
+    expect(result.request.temperature).toBeUndefined();
     expect(result.request.system).toContain("2026-07-13");
     expect(result.request.messages).toEqual([{ role: "user", content: "took 500mg paracetamol this morning" }]);
   });
