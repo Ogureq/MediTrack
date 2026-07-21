@@ -560,24 +560,14 @@ extension AITransport {
     /// `backend/src/extractLabs.ts`'s `callExtractLabsAnthropic`) so the
     /// BYOK path behaves identically to the relay path; unlike `DirectSpec`
     /// there's no free-form `messages` array to plumb through, since the
-    /// turn shape is always exactly these two blocks. `temperature` defaults
-    /// to 0 for deterministic extraction, matching both
-    /// `QuickAddAIService`'s convention and the relay's own
-    /// `EXTRACT_LABS_TEMPERATURE`.
+    /// turn shape is always exactly these two blocks. No `temperature` —
+    /// current models reject the parameter; determinism guidance lives in
+    /// the prompt, matching the relay.
     struct DirectImageSpec {
         let model: String
         let system: String
         let userInstruction: String
         let maxTokens: Int
-        let temperature: Double?
-
-        init(model: String, system: String, userInstruction: String, maxTokens: Int, temperature: Double? = nil) {
-            self.model = model
-            self.system = system
-            self.userInstruction = userInstruction
-            self.maxTokens = maxTokens
-            self.temperature = temperature
-        }
     }
 
     /// Bundled result of `extractLabs(image:direct:)`: the same
@@ -772,7 +762,6 @@ extension AITransport {
     struct DirectImageRequestBody: Encodable {
         let model: String
         let maxTokens: Int
-        let temperature: Double?
         let system: String
         let messages: [DirectImageMessage]
     }
@@ -790,7 +779,6 @@ extension AITransport {
         let body = DirectImageRequestBody(
             model: spec.model,
             maxTokens: spec.maxTokens,
-            temperature: spec.temperature,
             system: spec.system,
             // Image block first, then the trigger text — mirrors the
             // relay's own `content: [imageBlock, textBlock]` order exactly
