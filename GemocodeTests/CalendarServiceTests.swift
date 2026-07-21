@@ -121,8 +121,12 @@ final class CalendarServiceTests: XCTestCase {
             location: nil
         ))
 
-        XCTAssertFalse(ics.contains("LOCATION:"))
-        XCTAssertFalse(ics.contains("DESCRIPTION:"))
+        // The VALARM block always carries its RFC 5545-required
+        // "DESCRIPTION:Reminder" — only the event's own properties must be
+        // omitted, so assert against the pre-alarm portion.
+        let eventSection = try XCTUnwrap(ics.components(separatedBy: "BEGIN:VALARM").first)
+        XCTAssertFalse(eventSection.contains("LOCATION:"))
+        XCTAssertFalse(eventSection.contains("DESCRIPTION:"))
     }
 
     func testIcsDataIncludesLocationAndDescriptionWhenProvided() throws {
