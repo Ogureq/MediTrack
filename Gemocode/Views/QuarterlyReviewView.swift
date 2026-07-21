@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import StoreKit
 
 /// The Quarterly Health Review ritual: a guided, read-only recap of the last
 /// ~90 days built entirely from `QuarterlyReview.build(...)` — deterministic,
@@ -8,6 +9,7 @@ import SwiftData
 struct QuarterlyReviewView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.requestReview) private var requestReview
 
     @Query(sort: \ScoreSnapshot.date) private var snapshots: [ScoreSnapshot]
     @Query private var vitals: [VitalSample]
@@ -295,6 +297,14 @@ struct QuarterlyReviewView: View {
         Button {
             QuarterlyReview.markCompleted(now: .now, defaults: .standard)
             Haptics.success()
+            // Peak-delight moment: a completed recap with real data behind
+            // it. The system decides whether a prompt actually appears
+            // (max 3/year, never twice for one version), so this can fire
+            // every quarter — but skip data-empty first-week recaps, where
+            // there's nothing to be delighted about yet.
+            if !snapshots.isEmpty || !labResults.isEmpty {
+                requestReview()
+            }
             dismiss()
         } label: {
             Label("Done — see you next quarter", systemImage: "checkmark.circle.fill")
