@@ -77,7 +77,7 @@ describe("validateGenerateRequest — kind dispatch", () => {
 });
 
 describe("validateGenerateRequest — report", () => {
-  it("builds a report request with the ported system prompt, 1500 max_tokens, and the input serialized as the user message", () => {
+  it("builds a report request with the ported system prompt, 4000 max_tokens, and the input serialized as the user message", () => {
     const result = validateGenerateRequest({ kind: "report", input: validReportInput() });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -253,8 +253,8 @@ describe("system prompts keep the client services' safety rails", () => {
 
 describe("maxTokensForKind", () => {
   it("matches the per-kind budgets", () => {
-    expect(maxTokensForKind("report")).toBe(1500);
-    expect(maxTokensForKind("chat")).toBe(700);
+    expect(maxTokensForKind("report")).toBe(4000);
+    expect(maxTokensForKind("chat")).toBe(1200);
     expect(maxTokensForKind("extract")).toBe(800);
   });
 });
@@ -302,7 +302,7 @@ describe("mapAnthropicMessageResponse", () => {
 
 describe("callAnthropic", () => {
   const spec = {
-    max_tokens: 700,
+    max_tokens: 1200,
     system: "system prompt",
     messages: [{ role: "user" as const, content: "hi" }]
   };
@@ -333,7 +333,7 @@ describe("callAnthropic", () => {
     expect(headers["anthropic-version"]).toBe("2023-06-01");
     const body = JSON.parse(String(init.body)) as Record<string, unknown>;
     expect(body.model).toBe("claude-sonnet-5");
-    expect(body.max_tokens).toBe(700);
+    expect(body.max_tokens).toBe(1200);
     expect(body.system).toBe("system prompt");
     expect("stream" in body).toBe(false);
     expect("temperature" in body).toBe(false);

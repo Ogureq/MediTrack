@@ -245,6 +245,13 @@ router.post("/v1/ai/generate", async ({ request, env }: RouteContext<Env>) => {
     return errorResponse(502, "upstream_error", result.message);
   }
 
+  // A max_tokens truncation is a server-side sizing bug, not a user
+  // outcome: fail loudly with a named code instead of shipping a cut-off
+  // JSON fragment the client can only report as "unexpected response".
+  if (result.result.truncated) {
+    return errorResponse(502, "output_truncated", "The AI response exceeded its length budget — please try again.");
+  }
+
   // Only a genuinely successful, non-refused generation consumes the
   // one-lifetime free report — an upstream error never reaches this line
   // (it returns above), and a safety refusal is explicitly excluded too.

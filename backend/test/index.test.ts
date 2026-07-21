@@ -259,7 +259,7 @@ describe("POST /v1/ai/generate — auth", () => {
 // ---------------------------------------------------------------------------
 
 describe("POST /v1/ai/generate — happy paths", () => {
-  it("report: 200 with text, MODEL_REPORT, max_tokens 1500, report prompt", async () => {
+  it("report: 200 with text, MODEL_REPORT, max_tokens 4000, report prompt", async () => {
     const upstream = stubUpstream(() => anthropicSuccess("Your review shows a score of 78."));
     const env = makeEnv();
     const token = await mintToken(false);
@@ -270,7 +270,7 @@ describe("POST /v1/ai/generate — happy paths", () => {
 
     const sent = JSON.parse(String((upstream.mock.calls[0] as [unknown, RequestInit])[1].body)) as Record<string, unknown>;
     expect(sent.model).toBe("model-report");
-    expect(sent.max_tokens).toBe(1500);
+    expect(sent.max_tokens).toBe(4000);
     expect(String(sent.system)).toContain("educational health analyst");
     expect("stream" in sent).toBe(false);
   });
@@ -286,7 +286,7 @@ describe("POST /v1/ai/generate — happy paths", () => {
 
     const sent = JSON.parse(String((upstream.mock.calls[0] as [unknown, RequestInit])[1].body)) as Record<string, unknown>;
     expect(sent.model).toBe("model-chat");
-    expect(sent.max_tokens).toBe(700);
+    expect(sent.max_tokens).toBe(1200);
     expect(String(sent.system)).toContain("Health score: 78/100 (Good)");
     expect(sent.messages).toEqual([{ role: "user", content: "What does my score mean?" }]);
   });
@@ -482,8 +482,8 @@ describe("POST /v1/ai/generate — premium enforcement", () => {
 describe("POST /v1/ai/generate — quota", () => {
   it("books usage and returns 429 quota_exceeded once the per-user daily cap is exhausted", async () => {
     stubUpstream(() => anthropicSuccess("ok"));
-    // 1500 = exactly one report's reservation, so the second report must trip the cap.
-    const env = makeEnv({ PER_USER_DAILY_TOKENS: 1500 });
+    // 4000 = exactly one report's reservation, so the second report must trip the cap.
+    const env = makeEnv({ PER_USER_DAILY_TOKENS: 4000 });
     const token = await mintToken(false);
 
     const first = await postJson(env, "/v1/ai/generate", reportBody(), token);
@@ -507,7 +507,7 @@ describe("POST /v1/ai/generate — quota", () => {
 
   it("per-user caps are independent across devices", async () => {
     stubUpstream(() => anthropicSuccess("ok"));
-    const env = makeEnv({ PER_USER_DAILY_TOKENS: 700 });
+    const env = makeEnv({ PER_USER_DAILY_TOKENS: 1200 });
     const tokenA = await mintToken(false, "aaaaaaaa-1111-4222-8333-444444444444");
     const tokenB = await mintToken(false, "bbbbbbbb-1111-4222-8333-444444444444");
 
@@ -861,7 +861,7 @@ describe("logging", () => {
     );
     expect(entry.feature).toBe("report");
     expect(entry.model).toBe("model-report");
-    expect(entry.tokensReserved).toBe(1500);
+    expect(entry.tokensReserved).toBe(4000);
   });
 });
 

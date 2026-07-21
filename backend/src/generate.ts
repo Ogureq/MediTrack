@@ -28,8 +28,8 @@ import { REPORT_SUMMARY_SYSTEM_PROMPT, validateReportSummaryRequest, type Report
 
 export type GenerateKind = "report" | "chat" | "extract";
 
-export const REPORT_MAX_TOKENS = 1500;
-export const CHAT_MAX_TOKENS = 700;
+export const REPORT_MAX_TOKENS = 4000;
+export const CHAT_MAX_TOKENS = 1200;
 export const EXTRACT_MAX_TOKENS = 800;
 
 export const MAX_CHAT_CONTEXT_LENGTH = 8000;
@@ -338,6 +338,7 @@ interface AnthropicMessageResponse {
 export interface GenerateResult {
   text: string;
   refused: boolean;
+  truncated?: boolean;
 }
 
 /**
@@ -352,6 +353,13 @@ export interface GenerateResult {
 export function mapAnthropicMessageResponse(response: AnthropicMessageResponse): GenerateResult {
   if (response.stop_reason === "refusal") {
     return { text: "", refused: true };
+  }
+  // A max_tokens stop means the JSON payload was cut off mid-structure —
+  // passing the fragment through would surface client-side as a generic
+  // "unexpected response" parse failure (production incident: a 20+ value
+  // report at the old 1500-token cap). Name it instead.
+  if (response.stop_reason === "max_tokens") {
+    return { text: "", refused: false, truncated: true };
   }
   const text = (response.content ?? [])
     .filter((block): block is AnthropicContentBlock & { text: string } => block.type === "text" && typeof block.text === "string")
