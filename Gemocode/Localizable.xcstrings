@@ -7309,22 +7309,22 @@
         }
       }
     },
-    "Questions about these terms can be sent to support@gemocode.app (TODO: replace with the owner's actual support address before submission).": {
+    "Questions about these terms can be sent to info@gemocode.com.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Вопросы по этим условиям можно направлять на support@gemocode.app (TODO: заменить на реальный адрес поддержки владельца перед публикацией)."
+            "value": "Вопросы по этим условиям можно направлять на info@gemocode.com."
           }
         }
       }
     },
-    "Questions about this policy can be sent to support@gemocode.app (TODO: replace with the owner's actual support address before submission).": {
+    "Questions about this policy can be sent to info@gemocode.com.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Вопросы по этой политике можно направлять на support@gemocode.app (TODO: заменить на реальный адрес поддержки владельца перед публикацией)."
+            "value": "Вопросы по этой политике можно направлять на info@gemocode.com."
           }
         }
       }
@@ -8789,12 +8789,12 @@
         }
       }
     },
-    "These terms are governed by the laws of [TODO: owner to specify jurisdiction], without regard to its conflict-of-law principles, except where local consumer-protection law provides otherwise.": {
+    "These terms are governed by the laws of the Republic of Türkiye, without regard to its conflict-of-law principles, except where local consumer-protection law provides otherwise.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Эти условия регулируются законодательством [TODO: владельцу указать юрисдикцию], без учёта коллизионных норм, за исключением случаев, когда местное законодательство о защите прав потребителей предусматривает иное."
+            "value": "Настоящие условия регулируются законодательством Турецкой Республики, без учёта коллизионных норм, за исключением случаев, когда местное законодательство о защите прав потребителей предусматривает иное."
           }
         }
       }

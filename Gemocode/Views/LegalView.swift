@@ -96,7 +96,7 @@ extension LegalSection {
         ),
         LegalSection(
             heading: String(localized: "Contact"),
-            body: String(localized: "Questions about this policy can be sent to support@gemocode.app (TODO: replace with the owner's actual support address before submission).")
+            body: String(localized: "Questions about this policy can be sent to info@gemocode.com.")
         ),
     ]
 
@@ -131,7 +131,7 @@ extension LegalSection {
         ),
         LegalSection(
             heading: String(localized: "Governing Law"),
-            body: String(localized: "These terms are governed by the laws of [TODO: owner to specify jurisdiction], without regard to its conflict-of-law principles, except where local consumer-protection law provides otherwise.")
+            body: String(localized: "These terms are governed by the laws of the Republic of Türkiye, without regard to its conflict-of-law principles, except where local consumer-protection law provides otherwise.")
         ),
         LegalSection(
             heading: String(localized: "Changes to These Terms"),
@@ -139,7 +139,7 @@ extension LegalSection {
         ),
         LegalSection(
             heading: String(localized: "Contact"),
-            body: String(localized: "Questions about these terms can be sent to support@gemocode.app (TODO: replace with the owner's actual support address before submission).")
+            body: String(localized: "Questions about these terms can be sent to info@gemocode.com.")
         ),
     ]
 }
