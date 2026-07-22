@@ -23,6 +23,7 @@
 
 import { checkUnknownKeys, isPlainObject } from "./validation";
 import { ANTHROPIC_API_VERSION, ANTHROPIC_MESSAGES_URL } from "./generate";
+import { fetchAnthropicWithRetry } from "./upstream";
 
 // ---------------------------------------------------------------------------
 // Request validation
@@ -280,22 +281,8 @@ export const EXTRACT_LABS_MAX_TOKENS = 2000;
  */
 export const EXTRACT_LABS_IMAGE_TOKEN_ESTIMATE = 1600;
 
-/**
- * Upstream statuses worth retrying: rate limiting (429), Anthropic's
- * overloaded signal (529), request timeout (408), and transient 5xx. A 400
- * or 401 is a bug or a bad key — retrying those just burns wall-clock.
- */
-export const UPSTREAM_RETRYABLE_STATUSES = new Set([408, 429, 500, 502, 503, 504, 529]);
-
-/** Total attempts (1 initial + 2 retries) and the base backoff delay. */
-export const UPSTREAM_MAX_ATTEMPTS = 3;
-export const UPSTREAM_RETRY_BASE_DELAY_MS = 400;
-
-/** Backoff sleep. Workers bill CPU time, not wall-clock, so waiting is cheap. */
-function sleep(ms: number): Promise<void> {
-  if (ms <= 0) return Promise.resolve();
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+// Upstream retry policy (statuses, attempt count, backoff) is shared with
+// the report/chat path — see src/upstream.ts.
 
 // ---------------------------------------------------------------------------
 // Response sanity parsing (tolerant of code fences / wrapper prose)
@@ -477,8 +464,7 @@ export async function callExtractLabsAnthropic(opts: {
   retryDelayMs?: number;
 }): Promise<ExtractLabsCallResult> {
   const doFetch = opts.fetchImpl ?? fetch;
-  const maxAttempts = opts.maxAttempts ?? UPSTREAM_MAX_ATTEMPTS;
-  const retryDelayMs = opts.retryDelayMs ?? UPSTREAM_RETRY_BASE_DELAY_MS;
+  const { maxAttempts, retryDelayMs } = opts;
 
   const imageBlock: AnthropicImageContentBlock = {
     type: "image",
@@ -499,30 +485,20 @@ export async function callExtractLabsAnthropic(opts: {
   // photo extraction feeling unreliable. Retry those (and outright network
   // errors) with exponential backoff; anything else — 400s, auth failures —
   // is permanent and breaks out immediately.
-  let upstream: Response | null = null;
-  let networkMessage: string | null = null;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    upstream = null;
-    networkMessage = null;
-    try {
-      upstream = await doFetch(ANTHROPIC_MESSAGES_URL, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-api-key": opts.anthropicApiKey,
-          "anthropic-version": ANTHROPIC_API_VERSION
-        },
-        body: JSON.stringify(body)
-      });
-    } catch (err) {
-      networkMessage = err instanceof Error ? err.message : "Network error calling the AI service.";
-    }
-
-    const retryable = upstream === null || UPSTREAM_RETRYABLE_STATUSES.has(upstream.status);
-    if (!retryable || attempt === maxAttempts) break;
-    await sleep(retryDelayMs * 2 ** (attempt - 1));
-  }
+  const { response: upstream, networkMessage } = await fetchAnthropicWithRetry(
+    doFetch,
+    ANTHROPIC_MESSAGES_URL,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": opts.anthropicApiKey,
+        "anthropic-version": ANTHROPIC_API_VERSION
+      },
+      body: JSON.stringify(body)
+    },
+    { maxAttempts, retryDelayMs }
+  );
 
   if (upstream === null) {
     return {

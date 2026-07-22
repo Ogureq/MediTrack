@@ -359,6 +359,50 @@ describe("callAnthropic", () => {
     expect(result).toEqual({ ok: false, status: 529, message: "Overloaded" });
   });
 
+  it("retries a transient overload and succeeds on a later attempt", async () => {
+    let calls = 0;
+    const fetchImpl = vi.fn(async (): Promise<Response> => {
+      calls += 1;
+      if (calls === 1) {
+        return new Response(JSON.stringify({ error: { message: "Overloaded" } }), { status: 529 });
+      }
+      return new Response(
+        JSON.stringify({ content: [{ type: "text", text: "recovered" }], stop_reason: "end_turn" }),
+        { status: 200 }
+      );
+    });
+
+    const result = await callAnthropic({
+      anthropicApiKey: "k",
+      model: "m",
+      spec,
+      fetchImpl,
+      retryDelayMs: 0
+    });
+
+    expect(calls).toBe(2);
+    expect(result.ok).toBe(true);
+  });
+
+  it("never retries a permanent upstream rejection", async () => {
+    let calls = 0;
+    const fetchImpl = vi.fn(async (): Promise<Response> => {
+      calls += 1;
+      return new Response(JSON.stringify({ error: { message: "bad request" } }), { status: 400 });
+    });
+
+    const result = await callAnthropic({
+      anthropicApiKey: "k",
+      model: "m",
+      spec,
+      fetchImpl,
+      retryDelayMs: 0
+    });
+
+    expect(calls).toBe(1);
+    expect(result).toEqual({ ok: false, status: 400, message: "bad request" });
+  });
+
   it("maps an unparsable error body to a generic message", async () => {
     const fetchImpl = stubFetch(() => new Response("not json", { status: 500 }));
     const result = await callAnthropic({ anthropicApiKey: "k", model: "m", spec, fetchImpl });

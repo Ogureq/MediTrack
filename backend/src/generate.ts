@@ -22,6 +22,7 @@
 
 import { checkStringField, checkUnknownKeys, isPlainObject, type ValidationResult } from "./validation";
 import { REPORT_SUMMARY_SYSTEM_PROMPT, validateReportSummaryRequest, type ReportSummaryRequest } from "./relay";
+import { fetchAnthropicWithRetry } from "./upstream";
 
 // ---------------------------------------------------------------------------
 // Kinds, per-kind limits (from the fixed wire contract)
@@ -396,6 +397,8 @@ export async function callAnthropic(opts: {
   model: string;
   spec: AnthropicRequestSpec;
   fetchImpl?: typeof fetch;
+  maxAttempts?: number;
+  retryDelayMs?: number;
 }): Promise<AnthropicCallResult> {
   const doFetch = opts.fetchImpl ?? fetch;
   const body = {
@@ -406,9 +409,13 @@ export async function callAnthropic(opts: {
     messages: opts.spec.messages
   };
 
-  let upstream: Response;
-  try {
-    upstream = await doFetch(ANTHROPIC_MESSAGES_URL, {
+  // Retries transient upstream failures (429/529/5xx/network) — see
+  // src/upstream.ts. Without this a routine Anthropic overload became an
+  // instant user-facing report/chat failure.
+  const { response: upstream, networkMessage } = await fetchAnthropicWithRetry(
+    doFetch,
+    ANTHROPIC_MESSAGES_URL,
+    {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -416,9 +423,12 @@ export async function callAnthropic(opts: {
         "anthropic-version": ANTHROPIC_API_VERSION
       },
       body: JSON.stringify(body)
-    });
-  } catch (err) {
-    return { ok: false, status: 0, message: err instanceof Error ? err.message : "Network error calling the AI service." };
+    },
+    { maxAttempts: opts.maxAttempts, retryDelayMs: opts.retryDelayMs }
+  );
+
+  if (upstream === null) {
+    return { ok: false, status: 0, message: networkMessage ?? "Network error calling the AI service." };
   }
 
   const parsed = await safeJson(upstream);
