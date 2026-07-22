@@ -425,6 +425,40 @@ enum AISummaryService {
             messages: [(role: "user", text: inputJSON)]
         )
 
+        // An `.invalidOutput` failure — unparsable JSON, a fabricated or
+        // derived number, an unknown finding id, a missing questions
+        // section — is the model having a bad turn on a well-formed
+        // request, which is exactly why the error text tells the user to
+        // "try generating again". Do that for them once instead: the same
+        // call, re-rolled. Every other error (network, refused, quota,
+        // premium, auth) is deterministic or costly to repeat and throws
+        // on the first attempt. The free-report credit is unaffected
+        // either way — callers only record it once this returns a report.
+        var lastInvalidOutput: AISummaryError?
+        for _ in 0..<reportAttemptLimit {
+            do {
+                return try await attemptReport(input: input, inputJSON: inputJSON, direct: direct)
+            } catch let error as AISummaryError {
+                guard case .invalidOutput = error else { throw error }
+                lastInvalidOutput = error
+            }
+        }
+        throw lastInvalidOutput ?? AISummaryError.badResponse
+    }
+
+    /// Total attempts `generateReport` makes when the model's output keeps
+    /// failing verification. Two: one silent re-roll, then the named
+    /// failure reaches the user.
+    private static let reportAttemptLimit = 2
+
+    /// One end-to-end report attempt: generate, parse, and run every
+    /// verification guard. Throws `.invalidOutput` for anything the guards
+    /// reject so `generateReport` can decide whether to re-roll.
+    private static func attemptReport(
+        input: ReportInput,
+        inputJSON: String,
+        direct: AITransport.DirectSpec
+    ) async throws -> AIHealthReport {
         let text: String
         do {
             text = try await AITransport.generate(route: .report, input: input, direct: direct)
