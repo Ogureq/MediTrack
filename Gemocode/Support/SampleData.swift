@@ -259,8 +259,12 @@ enum SampleData {
         ))
     }
 
-    /// Deletes ALL data of every model type.
+    /// Deletes ALL data of every model type, including the home-screen
+    /// widget's shared snapshot — that lives outside the SwiftData store, in
+    /// the app group, and would otherwise keep displaying the last score and
+    /// vitals after the user erased everything.
     @MainActor static func eraseAllData(in context: ModelContext) {
+        WidgetBridge.clear()
         try? context.delete(model: MedicalReport.self)
         try? context.delete(model: LabResult.self)
         try? context.delete(model: ReportAttachment.self)

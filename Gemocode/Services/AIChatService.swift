@@ -94,6 +94,22 @@ enum AIChatService {
     /// request — see `cappedContext(_:limit:)`.
     static let contextCharacterLimit = 8000
 
+    /// The relay wire contract's cap on each message's `"text"`
+    /// (`MAX_CHAT_MESSAGE_LENGTH` in backend/src/generate.ts). Exceeding it
+    /// is a 400 that surfaces as a generic failure — and because history is
+    /// trimmed by message *count*, an oversized message keeps being resent,
+    /// so every later turn fails too until the sheet is closed and the
+    /// conversation lost. Truncate on the way out instead: a clipped
+    /// question still gets answered.
+    static let messageCharacterLimit = 2000
+
+    /// Truncates one message's text to `messageCharacterLimit`. Pure and
+    /// unit-testable, mirroring `cappedContext(_:limit:)`.
+    static func cappedMessage(_ text: String, limit: Int = messageCharacterLimit) -> String {
+        guard text.count > limit else { return text }
+        return String(text.prefix(limit))
+    }
+
     /// System-prompt rules: the assistant is an educational health
     /// companion, may only discuss the data in the provided context, must
     /// decline to diagnose/prescribe/interpret anything outside that
@@ -222,11 +238,11 @@ enum AIChatService {
             model: model,
             system: systemPrompt(context: boundedContext),
             maxTokens: maxTokens,
-            messages: trimmed.map { (role: $0.role == .user ? "user" : "assistant", text: $0.text) }
+            messages: trimmed.map { (role: $0.role == .user ? "user" : "assistant", text: cappedMessage($0.text)) }
         )
         let input = ChatInput(
             context: boundedContext,
-            messages: trimmed.map { ChatTurn(role: $0.role == .user ? "user" : "assistant", text: $0.text) }
+            messages: trimmed.map { ChatTurn(role: $0.role == .user ? "user" : "assistant", text: cappedMessage($0.text)) }
         )
 
         do {

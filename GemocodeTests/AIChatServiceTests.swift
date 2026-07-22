@@ -140,4 +140,22 @@ final class AIChatServiceTests: XCTestCase {
         let trimmed = AIChatService.trimmedHistory(history, limit: 12)
         XCTAssertEqual(trimmed, history)
     }
+
+    // MARK: Per-message cap
+
+    func testCappedMessageLeavesShortTextUntouched() {
+        XCTAssertEqual(AIChatService.cappedMessage("What does my LDL mean?"), "What does my LDL mean?")
+    }
+
+    func testCappedMessageTruncatesToTheRelaysLimit() {
+        let long = String(repeating: "a", count: AIChatService.messageCharacterLimit + 500)
+        let capped = AIChatService.cappedMessage(long)
+        XCTAssertEqual(capped.count, AIChatService.messageCharacterLimit)
+        XCTAssertTrue(long.hasPrefix(capped))
+    }
+
+    func testCappedMessageKeepsTextExactlyAtTheLimit() {
+        let exact = String(repeating: "b", count: AIChatService.messageCharacterLimit)
+        XCTAssertEqual(AIChatService.cappedMessage(exact), exact)
+    }
 }

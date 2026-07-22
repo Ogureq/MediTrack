@@ -91,6 +91,20 @@ enum WidgetBridge {
         WidgetCenter.shared.reloadAllTimelines()
     }
 
+    /// Removes the shared snapshot and refreshes the widget so it falls back
+    /// to its no-data placeholder.
+    ///
+    /// `update` is only ever called with real data (its caller bails when
+    /// the review `hasData` is false), so an erase would otherwise leave the
+    /// last score, headline, and vitals sitting in the app group — the
+    /// user's medical data outliving the explicit deletion they asked for,
+    /// visible on the home screen indefinitely. Erase paths must call this.
+    static func clear() {
+        guard let defaults = UserDefaults(suiteName: appGroupID) else { return }
+        defaults.removeObject(forKey: snapshotKey)
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
     // MARK: - Due-test display strings (resolved here, not in the widget)
 
     /// Builds one widget-safe due-test entry: a short catalog display name
