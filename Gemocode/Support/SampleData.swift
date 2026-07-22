@@ -265,6 +265,9 @@ enum SampleData {
     /// vitals after the user erased everything.
     @MainActor static func eraseAllData(in context: ModelContext) {
         WidgetBridge.clear()
+        // Bulk deletes bypass the per-row cancel in MedicationsView, so
+        // reminders would otherwise keep firing for erased medications.
+        NotificationService.cancelAllReminders()
         try? context.delete(model: MedicalReport.self)
         try? context.delete(model: LabResult.self)
         try? context.delete(model: ReportAttachment.self)

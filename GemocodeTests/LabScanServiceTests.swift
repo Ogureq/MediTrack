@@ -468,4 +468,43 @@ final class LabScanServiceTests: XCTestCase {
         XCTAssertEqual(calcium.reference.id, "calcium")
         XCTAssertEqual(calcium.value, 9.5, accuracy: 0.001)
     }
+
+    // MARK: Separator normalization
+    //
+    // A thousands comma used to be read as a decimal point, turning
+    // "Ferritin 1,234" into 1.234 — a 1000x understatement that the
+    // plausibility filter cannot catch, since it only rejects values that
+    // are too high. European decimal commas must keep working.
+
+    func testDecimalCommaStaysADecimal() {
+        XCTAssertEqual(LabScanService.normalizedNumberToken("5,4"), "5.4")
+        XCTAssertEqual(LabScanService.normalizedNumberToken("12,75"), "12.75")
+    }
+
+    func testLeadingZeroCommaIsADecimalNotGrouping() {
+        XCTAssertEqual(LabScanService.normalizedNumberToken("0,123"), "0.123")
+    }
+
+    func testThousandsCommaIsDropped() {
+        XCTAssertEqual(LabScanService.normalizedNumberToken("1,234"), "1234")
+        XCTAssertEqual(LabScanService.normalizedNumberToken("12,345"), "12345")
+        XCTAssertEqual(LabScanService.normalizedNumberToken("1,234,567"), "1234567")
+    }
+
+    func testMixedSeparatorsUseTheLastOneAsTheDecimal() {
+        XCTAssertEqual(LabScanService.normalizedNumberToken("1,234.56"), "1234.56")
+        XCTAssertEqual(LabScanService.normalizedNumberToken("1.234,56"), "1234.56")
+    }
+
+    func testPlainTokensAreUnchanged() {
+        XCTAssertEqual(LabScanService.normalizedNumberToken("126"), "126")
+        XCTAssertEqual(LabScanService.normalizedNumberToken("5.4"), "5.4")
+    }
+
+    func testThousandsSeparatedFerritinParsesAtFullMagnitude() throws {
+        let results = LabScanService.parse(lines: ["Ferritin 1,234 ng/mL"])
+        let ferritin = try XCTUnwrap(results.first)
+        XCTAssertEqual(ferritin.reference.id, "ferritin")
+        XCTAssertEqual(ferritin.value, 1234, accuracy: 0.001)
+    }
 }

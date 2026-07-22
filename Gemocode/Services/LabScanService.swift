@@ -218,11 +218,16 @@ enum LabScanService {
     }
 
     private static func firstNumber(in text: String) -> Double? {
+        // Collect the raw token with its separators intact — normalizing
+        // commas during the walk (the previous behavior) silently turned a
+        // thousands-separated result into a fraction: "Ferritin 1,234"
+        // became 1.234, a 1000x error the plausibility check can't catch
+        // because it only rejects values that are too HIGH.
         var current = ""
         var found: String?
         for character in text {
             if character.isNumber || ((character == "." || character == ",") && !current.isEmpty) {
-                current.append(character == "," ? "." : character)
+                current.append(character)
             } else if !current.isEmpty {
                 found = current
                 break
@@ -231,11 +236,63 @@ enum LabScanService {
         if found == nil && !current.isEmpty {
             found = current
         }
-        guard var token = found else { return nil }
-        if token.hasSuffix(".") {
+        guard let token = found else { return nil }
+        return Double(normalizedNumberToken(token))
+    }
+
+    /// Normalizes a raw numeric token's separators to a `Double`-parsable
+    /// form, distinguishing a thousands comma from a decimal comma — lab
+    /// reports in this app's supported languages use both ("1,234" is one
+    /// thousand two hundred thirty-four; "5,4" is five point four).
+    ///
+    /// Rules, in order:
+    /// - both `,` and `.` present: whichever comes LAST is the decimal
+    ///   separator, the other is a grouping mark ("1,234.56" and "1.234,56"
+    ///   both become 1234.56);
+    /// - only commas, in a strict grouping shape (1-3 leading digits that
+    ///   don't start with 0, then one or more groups of exactly 3):
+    ///   thousands, so the commas are dropped;
+    /// - any other comma: a decimal point.
+    ///
+    /// A lone `.` is always left as a decimal point — European
+    /// dot-grouping ("1.234" meaning 1234) is genuinely ambiguous against a
+    /// three-decimal result, and the existing behavior is the safer read.
+    static func normalizedNumberToken(_ token: String) -> String {
+        var token = token
+        while token.hasSuffix(".") || token.hasSuffix(",") {
             token.removeLast()
         }
-        return Double(token)
+        let hasComma = token.contains(",")
+        let hasDot = token.contains(".")
+
+        if hasComma && hasDot {
+            if token.lastIndex(of: ",")! > token.lastIndex(of: ".")! {
+                return token.replacingOccurrences(of: ".", with: "").replacingOccurrences(of: ",", with: ".")
+            }
+            return token.replacingOccurrences(of: ",", with: "")
+        }
+
+        if hasComma {
+            if isThousandsGrouped(token, separator: ",") {
+                return token.replacingOccurrences(of: ",", with: "")
+            }
+            return token.replacingOccurrences(of: ",", with: ".")
+        }
+
+        return token
+    }
+
+    /// True when `token` reads as a grouped integer — "1,234", "12,345",
+    /// "1,234,567" — and not as a decimal. A leading zero ("0,123") is
+    /// never grouping, since no one writes zero thousand.
+    private static func isThousandsGrouped(_ token: String, separator: Character) -> Bool {
+        let parts = token.split(separator: separator, omittingEmptySubsequences: false)
+        guard parts.count >= 2 else { return false }
+        guard let head = parts.first,
+              (1...3).contains(head.count),
+              head.first != "0",
+              head.allSatisfy(\.isNumber) else { return false }
+        return parts.dropFirst().allSatisfy { $0.count == 3 && $0.allSatisfy(\.isNumber) }
     }
 }
 

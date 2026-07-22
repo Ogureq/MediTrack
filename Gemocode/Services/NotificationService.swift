@@ -83,4 +83,14 @@ enum NotificationService {
     static func cancelReminder(id: String) {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id])
     }
+
+    /// Cancels every pending reminder this app scheduled.
+    ///
+    /// Per-row deletes cancel their own reminder, but the bulk
+    /// `context.delete(model:)` wipes used by Erase All Data and backup
+    /// restore don't go through those paths — so without this, "Take your
+    /// Vitamin D3" keeps firing for a medication that no longer exists.
+    static func cancelAllReminders() {
+        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+    }
 }

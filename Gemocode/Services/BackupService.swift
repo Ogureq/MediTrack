@@ -377,7 +377,12 @@ enum BackupService {
     static func restore(from data: Data, passphrase: String, into context: ModelContext) async throws -> Int {
         let payload = try await resolvePayload(from: data, passphrase: passphrase)
 
-        // Wipe everything except the profile object itself.
+        // Wipe everything except the profile object itself. These bulk
+        // deletes bypass the per-row reminder cancellation in
+        // MedicationsView/AppointmentsView, so pending notifications for
+        // records about to disappear are cleared here; the restore alert
+        // already tells the user reminders must be re-enabled afterwards.
+        NotificationService.cancelAllReminders()
         try? context.delete(model: MedicalReport.self)
         try? context.delete(model: LabResult.self)
         try? context.delete(model: ReportAttachment.self)
