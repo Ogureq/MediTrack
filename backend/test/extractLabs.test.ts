@@ -551,6 +551,59 @@ describe("callExtractLabsAnthropic", () => {
     expect(result.status).toBe(0);
   });
 
+  it("retries a transient overload and succeeds on a later attempt", async () => {
+    let calls = 0;
+    const fetchImpl = vi.fn(async (): Promise<Response> => {
+      calls += 1;
+      if (calls === 1) {
+        return new Response(JSON.stringify({ error: { message: "Overloaded" } }), { status: 529 });
+      }
+      return new Response(
+        JSON.stringify({
+          content: [
+            {
+              type: "text",
+              text: '{"values":[{"name":"HbA1c","value":5.4,"unit":"%","sourceText":"HbA1c 5.4 %"}]}'
+            }
+          ]
+        }),
+        { status: 200 }
+      );
+    });
+
+    const result = await callExtractLabsAnthropic({
+      anthropicApiKey: "k",
+      model: "m",
+      image,
+      fetchImpl,
+      retryDelayMs: 0
+    });
+
+    expect(calls).toBe(2);
+    expect(result.ok).toBe(true);
+    if (!result.ok || result.refused) throw new Error("expected success after the retry");
+    expect(result.values.map((v: { name: string }) => v.name)).toEqual(["HbA1c"]);
+  });
+
+  it("never retries a permanent upstream rejection", async () => {
+    let calls = 0;
+    const fetchImpl = vi.fn(async (): Promise<Response> => {
+      calls += 1;
+      return new Response(JSON.stringify({ error: { message: "bad request" } }), { status: 400 });
+    });
+
+    const result = await callExtractLabsAnthropic({
+      anthropicApiKey: "k",
+      model: "m",
+      image,
+      fetchImpl,
+      retryDelayMs: 0
+    });
+
+    expect(calls).toBe(1);
+    expect(result).toEqual({ ok: false, kind: "upstream", status: 400, message: "bad request" });
+  });
+
   it("carries a facility from the model's response text through to the call result", async () => {
     const fetchImpl = stubFetch(
       () =>

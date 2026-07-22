@@ -280,6 +280,23 @@ export const EXTRACT_LABS_MAX_TOKENS = 2000;
  */
 export const EXTRACT_LABS_IMAGE_TOKEN_ESTIMATE = 1600;
 
+/**
+ * Upstream statuses worth retrying: rate limiting (429), Anthropic's
+ * overloaded signal (529), request timeout (408), and transient 5xx. A 400
+ * or 401 is a bug or a bad key — retrying those just burns wall-clock.
+ */
+export const UPSTREAM_RETRYABLE_STATUSES = new Set([408, 429, 500, 502, 503, 504, 529]);
+
+/** Total attempts (1 initial + 2 retries) and the base backoff delay. */
+export const UPSTREAM_MAX_ATTEMPTS = 3;
+export const UPSTREAM_RETRY_BASE_DELAY_MS = 400;
+
+/** Backoff sleep. Workers bill CPU time, not wall-clock, so waiting is cheap. */
+function sleep(ms: number): Promise<void> {
+  if (ms <= 0) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 // ---------------------------------------------------------------------------
 // Response sanity parsing (tolerant of code fences / wrapper prose)
 // ---------------------------------------------------------------------------
@@ -456,8 +473,12 @@ export async function callExtractLabsAnthropic(opts: {
   model: string;
   image: ExtractLabsImage;
   fetchImpl?: typeof fetch;
+  maxAttempts?: number;
+  retryDelayMs?: number;
 }): Promise<ExtractLabsCallResult> {
   const doFetch = opts.fetchImpl ?? fetch;
+  const maxAttempts = opts.maxAttempts ?? UPSTREAM_MAX_ATTEMPTS;
+  const retryDelayMs = opts.retryDelayMs ?? UPSTREAM_RETRY_BASE_DELAY_MS;
 
   const imageBlock: AnthropicImageContentBlock = {
     type: "image",
@@ -472,23 +493,43 @@ export async function callExtractLabsAnthropic(opts: {
     messages: [{ role: "user", content: [imageBlock, textBlock] }]
   };
 
-  let upstream: Response;
-  try {
-    upstream = await doFetch(ANTHROPIC_MESSAGES_URL, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": opts.anthropicApiKey,
-        "anthropic-version": ANTHROPIC_API_VERSION
-      },
-      body: JSON.stringify(body)
-    });
-  } catch (err) {
+  // Anthropic rate limits (429) and overload/5xx responses are transient by
+  // nature: a single-shot call turns a blip that would clear in half a
+  // second into a user-facing "scan failed", which is the dominant cause of
+  // photo extraction feeling unreliable. Retry those (and outright network
+  // errors) with exponential backoff; anything else — 400s, auth failures —
+  // is permanent and breaks out immediately.
+  let upstream: Response | null = null;
+  let networkMessage: string | null = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    upstream = null;
+    networkMessage = null;
+    try {
+      upstream = await doFetch(ANTHROPIC_MESSAGES_URL, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": opts.anthropicApiKey,
+          "anthropic-version": ANTHROPIC_API_VERSION
+        },
+        body: JSON.stringify(body)
+      });
+    } catch (err) {
+      networkMessage = err instanceof Error ? err.message : "Network error calling the AI service.";
+    }
+
+    const retryable = upstream === null || UPSTREAM_RETRYABLE_STATUSES.has(upstream.status);
+    if (!retryable || attempt === maxAttempts) break;
+    await sleep(retryDelayMs * 2 ** (attempt - 1));
+  }
+
+  if (upstream === null) {
     return {
       ok: false,
       kind: "upstream",
       status: 0,
-      message: err instanceof Error ? err.message : "Network error calling the AI service."
+      message: networkMessage ?? "Network error calling the AI service."
     };
   }
 

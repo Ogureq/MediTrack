@@ -311,6 +311,15 @@ struct ScanReportView: View {
                     shareItem = nil
                 }
             }
+            .onAppear {
+                // SwiftUI also fires `.onDisappear` when another sheet (the
+                // camera, the photo picker) covers this one — not only on a
+                // real dismissal. Without this reset, that transient
+                // disappearance would latch `hasDisappeared` true for the
+                // rest of the flow and silently suppress the scan-results
+                // sheet from then on.
+                hasDisappeared = false
+            }
             .onDisappear {
                 // The sheet was dismissed (swipe-to-dismiss or programmatic)
                 // while a scan or an AI generation was still running. Cancel
@@ -1338,15 +1347,18 @@ struct ScanReportView: View {
         let existingKeys = Set(confirmedLabs.map { $0.reference.id.lowercased() })
             .union(scannedValues.map { $0.reference.id.lowercased() })
         scanTask = Task {
+            // See the AI path's matching `defer`: the re-entrancy latch must
+            // clear even when cancelled, or the scan button dies for the
+            // rest of this sheet's life.
+            defer { isScanning = false }
             let found = await LabScanService.scan(attachments: inputs)
                 .filter { !existingKeys.contains($0.reference.id.lowercased()) }
             // Cancelled (sheet dismissed mid-OCR, see .onDisappear below) —
-            // skip every mutation, including `isScanning`/`hasScanned`,
-            // rather than update state on a view that's gone.
+            // skip every mutation, including `hasScanned`, rather than
+            // update state on a view that's gone.
             guard !Task.isCancelled else { return }
             scannedValues.append(contentsOf: found)
             scannedAttachmentIDs.formUnion(newlyScannedIDs)
-            isScanning = false
             hasScanned = true
             // Belt-and-suspenders on top of the cancellation guard above:
             // never present a sheet once the view has already torn down.
@@ -1446,8 +1458,8 @@ struct ScanReportView: View {
 
             // Cancelled (sheet dismissed mid-AI-read) — skip every
             // mutation, exactly like `scanAttachments()`'s own guard.
+            // `isScanning` itself is cleared by the `defer` above.
             guard !Task.isCancelled else { return }
-            isScanning = false
 
             if hitNotConfigured {
                 showingAINotConfiguredNotice = true

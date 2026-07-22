@@ -221,6 +221,14 @@ enum AITransport {
     // MARK: - Relay path
 
     private static let relayGenerateTimeoutInterval: TimeInterval = 60
+
+    /// Photo extraction needs a longer deadline than a text generation: the
+    /// request carries a base64 image uphill on a phone connection, then the
+    /// relay makes its own vision call (now with retries). The relay path
+    /// used to share the 60s text budget — a *shorter* deadline than the
+    /// BYOK path's 90s despite doing strictly more work — which turned
+    /// slow-but-healthy scans into failures.
+    private static let relayExtractLabsTimeoutInterval: TimeInterval = 120
     private static let relayAuthTimeoutInterval: TimeInterval = 20
 
     fileprivate static let relayDeviceIDAccount = "relay.deviceID"
@@ -631,7 +639,7 @@ extension AITransport {
 
         var request = URLRequest(url: baseURL.appendingPathComponent("v1/extract-labs"))
         request.httpMethod = "POST"
-        request.timeoutInterval = relayGenerateTimeoutInterval
+        request.timeoutInterval = relayExtractLabsTimeoutInterval
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let encoder = JSONEncoder()
