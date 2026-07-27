@@ -186,7 +186,7 @@ enum HealthKitService {
     /// its type, date, and (rounded, as-stored) values match. Internal so
     /// tests can pin the shape.
     static func importKey(type: VitalType, value: Double, secondary: Double?, date: Date) -> String {
-        "\(type.rawValue)|\(date.timeIntervalSince1970)|\(value)|\(secondary.map(String.init) ?? "-")"
+        "\(type.rawValue)|\(date.timeIntervalSince1970)|\(value)|\(secondary.map { "\($0)" } ?? "-")"
     }
 
     /// Imports samples recorded after `since` (minus `importOverlap`) and
