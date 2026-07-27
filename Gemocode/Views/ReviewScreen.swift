@@ -537,6 +537,17 @@ struct ReviewScreen: View {
         guard !isGeneratingSummary else { return }
         isGeneratingSummary = true
         aiError = nil
+        // Claim any owed-report debt NOW, synchronously, rather than
+        // clearing it after the round trip: the flag checked only at
+        // button-render time meant two in-flight generations could both
+        // see it set and redeem two reports off one owed credit. Claiming
+        // before the first await closes that window (this runs on the main
+        // actor with no suspension since the check); a failed generation
+        // hands the claim back below.
+        let claimedOwedReport = AIReportQuota.isReportOwed(defaults: .standard)
+        if claimedOwedReport {
+            AIReportQuota.clearReportOwed(defaults: .standard)
+        }
         let current = review  // the caller's already-computed pass
         let profileSummary = aiProfileSummary
         let deltas = aiScoreDeltas
@@ -557,12 +568,13 @@ struct ReviewScreen: View {
                 if !premiumStore.isPremium {
                     AIReportQuota.recordUse(defaults: .standard)
                 }
-                // A delivered report settles any owed-report debt from a
-                // scan flow whose report half failed after consuming the
-                // credit (see AIReportQuota.markReportOwed).
-                AIReportQuota.clearReportOwed(defaults: .standard)
             } catch {
                 aiError = error.localizedDescription
+                // The debt this attempt claimed was never delivered —
+                // restore it so the user keeps the report they're owed.
+                if claimedOwedReport {
+                    AIReportQuota.markReportOwed(defaults: .standard)
+                }
             }
             isGeneratingSummary = false
         }
