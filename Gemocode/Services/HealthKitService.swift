@@ -159,23 +159,73 @@ enum HealthKitService {
         (.bodyTemperature, .temperature, .degreeCelsius(), 1),
     ]
 
-    /// Imports samples recorded after `since` and returns how many were
-    /// added. This is the shared incremental-import core: the manual
-    /// "Import from Apple Health" button in ProfileView and the automatic
-    /// background sync observer (`runIncrementalSync`) both call this same
-    /// function rather than duplicating the fetch/mapping/dedupe logic.
+    /// The note every HealthKit-sourced sample carries — also the marker
+    /// `importVitals`' dedup pass uses to recognize its own prior imports.
+    static let importNote = "Imported from Apple Health"
+
+    /// How far behind the stored high-water mark each import re-scans.
+    ///
+    /// The anchor is the wall-clock time a sync *finished* — but HealthKit
+    /// samples routinely arrive late with an earlier `startDate` (a paired
+    /// scale or Watch syncing hours after the reading was taken). A strict
+    /// anchor skipped those readings permanently. Re-scanning a 7-day
+    /// overlap window catches realistic late arrivals; the dedup pass below
+    /// makes the overlap free of duplicates. (Samples arriving more than 7
+    /// days late are still missed — the full fix is HKAnchoredObjectQuery,
+    /// tracked as follow-up.)
+    static let importOverlap: TimeInterval = 7 * 24 * 3600
+
+    /// Serializes imports: the manual ProfileView button and the hourly
+    /// observer sync can otherwise interleave at an await with two contexts
+    /// whose unsaved inserts are invisible to each other's dedup fetch.
+    /// Main-actor isolated, and checked/set with no suspension in between,
+    /// so the check-and-set is race-free.
+    @MainActor private static var importInFlight = false
+
+    /// Content key for one imported reading — a sample is "the same" when
+    /// its type, date, and (rounded, as-stored) values match. Internal so
+    /// tests can pin the shape.
+    static func importKey(type: VitalType, value: Double, secondary: Double?, date: Date) -> String {
+        "\(type.rawValue)|\(date.timeIntervalSince1970)|\(value)|\(secondary.map(String.init) ?? "-")"
+    }
+
+    /// Imports samples recorded after `since` (minus `importOverlap`) and
+    /// returns how many were added. This is the shared incremental-import
+    /// core: the manual "Import from Apple Health" button in ProfileView and
+    /// the automatic background sync observer (`runIncrementalSync`) both
+    /// call this same function rather than duplicating the
+    /// fetch/mapping/dedupe logic. Returns 0 without doing anything when
+    /// another import is already in flight.
     @MainActor
     static func importVitals(since: Date, into context: ModelContext) async throws -> Int {
+        guard !importInFlight else { return 0 }
+        importInFlight = true
+        defer { importInFlight = false }
+
         var imported = 0
-        let note = "Imported from Apple Health"
+        let effectiveSince = since.addingTimeInterval(-importOverlap)
+
+        // Everything this app previously imported inside the re-scan window,
+        // keyed by content — inserting a sample whose key is already present
+        // would duplicate it (double-counting trends and the health score).
+        let windowStart = effectiveSince
+        var seenKeys: Set<String> = Set(
+            ((try? context.fetch(FetchDescriptor<VitalSample>(
+                predicate: #Predicate { $0.date >= windowStart }
+            ))) ?? [])
+            .filter { $0.note == Self.importNote }
+            .map { importKey(type: $0.type, value: $0.value, secondary: $0.secondaryValue, date: $0.date) }
+        )
 
         for (identifier, vitalType, unit, scale) in quantityImportMappings {
             guard let quantityType = HKObjectType.quantityType(forIdentifier: identifier) else { continue }
-            let samples = try await quantitySamples(of: quantityType, since: since)
+            let samples = try await quantitySamples(of: quantityType, since: effectiveSince)
             for sample in samples {
                 let raw = sample.quantity.doubleValue(for: unit) * scale
                 let value = (raw * 10).rounded() / 10
-                context.insert(VitalSample(type: vitalType, value: value, date: sample.startDate, note: note))
+                let key = importKey(type: vitalType, value: value, secondary: nil, date: sample.startDate)
+                guard seenKeys.insert(key).inserted else { continue }
+                context.insert(VitalSample(type: vitalType, value: value, date: sample.startDate, note: Self.importNote))
                 imported += 1
                 // The first-ever sync can insert up to 500 samples per type
                 // on the main actor in one stretch; yield periodically so
@@ -188,18 +238,22 @@ enum HealthKitService {
         if let correlationType = HKObjectType.correlationType(forIdentifier: .bloodPressure),
            let systolicType = HKObjectType.quantityType(forIdentifier: .bloodPressureSystolic),
            let diastolicType = HKObjectType.quantityType(forIdentifier: .bloodPressureDiastolic) {
-            let correlations = try await correlationSamples(of: correlationType, since: since)
+            let correlations = try await correlationSamples(of: correlationType, since: effectiveSince)
             for correlation in correlations {
                 guard let systolic = correlation.objects(for: systolicType).first as? HKQuantitySample,
                       let diastolic = correlation.objects(for: diastolicType).first as? HKQuantitySample else {
                     continue
                 }
+                let systolicValue = systolic.quantity.doubleValue(for: .millimeterOfMercury()).rounded()
+                let diastolicValue = diastolic.quantity.doubleValue(for: .millimeterOfMercury()).rounded()
+                let key = importKey(type: .bloodPressure, value: systolicValue, secondary: diastolicValue, date: correlation.startDate)
+                guard seenKeys.insert(key).inserted else { continue }
                 context.insert(VitalSample(
                     type: .bloodPressure,
-                    value: systolic.quantity.doubleValue(for: .millimeterOfMercury()).rounded(),
-                    secondaryValue: diastolic.quantity.doubleValue(for: .millimeterOfMercury()).rounded(),
+                    value: systolicValue,
+                    secondaryValue: diastolicValue,
                     date: correlation.startDate,
-                    note: note
+                    note: Self.importNote
                 ))
                 imported += 1
                 if imported % 100 == 0 { await Task.yield() }
