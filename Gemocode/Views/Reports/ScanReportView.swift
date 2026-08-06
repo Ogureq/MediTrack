@@ -1061,7 +1061,7 @@ struct ScanReportView: View {
                 .kerning(0.8)
                 .foregroundStyle(Color(white: 0.55))
             Text(verbatim: subtitleText)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Color(white: 0.1))
             Rectangle().fill(Color(white: 0.88)).frame(height: 1).padding(.vertical, 3)
 

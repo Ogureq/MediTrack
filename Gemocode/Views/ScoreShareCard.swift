@@ -146,7 +146,7 @@ struct ScoreShareCard: View {
 
     private var footer: some View {
         Text("Tracked privately, on-device")
-            .font(.system(size: 11, weight: .medium))
+            .font(.system(size: 13, weight: .medium))
             .foregroundStyle(Editorial.muted(scheme))
             .frame(maxWidth: .infinity, alignment: .center)
     }

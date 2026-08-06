@@ -185,7 +185,7 @@ struct ReminderListRow: View {
                         }
                         if !reminder.detail.isEmpty {
                             Text(reminder.detail)
-                                .font(.system(size: 12, weight: .regular))
+                                .font(.system(size: 13, weight: .regular))
                                 .foregroundStyle(Editorial.muted(colorScheme))
                                 .lineLimit(1)
                         }

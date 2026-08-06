@@ -348,7 +348,7 @@ private struct GoalProgressRow: View {
                 Spacer(minLength: 8)
                 Text(retestCaption ?? dueText)
             }
-            .font(.system(size: 11, weight: .regular))
+            .font(.system(size: 13, weight: .regular))
             .foregroundStyle(Editorial.muted(colorScheme))
         }
         .accessibilityElement(children: .combine)
@@ -371,7 +371,7 @@ private struct GoalsDrawBundleFooter: View {
                 .foregroundStyle(Editorial.accent(colorScheme))
                 .accessibilityHidden(true)
             Text(text)
-                .font(.system(size: 11, weight: .regular))
+                .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(Editorial.muted(colorScheme))
         }
         .padding(11)

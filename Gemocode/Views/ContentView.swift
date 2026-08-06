@@ -212,7 +212,7 @@ struct MoreView: View {
                     profileHeaderCard
 
                     Text("HEALTH RECORDS")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: 13, weight: .bold))
                         .tracking(1.2)
                         .foregroundStyle(.primary.opacity(0.42))
                         .accessibilityAddTraits(.isHeader)
@@ -285,7 +285,7 @@ struct MoreView: View {
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(.primary)
                     Text("Profile, settings & data")
-                        .font(.system(size: 12.5))
+                        .font(.system(size: 13.5))
                         .foregroundStyle(.primary.opacity(0.5))
                 }
 
@@ -330,7 +330,7 @@ struct MoreView: View {
                         .font(.system(size: 14.5, weight: .semibold))
                         .foregroundStyle(.primary)
                     Text(subtitle)
-                        .font(.system(size: 11.5))
+                        .font(.system(size: 13.5))
                         .foregroundStyle(.primary.opacity(0.45))
                         .lineLimit(1)
                 }
@@ -373,7 +373,7 @@ struct MoreView: View {
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(.primary)
                     Text("Emergency info at a glance")
-                        .font(.system(size: 12))
+                        .font(.system(size: 13))
                         .foregroundStyle(.primary.opacity(0.5))
                 }
                 Spacer()

@@ -388,7 +388,7 @@ struct DashboardView: View {
                 )
                 if hasDueOrSoon {
                     Text(RetestSchedule.disclaimer)
-                        .font(.system(size: 10))
+                        .font(.system(size: 13))
                         .foregroundStyle(Editorial.muted(colorScheme))
                 }
             }
@@ -454,7 +454,7 @@ struct DashboardView: View {
                 showingBookSheet = true
             } label: {
                 Text("Book")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.white)
                     .padding(.vertical, 9)
                     .padding(.horizontal, 16)

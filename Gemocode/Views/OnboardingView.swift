@@ -186,7 +186,7 @@ struct OnboardingView: View {
                 accessibilityLabel: Text(verbatim: "\(reference?.name ?? "Vitamin D") \(demoValue.compactFormatted) \(reference?.unit ?? "ng/mL"), \(LabStatus.low.label)")
             )
             Text("Every value you track will look like this — no decoding needed.")
-                .font(.system(size: 11, weight: .regular))
+                .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(Editorial.muted(colorScheme))
         }
         .padding(16)

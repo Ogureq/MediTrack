@@ -113,7 +113,7 @@ struct HealthTimelineView: View {
             selectedCategory = category
         } label: {
             Text(title)
-                .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
+                .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
                 .foregroundStyle(isSelected ? Editorial.ink(colorScheme) : Editorial.muted(colorScheme))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
@@ -177,11 +177,11 @@ private struct TimelineRow: View {
                         .foregroundStyle(Editorial.ink(colorScheme))
                     Spacer()
                     Text(event.date, format: .relative(presentation: .named))
-                        .font(.system(size: 11))
+                        .font(.system(size: 13))
                         .foregroundStyle(Editorial.muted(colorScheme))
                 }
                 Text(event.detail)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundStyle(Editorial.muted(colorScheme))
             }
         }

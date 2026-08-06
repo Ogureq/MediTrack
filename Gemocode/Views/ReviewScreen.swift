@@ -207,7 +207,7 @@ struct ReviewScreen: View {
                 .font(.system(size: 13))
                 .foregroundStyle(Editorial.muted(colorScheme))
             Text("Generated \(review.generatedAt.formatted(date: .abbreviated, time: .shortened))")
-                .font(.system(size: 11))
+                .font(.system(size: 13))
                 .foregroundStyle(Editorial.muted(colorScheme))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -302,7 +302,7 @@ struct ReviewScreen: View {
                 .background(Capsule().fill(Editorial.hairline(colorScheme)))
             if let topFinding {
                 Text(verbatim: categoryDetailText(topFinding, totalCount: group.findings.count))
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundStyle(Editorial.muted(colorScheme))
                     .lineLimit(2)
             }
@@ -474,7 +474,7 @@ struct ReviewScreen: View {
                         .foregroundStyle(Editorial.ink(colorScheme))
                     if itemCount > 0 {
                         Text("\(itemCount) supplement suggestions")
-                            .font(.system(size: 12))
+                            .font(.system(size: 13))
                             .foregroundStyle(Editorial.muted(colorScheme))
                     }
                 }
@@ -622,7 +622,7 @@ struct ReviewScreen: View {
                 trendTag(trend.direction)
             }
             Text(trend.detail)
-                .font(.system(size: 12))
+                .font(.system(size: 13))
                 .foregroundStyle(Editorial.muted(colorScheme))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -643,7 +643,7 @@ struct ReviewScreen: View {
             EditorialTag(verbatim: direction.displayName, kind: .bad)
         case .stable, .rising, .falling:
             Text(direction.displayName)
-                .font(.system(size: 12))
+                .font(.system(size: 13))
                 .foregroundStyle(Editorial.muted(colorScheme))
         }
     }
@@ -676,7 +676,7 @@ struct ReviewScreen: View {
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(Editorial.ink(colorScheme))
                         Text(snapshot.date.formatted(date: .abbreviated, time: .omitted))
-                            .font(.system(size: 11))
+                            .font(.system(size: 13))
                             .foregroundStyle(Editorial.muted(colorScheme))
                     }
                     Spacer()
@@ -712,7 +712,7 @@ struct ReviewScreen: View {
             EditorialTag(verbatim: status.label, kind: .good)
         case .unknown:
             Text(status.label)
-                .font(.system(size: 11))
+                .font(.system(size: 13))
                 .foregroundStyle(Editorial.muted(colorScheme))
         }
     }
@@ -736,7 +736,7 @@ struct ReviewScreen: View {
 
     private var disclaimerCard: some View {
         Text(HealthReview.disclaimer)
-            .font(.system(size: 11))
+            .font(.system(size: 13))
             .foregroundStyle(Editorial.muted(colorScheme))
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)

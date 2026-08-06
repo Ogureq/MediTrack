@@ -224,7 +224,7 @@ struct ReportRow: View {
                 statusDots
             } else if let linkedLabName {
                 Text(verbatim: "\(linkedLabName) ↗")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Editorial.accent(colorScheme))
                     .lineLimit(1)
             }

@@ -290,7 +290,7 @@ struct DocumentsView: View {
             selectedCategory = category
         } label: {
             Text(title)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(isSelected ? Editorial.canvas(colorScheme) : Editorial.muted(colorScheme))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
@@ -338,7 +338,7 @@ private struct DocumentRow: View {
                     .foregroundStyle(Editorial.ink(colorScheme))
                     .lineLimit(1)
                 Text("\(item.reportTitle) · \(sizeText)")
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundStyle(Editorial.muted(colorScheme))
                     .lineLimit(1)
             }
@@ -346,7 +346,7 @@ private struct DocumentRow: View {
             Spacer(minLength: 8)
 
             Text(dateText)
-                .font(.system(size: 11))
+                .font(.system(size: 13))
                 .foregroundStyle(Editorial.muted(colorScheme))
         }
         .ledgerRow()

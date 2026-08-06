@@ -106,7 +106,7 @@ struct QuickAddView: View {
                                     : String(format: String(localized: "Understood — %lld entries found"), entryCount),
                                 systemImage: "sparkle"
                             )
-                            .font(.system(size: 11, weight: .regular))
+                            .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(.secondary)
                             .accessibilityElement(children: .combine)
                         }
@@ -476,7 +476,7 @@ private struct QuickAddPreviewCard: View {
                 Spacer(minLength: 8)
                 if let loggedText = display.loggedText {
                     Text(loggedText)
-                        .font(.system(size: 12, weight: .regular))
+                        .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(Editorial.accent(colorScheme))
                 } else if let statusTag = display.statusTag {
                     EditorialTag(statusTag.label, kind: statusTag.kind)
@@ -484,7 +484,7 @@ private struct QuickAddPreviewCard: View {
             }
 
             Text(([display.typeLabel] + display.detailLines).joined(separator: " · "))
-                .font(.system(size: 12, weight: .regular))
+                .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(Editorial.muted(colorScheme))
 
             if isAIFilled {
@@ -532,14 +532,14 @@ private struct QuickAddBatchPreviewCard: View {
                             .foregroundStyle(Editorial.ink(colorScheme))
                         if let loggedText = display.loggedText {
                             Text(loggedText)
-                                .font(.system(size: 12, weight: .regular))
+                                .font(.system(size: 13, weight: .regular))
                                 .foregroundStyle(Editorial.accent(colorScheme))
                         } else if let statusTag = display.statusTag {
                             EditorialTag(statusTag.label, kind: statusTag.kind)
                         }
                     }
                     Text(([display.typeLabel] + display.detailLines).joined(separator: " · "))
-                        .font(.system(size: 12, weight: .regular))
+                        .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(Editorial.muted(colorScheme))
                 }
                 .accessibilityElement(children: .ignore)

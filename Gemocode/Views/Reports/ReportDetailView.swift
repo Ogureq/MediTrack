@@ -350,7 +350,7 @@ struct ReportDetailView: View {
                     .foregroundStyle(Editorial.ink(colorScheme))
                     .fixedSize(horizontal: false, vertical: true)
                 Text(sourceLine)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundStyle(Editorial.muted(colorScheme))
                 if let firstAttachment = report.attachments.first {
                     NavigationLink {
@@ -402,7 +402,7 @@ struct ReportDetailView: View {
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(color)
             Text(caption)
-                .font(.system(size: 10))
+                .font(.system(size: 13))
                 .foregroundStyle(Editorial.muted(colorScheme))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -523,7 +523,7 @@ struct LabResultRow: View {
                     accessibilityLabel: Text("\(result.displayName) \(result.value.compactFormatted) \(result.unit), \(status.label)")
                 )
                 Text("Typical: \(range.lowerBound.compactFormatted)–\(range.upperBound.compactFormatted) \(result.unit)")
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundStyle(Editorial.muted(colorScheme))
             }
             if status.isOutOfRange, let reference {
@@ -531,7 +531,7 @@ struct LabResultRow: View {
                     ? reference.lowMeaning
                     : reference.highMeaning
                 Text(meaning)
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundStyle(Editorial.muted(colorScheme))
             }
         }

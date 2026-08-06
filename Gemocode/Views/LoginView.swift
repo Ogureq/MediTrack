@@ -156,7 +156,7 @@ struct LoginView: View {
                     showingMedicalID = true
                 } label: {
                     Text("Medical ID")
-                        .font(.system(size: 12, weight: .regular))
+                        .font(.system(size: 13, weight: .regular))
                         .underline()
                 }
                 .buttonStyle(.plain)

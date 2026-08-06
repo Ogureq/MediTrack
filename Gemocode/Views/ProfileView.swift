@@ -269,7 +269,7 @@ private struct ProfileForm: View {
                         .foregroundStyle(Editorial.ink(colorScheme))
                     if profile.sex != .unspecified {
                         Text("\(profile.sex.displayName) · sex-specific ranges applied")
-                            .font(.system(size: 12, weight: .regular))
+                            .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(Editorial.muted(colorScheme))
                     }
                 }
@@ -278,7 +278,7 @@ private struct ProfileForm: View {
                     showingProfileEditor = true
                 } label: {
                     Text("Edit")
-                        .font(.system(size: 12, weight: .regular))
+                        .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(Editorial.accent(colorScheme))
                 }
                 .buttonStyle(.plain)
@@ -481,7 +481,7 @@ private struct ProfileForm: View {
             settings.languageChoice = choice
         } label: {
             Text(verbatim: label)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(isSelected ? Editorial.canvas(colorScheme) : Editorial.muted(colorScheme))
                 .padding(.horizontal, 13)
                 .padding(.vertical, 6)
@@ -513,7 +513,7 @@ private struct ProfileForm: View {
             settings.themeChoice = choice
         } label: {
             Text(choice.displayName)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(isSelected ? Editorial.canvas(colorScheme) : Editorial.muted(colorScheme))
                 .padding(.horizontal, 13)
                 .padding(.vertical, 6)

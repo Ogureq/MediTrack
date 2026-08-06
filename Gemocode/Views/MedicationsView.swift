@@ -398,10 +398,10 @@ struct InteractionRow: View {
                 EditorialTag(verbatim: interaction.severity.displayName, kind: tagKind)
             }
             Text(interaction.explanation)
-                .font(.system(size: 12, weight: .regular))
+                .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(Editorial.muted(colorScheme))
             Text(interaction.recommendation)
-                .font(.system(size: 11, weight: .regular))
+                .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(Editorial.muted(colorScheme))
         }
         .accessibilityElement(children: .combine)
@@ -485,12 +485,12 @@ struct MedicationRow: View {
                     }
                     if !medication.dosage.isEmpty || !medication.frequency.isEmpty {
                         Text([medication.dosage, medication.frequency].filter { !$0.isEmpty }.joined(separator: " · "))
-                            .font(.system(size: 12, weight: .regular))
+                            .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(Editorial.muted(colorScheme))
                     }
                     if !medication.purpose.isEmpty {
                         Text(medication.purpose)
-                            .font(.system(size: 11, weight: .regular))
+                            .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(Editorial.muted(colorScheme))
                     }
                     HStack(spacing: 4) {
@@ -499,11 +499,11 @@ struct MedicationRow: View {
                             Text("– \(endDate.formatted(date: .abbreviated, time: .omitted))")
                         }
                     }
-                    .font(.system(size: 11, weight: .regular))
+                    .font(.system(size: 13, weight: .regular))
                     .foregroundStyle(Editorial.muted(colorScheme))
                     if let monitorLineText {
                         Text(monitorLineText)
-                            .font(.system(size: 11, weight: .regular))
+                            .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(monitorLineColor)
                     }
                 }
@@ -517,7 +517,7 @@ struct MedicationRow: View {
                     LabDetailView(seriesKey: linkedLabID)
                 } label: {
                     Text(verbatim: labChipText)
-                        .font(.system(size: 12, weight: .regular))
+                        .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(Editorial.accent(colorScheme))
                 }
                 .accessibilityLabel(
@@ -617,11 +617,11 @@ private struct PrescriptionScanResultsSheet: View {
                         .foregroundStyle(Editorial.ink(colorScheme))
                     if !details.isEmpty {
                         Text(details.joined(separator: " · "))
-                            .font(.system(size: 12, weight: .regular))
+                            .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(Editorial.muted(colorScheme))
                     }
                     Text("“\(item.sourceLine)”")
-                        .font(.system(size: 11))
+                        .font(.system(size: 13))
                         .foregroundStyle(Editorial.muted(colorScheme))
                         .lineLimit(1)
                 }

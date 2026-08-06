@@ -71,7 +71,7 @@ struct ReviewPDFPage: View {
             header
             Divider()
             Text(review.summary)
-                .font(.system(size: 12))
+                .font(.system(size: 13))
             severitySection("Critical", findings: review.criticalFindings, color: .red)
             severitySection("Needs Attention", findings: review.attentionFindings, color: .orange)
             severitySection("Informational", findings: review.infoFindings, color: .blue)
@@ -101,10 +101,10 @@ struct ReviewPDFPage: View {
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
                 Text(review.generatedAt.formatted(date: .long, time: .shortened))
-                    .font(.system(size: 10))
+                    .font(.system(size: 13))
                     .foregroundStyle(secondaryText)
                 Text("Score: \(review.score)/100 · \(review.scoreLabel)")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
             }
         }
     }
@@ -114,19 +114,19 @@ struct ReviewPDFPage: View {
         if !findings.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 Text(title.uppercased())
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(color)
                 ForEach(findings) { finding in
                     VStack(alignment: .leading, spacing: 2) {
                         Text("• \(finding.title)")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(size: 13, weight: .semibold))
                         Text(finding.detail)
-                            .font(.system(size: 10))
+                            .font(.system(size: 13))
                             .foregroundStyle(secondaryText)
                             .padding(.leading, 10)
                         if let recommendation = finding.recommendation {
                             Text("→ \(recommendation)")
-                                .font(.system(size: 10).italic())
+                                .font(.system(size: 13).italic())
                                 .foregroundStyle(secondaryText)
                                 .padding(.leading, 10)
                         }
@@ -141,11 +141,11 @@ struct ReviewPDFPage: View {
         if !review.trends.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
                 Text("TRENDS")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(accent)
                 ForEach(review.trends) { trend in
                     Text("• \(trend.detail)")
-                        .font(.system(size: 10))
+                        .font(.system(size: 13))
                 }
             }
         }
@@ -156,12 +156,12 @@ struct ReviewPDFPage: View {
         if !review.labSnapshots.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
                 Text("LATEST LAB VALUES")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(accent)
                 ForEach(review.labSnapshots) { snapshot in
                     HStack(spacing: 8) {
                         Text(snapshot.name)
-                            .font(.system(size: 10))
+                            .font(.system(size: 13))
                         if let range = snapshot.range {
                             Text("(\(range.lowerBound.compactFormatted)–\(range.upperBound.compactFormatted))")
                                 .font(.system(size: 9))
@@ -169,7 +169,7 @@ struct ReviewPDFPage: View {
                         }
                         Spacer()
                         Text("\(snapshot.value.compactFormatted) \(snapshot.unit)")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(size: 13, weight: .semibold))
                         Text(snapshot.status.label)
                             .font(.system(size: 8, weight: .bold))
                             .foregroundStyle(.white)

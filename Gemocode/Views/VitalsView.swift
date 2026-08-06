@@ -174,12 +174,12 @@ struct VitalsView: View {
                     Spacer()
                     Text("stage 2")
                 }
-                .font(.system(size: 10))
+                .font(.system(size: 13))
                 .foregroundStyle(Editorial.muted(colorScheme))
             }
 
             Text("ACC/AHA categories")
-                .font(.system(size: 11))
+                .font(.system(size: 13))
                 .foregroundStyle(Editorial.muted(colorScheme))
 
             Button {
@@ -389,7 +389,7 @@ private struct VitalLedgerRow: View {
                     .foregroundStyle(Editorial.ink(colorScheme))
                     .lineLimit(1)
                 Text(secondaryCaption)
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundStyle(delta?.color ?? Editorial.muted(colorScheme))
                     .lineLimit(1)
             }
@@ -403,7 +403,7 @@ private struct VitalLedgerRow: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Text(unitText)
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundStyle(Editorial.muted(colorScheme))
             }
         }
@@ -493,7 +493,7 @@ private struct VitalTypeDetailView: View {
                                 .foregroundStyle(Editorial.ink(colorScheme))
                             if !sample.note.isEmpty {
                                 Text(sample.note)
-                                    .font(.system(size: 11))
+                                    .font(.system(size: 13))
                                     .foregroundStyle(Editorial.muted(colorScheme))
                             }
                         }

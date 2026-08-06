@@ -81,7 +81,7 @@ struct RetestScheduleView: View {
                         HStack {
                             Spacer()
                             Text(trackedCountText)
-                                .font(.system(size: 12))
+                                .font(.system(size: 13))
                                 .foregroundStyle(Editorial.muted(colorScheme))
                         }
                     }
@@ -109,7 +109,7 @@ struct RetestScheduleView: View {
 
                     Section {
                         Text(RetestSchedule.disclaimer)
-                            .font(.system(size: 11))
+                            .font(.system(size: 13))
                             .foregroundStyle(Editorial.muted(colorScheme))
                     }
                     .listRowBackground(Color.clear)
@@ -149,7 +149,7 @@ struct RetestScheduleView: View {
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(Editorial.ink(colorScheme))
                     Text(verbatim: nextDrawSubtitle(bundle: bundle))
-                        .font(.system(size: 12))
+                        .font(.system(size: 13))
                         .foregroundStyle(Editorial.muted(colorScheme))
                     if bundle.requiresFasting {
                         EditorialTag("Fasting Required", kind: .warn)
@@ -180,7 +180,7 @@ struct RetestScheduleView: View {
             // `String(localized:)`, which both require a compile-time
             // literal key.
             Text(NSLocalizedString(RetestSchedule.pricingFootnote, comment: "Pricing footnote for RetestSchedule money figures"))
-                .font(.system(size: 10))
+                .font(.system(size: 13))
                 .foregroundStyle(Editorial.muted(colorScheme))
         }
     }
@@ -227,7 +227,7 @@ struct RetestScheduleView: View {
             } footer: {
                 if let footer {
                     Text(footer)
-                        .font(.system(size: 11))
+                        .font(.system(size: 13))
                         .foregroundStyle(Editorial.muted(colorScheme))
                 }
             }
@@ -317,12 +317,12 @@ private struct RetestScheduleRow: View {
                 .background(Capsule().fill(Editorial.hairline(colorScheme)))
             if item.status != .upcoming {
                 Text("\(dueText) · \(intervalText)")
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundStyle(Editorial.muted(colorScheme))
             }
             if let wasteText {
                 Text(verbatim: wasteText)
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundStyle(Editorial.muted(colorScheme))
             }
         }
@@ -346,7 +346,7 @@ private struct RetestScheduleRow: View {
             EditorialTag("Due Soon", kind: .warn)
         case .upcoming:
             Text(dueText)
-                .font(.system(size: 12))
+                .font(.system(size: 13))
                 .foregroundStyle(Editorial.muted(colorScheme))
         }
     }

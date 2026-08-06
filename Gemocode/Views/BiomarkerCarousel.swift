@@ -172,7 +172,7 @@ private struct BiomarkerRow: View {
                         .foregroundStyle(Editorial.ink(colorScheme))
                         .lineLimit(1)
                     Text("Updated \(series.latestDate.formatted(.relative(presentation: .named)))")
-                        .font(.system(size: 11))
+                        .font(.system(size: 13))
                         .foregroundStyle(Editorial.muted(colorScheme))
                         .lineLimit(1)
                 }

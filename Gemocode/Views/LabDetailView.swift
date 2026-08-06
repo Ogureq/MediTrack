@@ -137,7 +137,7 @@ struct LabDetailView: View {
                 Spacer(minLength: 0)
             }
             Text(latest.date.formatted(date: .abbreviated, time: .omitted))
-                .font(.system(size: 12))
+                .font(.system(size: 13))
                 .foregroundStyle(Editorial.muted(colorScheme))
         }
         .accessibilityElement(children: .combine)
@@ -154,7 +154,7 @@ struct LabDetailView: View {
             Spacer()
             Text(String(format: String(localized: "high >%@"), range.upperBound.compactFormatted))
         }
-        .font(.system(size: 10))
+        .font(.system(size: 13))
         .foregroundStyle(Editorial.muted(colorScheme))
     }
 
@@ -231,7 +231,7 @@ struct LabDetailView: View {
                     .foregroundStyle(Editorial.ink(colorScheme))
                 if let title = result.report?.title, !title.isEmpty {
                     Text(title)
-                        .font(.system(size: 11))
+                        .font(.system(size: 13))
                         .foregroundStyle(Editorial.muted(colorScheme))
                         .lineLimit(1)
                 }

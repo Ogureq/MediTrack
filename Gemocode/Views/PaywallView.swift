@@ -124,7 +124,7 @@ struct PaywallView: View {
     private var premiumLedger: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Premium Adds")
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .kerning(1.6)
                 .textCase(.uppercase)
                 .foregroundStyle(Editorial.accent(colorScheme))
@@ -401,12 +401,12 @@ private struct PaywallProductCard: View {
                     ProgressView()
                 } else if isYearly {
                     Text("2 months free")
-                        .font(.system(size: 12, weight: .regular))
+                        .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(.white.opacity(0.8))
                         .lineLimit(1)
                 } else if isLifetime {
                     Text("One-time")
-                        .font(.system(size: 12, weight: .regular))
+                        .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(Editorial.muted(colorScheme))
                         .lineLimit(1)
                 }

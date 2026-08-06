@@ -182,7 +182,7 @@ private struct SymptomInsightBanner: View {
                 .foregroundStyle(Editorial.accent(colorScheme))
                 .accessibilityHidden(true)
             Text(text)
-                .font(.system(size: 11, weight: .regular))
+                .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(Editorial.muted(colorScheme))
         }
         .padding(11)
@@ -269,7 +269,7 @@ private struct SymptomLogRow: View {
                 Text(entry.date.formatted(date: .abbreviated, time: .shortened))
                     .lineLimit(1)
             }
-            .font(.system(size: 12, weight: .regular))
+            .font(.system(size: 13, weight: .regular))
             .foregroundStyle(Editorial.muted(colorScheme))
         }
         .accessibilityElement(children: .combine)

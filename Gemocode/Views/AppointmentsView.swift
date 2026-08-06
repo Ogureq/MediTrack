@@ -287,11 +287,11 @@ private struct NextAppointmentCard: View {
                         countdownTag
                     }
                     Text(appointment.date.formatted(date: .abbreviated, time: .shortened))
-                        .font(.system(size: 12, weight: .regular))
+                        .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(Editorial.muted(colorScheme))
                     if !detailLine.isEmpty {
                         Text(detailLine)
-                            .font(.system(size: 12, weight: .regular))
+                            .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(Editorial.muted(colorScheme))
                     }
                 }
@@ -348,7 +348,7 @@ private struct NextAppointmentCard: View {
             EditorialTag(verbatim: countdownText, kind: .warn)
         } else {
             Text(verbatim: countdownText)
-                .font(.system(size: 12, weight: .regular))
+                .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(Editorial.muted(colorScheme))
         }
     }
@@ -471,7 +471,7 @@ struct AppointmentRow: View {
                     }
                 }
                 Text(detailLine)
-                    .font(.system(size: 12, weight: .regular))
+                    .font(.system(size: 13, weight: .regular))
                     .foregroundStyle(Editorial.muted(colorScheme))
             }
 
@@ -479,7 +479,7 @@ struct AppointmentRow: View {
 
             if isUpcoming {
                 Text(appointment.date.formatted(date: .omitted, time: .shortened))
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Editorial.muted(colorScheme))
             } else {
                 EditorialTag("Done", kind: .good)

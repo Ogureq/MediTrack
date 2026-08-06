@@ -132,7 +132,7 @@ struct MedicalIDView: View {
                                 Text(dateOfBirth.formatted(date: .abbreviated, time: .omitted))
                             }
                         }
-                        .font(.system(size: 12, weight: .regular))
+                        .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(Editorial.muted(colorScheme))
                     }
                 }
@@ -143,7 +143,7 @@ struct MedicalIDView: View {
                 FlowLayout(spacing: 8) {
                     ForEach(identityChips, id: \.self) { chip in
                         Text(chip)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(Editorial.ink(colorScheme))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
@@ -206,7 +206,7 @@ struct MedicalIDView: View {
                 // usual muted section-header color, matching the emergency-card
                 // mockup's red "Allergies" header.
                 Text("ALLERGIES")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .kerning(1.6)
                     .textCase(.uppercase)
                     .foregroundStyle(Editorial.tagBad(colorScheme))
@@ -254,7 +254,7 @@ struct MedicalIDView: View {
                     .foregroundStyle(Editorial.ink(colorScheme))
                 if !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.system(size: 12, weight: .regular))
+                        .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(Editorial.muted(colorScheme))
                 }
             }
@@ -282,7 +282,7 @@ struct MedicalIDView: View {
                 FlowLayout(spacing: 8) {
                     ForEach(conditionChips, id: \.self) { condition in
                         Text(condition)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(Editorial.ink(colorScheme))
                             .padding(.horizontal, 14)
                             .padding(.vertical, 7)
@@ -320,7 +320,7 @@ struct MedicalIDView: View {
                             .joined(separator: " · ")
                         if !caption.isEmpty {
                             Text(caption)
-                                .font(.system(size: 12, weight: .regular))
+                                .font(.system(size: 13, weight: .regular))
                                 .foregroundStyle(Editorial.muted(colorScheme))
                         }
                     }

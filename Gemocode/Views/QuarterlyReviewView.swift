@@ -286,7 +286,7 @@ struct QuarterlyReviewView: View {
 
     private var disclaimerCard: some View {
         Text(QuarterlyReviewSummary.disclaimer)
-            .font(.system(size: 11))
+            .font(.system(size: 13))
             .foregroundStyle(Editorial.muted(colorScheme))
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -337,7 +337,7 @@ private struct ChangeRow: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(Editorial.ink(colorScheme))
                 Text("\(fromText) → \(toText)")
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundStyle(Editorial.muted(colorScheme))
             }
             Spacer()
@@ -364,7 +364,7 @@ private struct ChangeRow: View {
             EditorialTag(verbatim: direction.label, kind: .warn)
         case .steady:
             Text(direction.label)
-                .font(.system(size: 12))
+                .font(.system(size: 13))
                 .foregroundStyle(Editorial.muted(colorScheme))
         }
     }

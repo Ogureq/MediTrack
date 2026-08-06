@@ -283,7 +283,7 @@ struct PillTabBar: View {
                     selection = item.tag
                 } label: {
                     Text(item.label)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 13, weight: .medium))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                         .opacity(isSelected ? 1 : 0.55)
