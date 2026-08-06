@@ -84,7 +84,7 @@ appstoreconnect.apple.com → My Apps → "+" → New App:
 Your app → Monetization → **Subscriptions** → Create Subscription Group:
 "Gemocode Premium". Inside it create:
 1. **Monthly**: reference name "Premium Monthly", product ID
-   `com.ogureq.gemocode.premium.monthly`, price **$19.99** (pick the tier;
+   `com.ogureq.gemocode.premium.monthly`, price **$14.99** (pick the tier;
    Apple auto-converts other currencies).
 2. **Yearly**: `com.ogureq.gemocode.premium.yearly` — recommended
    **$149.99** (~37% off, standard yearly anchor).

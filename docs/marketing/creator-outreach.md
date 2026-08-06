@@ -12,7 +12,7 @@ overpromising (iOS-only, pre-launch — adjust the "download" language to
 "waitlist" until launch day actually happens), and accurate pricing —
 tracking (including the Tests Due retest schedule) is free forever; lab
 scanning and every AI feature (report narration, chat, AI-assisted entry)
-are Premium at $19.99/mo, with one free lifetime scan-and-report as a trial.
+are Premium at $14.99/mo, with one free lifetime scan-and-report as a trial.
 Never describe scanning, OCR, or AI-assisted entry as free.
 
 ---
@@ -125,7 +125,7 @@ Standing rules regardless of band:
 - The free/paid split stated plainly: tracking — including the Tests Due
   retest schedule, health score, trends, and Quarterly Review — is free
   forever. Lab scanning and every AI feature (report narration, chat,
-  AI-assisted entry) are Premium at $19.99/mo, with one free lifetime
+  AI-assisted entry) are Premium at $14.99/mo, with one free lifetime
   scan-and-report as a trial.
 - Retest intervals shown on-screen are always captioned "commonly
   recommended — your doctor may advise differently," never stated as a fixed

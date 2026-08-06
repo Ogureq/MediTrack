@@ -14,7 +14,7 @@ in docs/MARKETING.md — high intent, low competition versus the saturated
 symptoms/goals tracking, health score & trends, Tests Due retest schedule,
 Quarterly Review, widget, Apple Health sync, and one free AI scan-and-report
 (lifetime trial — the only way a free account ever gets a lab scanned).
-Premium ($19.99/mo) = unlimited lab scanning, unlimited AI reports, AI chat,
+Premium ($14.99/mo) = unlimited lab scanning, unlimited AI reports, AI chat,
 AI-assisted entry, and a professional PDF export of AI reports. Nothing
 below claims scanning/OCR is free forever.
 
@@ -50,7 +50,7 @@ retest" cluster — plus condition terms for the ICP's own searches.)
 ## Promotional text (170 chars max, editable without review)
 
 ```
-New: Tests Due shows when each blood test is next due — skip duplicates, never miss one. Free tracking, private on-device. One free AI report, then $19.99/mo.
+New: Tests Due shows when each blood test is next due — skip duplicates, never miss one. Free tracking, private on-device. One free AI report, then $14.99/mo.
 ```
 (158 chars. Leads with the new retest-schedule feature and the money angle
 (skip duplicates), states the free/premium split accurately — no "free
@@ -101,7 +101,7 @@ PRIVATE BY ARCHITECTURE
 • Works in airplane mode. Optional passcode + Face ID lock with lockout
   protection. Backups are encrypted files you control.
 
-GEMOCODE PREMIUM — $19.99/MONTH
+GEMOCODE PREMIUM — $14.99/MONTH
 • Unlimited lab report scanning: on-device text recognition finds the
   values, matches them against 46 common tests with reference ranges, and
   builds your history automatically

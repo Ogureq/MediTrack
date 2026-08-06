@@ -11,7 +11,7 @@ response. It persists nothing but a metadata-only daily token ledger and a
 per-device "free report used" flag.
 
 **Business model:** every local Gemocode feature is free; AI is premium
-(**$19.99/month**, which is what funds the owner-paid Anthropic usage this
+(**$14.99/month**, which is what funds the owner-paid Anthropic usage this
 relay performs) — with exactly **one free lifetime AI report** per device as
 a trial. Enforcement ships behind the `ENFORCE_PREMIUM` flag (default
 `"false"`) so the deployed relay can be tested end-to-end before App Store

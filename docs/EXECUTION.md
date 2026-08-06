@@ -6,7 +6,7 @@ then 10 → 100 → 1,000. Written against the REAL current state:
 - DONE: app built & running on device, relay live, site live at gemocode.com,
   App Store listing copy (docs/marketing/app-store-listing.md), 11 video
   scripts (docs/marketing/content-bank.md), creator kit, Reddit/PH/HN drafts,
-  pricing ($19.99/mo Premium, one free AI scan-and-report).
+  pricing ($14.99/mo Premium, one free AI scan-and-report).
 - BLOCKED ON OWNER: Apple Developer enrollment (in progress), relay
   ANTHROPIC_API_KEY re-put, ENFORCE_PREMIUM flip before launch.
 - FROZEN: no new features until Phase 4 says so. The app is v1-complete.
@@ -144,7 +144,7 @@ coordinated push); leaving the relay unmetered (free AI for the world).
 subscription approved; relay enforcing premium; launch posts drafted.
 
 Daily 90-min split:
-- Day 15: Create the $19.99/mo subscription + yearly in App Store Connect
+- Day 15: Create the $14.99/mo subscription + yearly in App Store Connect
   (App → Subscriptions). Fill App Review notes: demo instructions ("Profile
   → Data → Load Sample Data"), explain the one-free-scan model. Submit for
   review with "Manual release".

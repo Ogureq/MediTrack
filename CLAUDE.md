@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Gemocode — a local-first iOS 17.0+ medical tracker (SwiftUI + SwiftData, Swift 5 mode, zero third-party dependencies). **Health records never leave the device**: all data lives on-device in SwiftData, secrets in the Keychain, no accounts. The one deliberate exception is AI: `backend/` is a Cloudflare Workers relay (TypeScript, vitest, own CI via `backend-ci.yml`) fronting the owner's Anthropic API key — that key exists ONLY as a wrangler secret, never in this repo, the client, chat logs, or worker logs. Keep both invariants unless the user asks otherwise. Business model: every local feature is free; AI is premium ($19.99/mo) with exactly one free lifetime AI report as a trial.
+Gemocode — a local-first iOS 17.0+ medical tracker (SwiftUI + SwiftData, Swift 5 mode, zero third-party dependencies). **Health records never leave the device**: all data lives on-device in SwiftData, secrets in the Keychain, no accounts. The one deliberate exception is AI: `backend/` is a Cloudflare Workers relay (TypeScript, vitest, own CI via `backend-ci.yml`) fronting the owner's Anthropic API key — that key exists ONLY as a wrangler secret, never in this repo, the client, chat logs, or worker logs. Keep both invariants unless the user asks otherwise. Business model: every local feature is free; AI is premium ($14.99/mo) with exactly one free lifetime AI report as a trial.
 
 ## Build & test
 

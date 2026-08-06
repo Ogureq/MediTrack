@@ -19,7 +19,7 @@ already shipped (streaks, quarterly ritual, widgets, Tests Due reminders).
 
 **Pricing facts (Jul 2026, current):** lab report scanning and all AI
 features (chat, AI-assisted entry, unlimited reports, the PDF export) are
-Premium at $19.99/mo. Free users get one lifetime AI scan-and-report as a
+Premium at $14.99/mo. Free users get one lifetime AI scan-and-report as a
 trial — that trial is also the only way a free account ever scans a lab.
 Tracking, the health score, trends, the widget, Apple Health sync, and Tests
 Due retest reminders are free forever because they're on-device rule-based
@@ -243,7 +243,7 @@ doctor-visit prep ("walk in with your history, not a blank slate").
 **Benchmarks *(est., replace with cohort data)*:** iOS health CPI $2–4;
 onboarding→activation 40–55%; free-trial-use rate 25–35% of activated;
 taste→premium 8–12% within 30 days. Blended CAC target ≤$25 against
-$19.99/mo (payback <2 months at ~60% M1 premium retention). Kill any channel
+$14.99/mo (payback <2 months at ~60% M1 premium retention). Kill any channel
 above $40 CAC after $500 spent.
 
 **Budget tiers:** $0 — engines A(organic)/B/C only; $1k/mo — ASA exact +

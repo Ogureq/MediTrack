@@ -17,7 +17,7 @@ may advise differently"; each article closes with a soft, factual mention of
 Gemocode (never a hard sell) and a medical disclaimer block. Pricing, where
 mentioned, is stated accurately: tracking and the Tests Due retest schedule
 are free forever; scanning a lab report and AI features are Premium
-($19.99/mo) with one free lifetime scan-and-report trial — never described
+($14.99/mo) with one free lifetime scan-and-report trial — never described
 as free scanning. Each article also carries its own SEO title and meta
 description.
 
